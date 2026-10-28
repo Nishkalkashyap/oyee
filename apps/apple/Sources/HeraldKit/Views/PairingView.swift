@@ -6,7 +6,7 @@ public struct PairingView: View {
     let model: HeraldModel
     var compact: Bool
 
-    @ViewState private var server = ""
+    @ViewState private var server = Pairing.defaultServerURL
     @ViewState private var code = ""
     @ViewState private var busy = false
     @ViewState private var error: String?
@@ -97,7 +97,7 @@ public struct PairingView: View {
             server = link.server.absoluteString
             code = Pairing.displayCode(link.code)
             error = nil
-        } else if server.isEmpty, let existing = model.credentials?.serverURL {
+        } else if let existing = model.credentials?.serverURL {
             server = existing.absoluteString
         }
     }

@@ -37,8 +37,8 @@ describe("meta", () => {
 
   it("google login redirects with state + PKCE when configured, errors otherwise", async () => {
     const r = await call("GET", "/auth/google/login?redirect=/inbox", null);
-    expect(r.status).toBe(500); // GOOGLE_CLIENT_ID not configured in tests
-    expect(r.body.error.message).toMatch(/not configured/);
+    expect(r.status).toBe(302); // GOOGLE_CLIENT_ID not configured in tests
+    expect(r.res.headers.get("location")).toBe("/login?error=not_configured");
   });
 });
 

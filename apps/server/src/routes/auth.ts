@@ -6,7 +6,7 @@ import type { AppEnv } from "../app";
 import { isDevLogin, publicUrl } from "../env";
 import { consumeOAuthState, createSession, deleteSession, saveOAuthState, upsertUser } from "../db";
 import { b64urlDecodeString, b64urlEncode, randomBytes, timingSafeEqual, utf8 } from "../lib/encoding";
-import { ApiError, badRequest, forbidden, notFound } from "../lib/errors";
+import { badRequest, forbidden, notFound } from "../lib/errors";
 import {
   clearSessionCookie,
   emailAllowed,
@@ -28,9 +28,7 @@ function loginError(code: string): string {
 
 authRoutes.get("/google/login", async (c) => {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = c.env;
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    throw new ApiError("internal", "Google sign-in is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)");
-  }
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return c.redirect(loginError("not_configured"));
   const redirect = safeRedirect(c.req.query("redirect"));
   const state = b64urlEncode(randomBytes(24));
   const verifier = b64urlEncode(randomBytes(32));

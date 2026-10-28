@@ -2,6 +2,9 @@ import Foundation
 
 /// Pairing code + server URL helpers (protocol §2.2).
 public enum Pairing {
+    /// The hosted instance, prefilled on the pairing screen. Self-hosters can change it here or type their own URL.
+    public static let defaultServerURL = "https://push.nishkal.in"
+
     public static let alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
     private static let alphabetSet = Set(alphabet)
 

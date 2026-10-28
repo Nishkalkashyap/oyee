@@ -14,7 +14,7 @@ if (hasGoogleServices) {
 }
 
 // Override with -PheraldServerUrl=https://my-herald.example.com or in ~/.gradle/gradle.properties.
-val defaultServerUrl = (findProperty("heraldServerUrl") as String?) ?: "https://herald.example.workers.dev"
+val defaultServerUrl = (findProperty("heraldServerUrl") as String?) ?: "https://push.nishkal.in"
 
 android {
     namespace = "dev.herald.android"

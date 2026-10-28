@@ -30,7 +30,7 @@ cd apps/android
 ```
 
 The server URL pre-filled on the pairing screen comes from `BuildConfig.DEFAULT_SERVER_URL`
-(default `https://herald.example.workers.dev`). To change it:
+(default `https://push.nishkal.in`, the hosted instance). To change it:
 
 ```bash
 ./gradlew assembleDebug -PheraldServerUrl=https://herald.mydomain.dev
