@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+coverage/
+# Android
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/
+apps/android/local.properties
+apps/android/.idea/
+apps/android/.kotlin/
+*.apk
+*.keystore
+# Apple
+apps/apple/.build/
+apps/apple/build/
+apps/apple/*.xcodeproj
+apps/apple/DerivedData/
+apps/apple/.swiftpm/
+xcuserdata/

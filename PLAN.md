@@ -1,0 +1,209 @@
+# Herald — Plan
+
+> One inbox for everything that wants your attention: AI agents, cron jobs, Home Assistant, CI, infra monitors.
+> Send a notification with one HTTP call or one MCP tool call, receive it on your phone, laptop and browser —
+> with live-updating progress, action buttons and inline replies.
+
+Herald is a free, open-source project. It is not monetized. The web app/backend is hosted on Cloudflare Workers;
+the native clients are **not distributed as signed binaries** — users build them from source (or sideload an
+unsigned/debug build).
+
+---
+
+## 1. Why we're building it
+
+1. **Agents run in the background now.** Claude Code, Codex, custom Slack agents and scheduled jobs monitor AWS,
+   run long tasks, and need a way to say "done", "broken" or "I need a decision".
+2. **The current options are heavy.** Slack/Discord/Telegram need accounts, bot apps, tokens and scopes just to
+   send yourself a message. Every agent vendor is building its own notification channel, so alerts end up spread
+   over many apps.
+3. **Home Assistant and other tools only need a webhook.** Paste a URL into HA, and notifications arrive on every device.
+4. **Simple push isn't enough for agents.** Agents produce *runs* that make progress, finish, fail and sometimes
+   need an answer. Herald treats notifications as live objects: they can be updated in place, resolved, answered and
+   grouped into threads, and all of that stays in sync across devices.
+
+Existing tools (ntfy, Pushover, Gotify, Pushcut, Bark, and MCP-specific apps like Pushary/AlertMCP) each cover part
+of this. Herald combines **MCP + webhook ingestion + live updates + two-way actions + cross-device sync + rich cards**
+in one open-source, self-hostable package that we fully control.
+
+## 2. Product summary
+
+- Sign in to the web app with **Google**.
+- The landing page has two primary buttons: **Create MCP server URL** and **Create webhook**. Each one creates a
+  scoped, revocable token and shows copy-paste snippets (Claude Code, Codex, generic MCP JSON, curl, Home Assistant YAML).
+- **Pair devices** (Android, iOS, macOS) with a short pairing code / QR / deep link. The browser can also enable Web Push.
+- **Inbox** (web + every client): list, filter (source, severity, status, thread, text), paginate, and act on notifications live.
+- **Templates**: named presets with `{{variables}}`, written once in a platform-neutral card schema and rendered
+  natively by each client.
+- **MCP tools**: `send_notification`, `update_notification`, `resolve_notification`, `ask`, `wait_for_response`,
+  `get_notification`, `list_notifications`, `list_templates`, `upsert_template`, `delete_template`, `list_devices`.
+
+### Core concepts
+
+| Concept | Meaning |
+|---|---|
+| **Notification (card)** | A live object: title, body, severity, fields, progress, image, actions, reply box, status. Has a `version` that increments on every change. |
+| **Source** | Who sent it ("aws-monitor", "home-assistant"). Defaults to the token's label. |
+| **Thread** | Optional `threadId` that groups related notifications (e.g. one agent run). |
+| **Severity** | `debug` · `info` · `success` · `warning` · `critical`. Controls sound/importance on each platform. |
+| **Status** | `active` or `resolved`. Resolving removes the system notification from every device. |
+| **Response** | A user's tap on an action button and/or a typed reply. Delivered to waiting MCP `wait_for_response` calls and optional callback webhooks. |
+| **Template** | Named, reusable partial card with `{{var}}` placeholders. |
+| **Token** | `webhook` (send-only, via `/hook/<token>`), `mcp` (MCP tools), `device` (a paired client). Stored hashed and revocable. |
+
+## 3. Delivery strategy per platform (decided)
+
+| Platform | Primary transport | Fallback | Notes |
+|---|---|---|---|
+| **Android** | **FCM** data messages (wakes the app, battery-friendly) | **WebSocket foreground service** ("instant delivery" mode), for phones without Google services or builds without Firebase | `google-services.json` for the hosted instance's Firebase project is committed, so self-built APKs work against the hosted backend. Self-hosters swap in their own. The build must also succeed **without** that file (FCM is then disabled at runtime). |
+| **macOS** | **WebSocket** from a menu-bar app (launch at login) → local `UNUserNotificationCenter` notifications | REST catch-up on reconnect | No APNs, because push requires a paid Apple Developer account and signing. An ad-hoc-signed, locally built app is enough. |
+| **iOS** | **WebSocket** while the app is in the foreground or recently backgrounded → local notifications | `BGAppRefreshTask` best-effort catch-up + REST sync on launch | **No APNs (decided).** iOS won't get instant delivery while the app is suspended. This limitation is documented clearly. Built with Xcode using a free personal team (7-day provisioning) or a paid team. |
+| **Web** | **WebSocket** for the live inbox | **Web Push (VAPID)** via service worker for background notifications | Web Push supports only title/body/icon/image + up to ~2 actions. Text replies open the inbox. |
+
+## 4. Architecture
+
+```
+            ┌──────────── agents / scripts / HA / CI ─────────────┐
+            │  MCP (Streamable HTTP)      Webhook POST/GET        │
+            └──────────────┬───────────────────────┬──────────────┘
+                           ▼                       ▼
+   ┌─────────────────────────── Cloudflare Worker (apps/server) ───────────────────────────┐
+   │  Hono router · Google OAuth · sessions · token auth · MCP handler · webhook adapters  │
+   │  serves the SPA (apps/web build) from Workers static assets                           │
+   │                                                                                       │
+   │   D1 (global): users, sessions, tokens, devices, pairing codes                        │
+   │   InboxDO (one per user, SQLite storage): notifications, templates, responses,        │
+   │            hibernatable WebSockets, MCP wait_for_response waiters, retention alarm    │
+   │   Fan-out: WebSocket broadcast + FCM HTTP v1 + Web Push (VAPID, aes128gcm)            │
+   └───────────────────────────────────────────────────────────────────────────────────────┘
+          ▲ WebSocket / REST          ▲ FCM               ▲ Web Push           ▲ WebSocket / REST
+     macOS menu-bar app           Android app          Browser (SW)          iOS app
+```
+
+### Repository layout (pnpm monorepo)
+
+```
+herald/
+├── PLAN.md                 ← this file
+├── README.md
+├── docs/protocol.md        ← THE contract: REST API, WebSocket protocol, FCM payload, card schema, auth
+├── packages/schema/        ← @herald/schema: TypeScript types + zod schemas for the contract (source of truth for TS)
+├── apps/server/            ← @herald/server: Cloudflare Worker + Durable Objects + D1 (Hono, MCP, webhooks, push)
+├── apps/web/               ← @herald/web: React + Vite SPA (inbox, connect, devices, templates); built into server assets
+├── apps/android/           ← Kotlin + Jetpack Compose app (Gradle; not a pnpm package)
+└── apps/apple/             ← Swift: HeraldKit package (shared) + macOS menu-bar app + iOS app (XcodeGen; not a pnpm package)
+```
+
+### Tech choices
+
+- **Server**: TypeScript, Hono, Cloudflare Workers, Durable Objects (SQLite-backed, WebSocket Hibernation API),
+  D1, Workers Static Assets, MCP via the official TypeScript SDK / Cloudflare `agents` stateless handler, zod.
+  Tests: Vitest + `@cloudflare/vitest-pool-workers`.
+- **Web**: React, Vite, TypeScript, React Router, TanStack Query, Tailwind CSS v4. Service worker for Web Push.
+- **Android**: Kotlin, Jetpack Compose (Material 3), OkHttp (REST + WebSocket), kotlinx.serialization, DataStore,
+  Firebase Messaging (optional at build time). minSdk 26, compile/target SDK 36. Uses `Notification.ProgressStyle` on API 36+.
+- **Apple**: Swift 6, SwiftUI. `HeraldKit` Swift package (models, API client, `URLSessionWebSocketTask` client, local
+  notification presenter, shared SwiftUI card views). macOS app buildable **without Xcode** via `swift build` + a script
+  that assembles an ad-hoc-signed `.app` bundle. iOS app via XcodeGen `project.yml` (requires Xcode).
+
+## 5. Features in detail
+
+### 5.1 Ingestion
+- **MCP**: `https://<host>/mcp/<mcp-token>` (token in the URL, for clients that can't set headers) or `https://<host>/mcp`
+  with `Authorization: Bearer <mcp-token>`. Streamable HTTP transport, stateless.
+- **Webhook**: `POST|GET https://<host>/hook/<webhook-token>`. Accepts:
+  - JSON matching the send schema,
+  - `text/plain` body (becomes `body`), with title/severity/etc. from query params or ntfy-style headers
+    (`Title`/`X-Title`, `Priority`/`X-Priority` 1–5, `Tags`/`X-Tags`, `Click`/`X-Click`),
+  - auto-detected **Prometheus Alertmanager**, **Grafana**, and **AWS SNS** payloads (SNS subscription confirmation is handled automatically).
+- **Web composer + REST** `POST /api/notifications` for manual sends and tests.
+
+### 5.2 Live updates and two-way actions
+- `update_notification` patches any field and increments `version`. Clients replace the system notification in place.
+  The update is silent unless `alert: true` is set.
+- Actions: up to 3 buttons. Each one either **opens a URL**, **records a response** (default), and/or **calls a callback URL**
+  (the server POSTs the response JSON). With `resolves: true`, tapping it also resolves the notification.
+- Reply: an optional text box (Android `RemoteInput`, Apple `UNTextInputNotificationAction`, web: opens the inbox).
+- `ask` = send + `wait_for_response` (long-poll ≤ 55 s per call, repeatable) for human-in-the-loop agents.
+
+### 5.3 Cross-device sync
+- Read / resolve / respond / delete on any device is broadcast to all others, which clear or update their system notification.
+- Reconnecting clients catch up with `sync` (by `updatedAt` cursor).
+
+### 5.4 Templates
+- Stored per user: `{ name, description, card }`, where `card` is a partial card containing `{{var}}` / `{{var|fallback}}` placeholders.
+- Send with `{ template: "aws-alarm", vars: {...}, ...overrides }`. The server renders the template, then applies explicit overrides.
+- The web editor shows a live preview mock for Android, iOS, macOS and web.
+
+### 5.5 Rendering per platform (best effort from one schema)
+
+| Card field | Android | macOS / iOS | Web Push | In-app inbox (all) |
+|---|---|---|---|---|
+| title / body | ✅ BigTextStyle | ✅ | ✅ | ✅ markdown subset |
+| severity | channel per severity | sound / interruption level | `requireInteraction` for critical | color + icon |
+| fields | appended to big text | appended to body | appended to body | key/value grid |
+| progress | `ProgressStyle` (36+) / `setProgress` | text in body; live bar in menu bar & inbox | text | progress bar |
+| image | BigPictureStyle | attachment (downloaded) | `image` | inline |
+| actions | ✅ up to 3 | ✅ dynamic categories | ✅ up to 2 | ✅ |
+| reply | RemoteInput | text-input action | opens inbox | text box |
+| threadId / source | `setGroup` | `threadIdentifier` | `tag` | grouping |
+
+### 5.6 Security
+- Tokens are random and 32+ bytes, prefixed (`hrd_wh_`, `hrd_mcp_`, `hrd_dev_`), stored as SHA-256 hashes, shown in plaintext once, and revocable.
+- Scopes: session = everything; `mcp` = notification + template tools; `webhook` = send only; `device` = read/act on notifications, register its own push transport, open a WebSocket.
+- Optional `ALLOWED_EMAILS` allowlist so an instance can be private.
+- Per-token rate limit (default 60 sends/min) and payload size limits.
+- Callback URLs are called server-side with a signed `X-Herald-Signature` (HMAC-SHA256 with a per-token secret).
+- `DEV_LOGIN=true` enables a local-only login bypass for development and tests. It must never be enabled in production.
+
+### 5.7 Retention
+- Notifications are kept for 30 days and capped at 5,000 per user (configurable). A DO alarm prunes them daily.
+
+## 6. Configuration (server)
+
+| Variable | Purpose |
+|---|---|
+| `PUBLIC_URL` | e.g. `https://herald.example.workers.dev` (used in snippets, OAuth redirect, deep links) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth (web app sign-in) |
+| `SESSION_SECRET` | HMAC key for session cookies and callback signatures |
+| `ALLOWED_EMAILS` | optional comma-separated allowlist |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push |
+| `FCM_SERVICE_ACCOUNT_JSON` | Firebase service account for FCM HTTP v1 (same project as the Android `google-services.json`) |
+| `DEV_LOGIN` | `true` only in local dev |
+
+## 7. Milestones
+
+**M1 — built now, in parallel (one agent per app)**
+- `packages/schema` + `docs/protocol.md` (done before the agents start: the contract).
+- `apps/server`: auth (Google + dev login), tokens, pairing, devices, notifications CRUD, InboxDO + WebSocket,
+  webhook (+ adapters), MCP tools, templates, FCM + Web Push fan-out, retention, tests.
+- `apps/web`: login, Connect page (MCP URL / webhook with snippets), Inbox (live), notification detail with actions/reply,
+  Devices (pairing code + QR, Web Push toggle), Templates editor with platform previews, Composer.
+- `apps/android`: pairing, inbox, FCM + WebSocket foreground service, rich notifications (channels, progress, actions,
+  reply, grouping, in-place updates, cross-device dismissal), settings.
+- `apps/apple`: HeraldKit, macOS menu-bar app (live WebSocket, local notifications with dynamic actions/reply, inbox
+  window, launch at login), iOS app (pairing, inbox, foreground socket, background refresh).
+
+**M2 — later**
+- Routing rules (severity → devices, quiet hours, digests, escalation if not acknowledged).
+- MCP OAuth (instead of / in addition to the token URL).
+- Optional bring-your-own APNs key for users with paid Apple accounts (real iOS push + Live Activities).
+- AI digest/summaries of noisy sources, dedupe/collapse.
+- Desktop clients for Windows/Linux (Tauri) if wanted.
+
+## 8. Build & distribution
+
+- Web/server: `pnpm install && pnpm build && pnpm --filter @herald/server deploy` (wrangler). The hosted instance is maintained by us.
+- Android: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`. No Play Store.
+- macOS: `apps/apple/scripts/build-macos-app.sh` → `Herald.app` (ad-hoc signed). No notarization.
+- iOS: `cd apps/apple && xcodegen && open Herald.xcodeproj` → run on device with your own (free or paid) team.
+- Every client lets you configure the **server URL**, so self-hosted instances work everywhere.
+
+## 9. Definition of done (M1)
+
+- `pnpm -r typecheck`, `pnpm -r test`, `pnpm -r build` pass.
+- `wrangler dev` runs locally. With `DEV_LOGIN=true`, a full flow works end to end: log in → create webhook → curl a
+  notification → it appears live in the web inbox → update/resolve via MCP → the inbox updates.
+- Android: `./gradlew assembleDebug` succeeds (with and without `google-services.json`).
+- Apple: `swift build` + `swift test` for HeraldKit succeed; the macOS `.app` bundle script succeeds. The iOS project is
+  generated by XcodeGen and is unverified until Xcode is installed.
