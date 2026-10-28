@@ -7,12 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:274103845543:android:c577330adf67f5f26ad182",
+        "mobilesdk_app_id": "1:274103845543:android:79a7bf68daaeb4d96ad182",
         "android_client_info": {
-          "package_name": "dev.herald.android"
+          "package_name": "app.oyee.android"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAoPcY4wSQ_0nxEfqMBwX0eUDv9i0FvjpU"
@@ -20,7 +25,41 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:274103845543:android:c577330adf67f5f26ad182",
+        "android_client_info": {
+          "package_name": "dev.herald.android"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoPcY4wSQ_0nxEfqMBwX0eUDv9i0FvjpU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
