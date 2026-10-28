@@ -1,0 +1,1 @@
+{ "id": "dev_1", "name": "Pixel 9", "platform": "android", "transports": ["fcm", "websocket", "carrier-pigeon"], "createdAt": "2026-10-28T10:00:00.000Z", "lastSeenAt": "2026-10-28T10:00:00.000Z" }

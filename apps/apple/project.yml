@@ -1,0 +1,62 @@
+# XcodeGen spec for users with Xcode: `brew install xcodegen && xcodegen && open Herald.xcodeproj`.
+# The generated Herald.xcodeproj is gitignored. Set DEVELOPMENT_TEAM (or pick your team in Xcode → Signing).
+name: Herald
+
+options:
+  bundleIdPrefix: dev.herald
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""            # ← your team ID (a free personal team works; apps then expire after 7 days)
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+
+packages:
+  HeraldKit:
+    path: .                         # the local Swift package (Package.swift in this directory)
+
+targets:
+  Herald-iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iOS
+    dependencies:
+      - package: HeraldKit
+        product: HeraldKit
+    settings:
+      base:
+        PRODUCT_NAME: Herald
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herald.ios
+        INFOPLIST_FILE: Resources/HeraldiOS-Info.plist   # URL scheme `herald`, BGTaskSchedulerPermittedIdentifiers, UIBackgroundModes=fetch, ATS localhost
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # HeraldKit itself is Swift 6 (strict concurrency). The iOS app target can't be compiled without the iOS SDK
+        # here, so it uses Swift 5 mode to keep any SDK-specific concurrency diagnostics as warnings.
+        SWIFT_VERSION: "5.0"
+    scheme: {}
+
+  Herald-macOS:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/HeraldMac
+    dependencies:
+      - package: HeraldKit
+        product: HeraldKit
+    settings:
+      base:
+        PRODUCT_NAME: Herald
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herald.mac
+        INFOPLIST_FILE: Resources/HeraldMac-Info.plist   # LSUIElement, URL scheme `herald`, ATS localhost
+        SWIFT_VERSION: "6.0"
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+    scheme: {}

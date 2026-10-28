@@ -1,0 +1,1 @@
+{ "type": "sync.result", "notifications": [ { "id": "ntf_A", "title": "One", "version": 2, "createdAt": "2026-10-28T10:00:00.000Z", "updatedAt": "2026-10-28T10:03:00.000Z" } ], "deletedIds": ["ntf_gone"], "cursor": "c2", "hasMore": true }

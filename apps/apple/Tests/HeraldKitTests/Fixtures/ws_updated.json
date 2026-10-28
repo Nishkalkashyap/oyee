@@ -1,0 +1,1 @@
+{ "type": "notification.updated", "notification": { "id": "ntf_A", "title": "Deploy", "version": 4, "progress": { "value": 5, "max": 7 }, "createdAt": "2026-10-28T10:00:00.000Z", "updatedAt": "2026-10-28T10:02:00.000Z" }, "alert": false, "reason": "update" }

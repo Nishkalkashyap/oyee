@@ -1,0 +1,3 @@
+{ "id": "tpl_1", "name": "aws-alarm", "description": "CloudWatch alarm",
+  "card": { "title": "{{service}} {{metric}} high", "severity": "warning", "fields": [{"label":"Region","value":"{{region|us-east-1}}"}] },
+  "createdAt": "2026-10-28T10:00:00.000Z", "updatedAt": "2026-10-28T10:00:00.000Z" }

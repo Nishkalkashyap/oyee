@@ -1,0 +1,1 @@
+{ "items": [ { "id": "ntf_A", "title": "One", "createdAt": "2026-10-28T10:00:00.000Z" }, { "id": "ntf_B", "title": "Two", "createdAt": "2026-10-28T10:01:00.000Z" } ], "nextCursor": "opaque-cursor-1" }

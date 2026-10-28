@@ -1,0 +1,33 @@
+{
+  "id": "ntf_01JBX9Z6Q2W3E4R5T6Y7U8I9O0",
+  "source": "aws-monitor",
+  "threadId": "run-42",
+  "title": "prod-api CPU high",
+  "body": "CPU above **90%** for 5m",
+  "severity": "critical",
+  "status": "active",
+  "icon": "🔥",
+  "image": "https://example.com/graph.png",
+  "url": "https://console.aws.amazon.com/cloudwatch",
+  "fields": [{ "label": "Region", "value": "us-east-1" }],
+  "progress": { "value": 3, "max": 7, "label": "3/7 checks", "indeterminate": false },
+  "actions": [
+    { "id": "ack", "label": "Acknowledge", "style": "primary", "resolves": true },
+    { "id": "scale", "label": "Scale +2", "style": "default", "callback": { "url": "https://example.com/scale" } },
+    { "id": "open", "label": "Open console", "url": "https://console.aws.amazon.com" }
+  ],
+  "reply": { "placeholder": "Tell the agent…", "buttonLabel": "Send" },
+  "tags": ["prod", "aws"],
+  "silent": false,
+  "template": "aws-alarm",
+  "version": 3,
+  "createdAt": "2026-10-28T10:00:00.000Z",
+  "updatedAt": "2026-10-28T10:05:00.000Z",
+  "readAt": null,
+  "resolvedAt": null,
+  "responses": [
+    { "actionId": "ack", "text": null, "deviceId": "dev_01JBX9Z6Q2W3E4R5T6Y7U8I9O0", "deviceName": "Pixel 9", "at": "2026-10-28T10:06:00.000Z" }
+  ],
+  "someFutureField": { "nested": [1, 2, 3] },
+  "priority": 5
+}

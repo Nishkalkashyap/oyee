@@ -1,0 +1,5 @@
+{
+  "device": { "id": "dev_01JBXDEVICE000000000000000", "name": "Nishkal's MacBook Pro", "platform": "macos", "transports": ["websocket"], "createdAt": "2026-10-28T10:00:00.000Z", "lastSeenAt": null },
+  "token": "hrd_dev_abcdefghijklmnopqrstuvwxyz0123456789",
+  "user": { "id": "usr_01JBXUSER00000000000000000", "email": "a@b.c", "name": "Ada", "avatarUrl": null }
+}
