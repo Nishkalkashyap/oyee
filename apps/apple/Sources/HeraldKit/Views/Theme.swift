@@ -42,7 +42,7 @@ public enum Theme {
         return (Color(hex: t.fill), Color(hex: t.ink))
     }
 
-    static func dynamic(light: UInt32, dark: UInt32) -> Color {
+    public static func dynamic(light: UInt32, dark: UInt32) -> Color {
         #if os(macOS)
         Color(nsColor: NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua]) != nil
@@ -268,5 +268,66 @@ public struct SeverityPill: View {
         .padding(.horizontal, 9)
         .frame(height: 22)
         .background(severity.color.opacity(0.13), in: Capsule())
+    }
+}
+
+/// Gluon's switch: grey track, green when on, white thumb.
+public struct HeraldToggleStyle: ToggleStyle {
+    public init() {}
+    public func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            Spacer(minLength: 12)
+            Capsule()
+                .fill(configuration.isOn ? Color(hex: 0x16A34A) : Theme.dynamic(light: 0xE0DCD4, dark: 0x3D3934))
+                .frame(width: 42, height: 24)
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                    Circle().fill(.white).shadow(color: .black.opacity(0.15), radius: 1, y: 1).padding(3)
+                }
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isOn)
+                .onTapGesture { configuration.isOn.toggle() }
+                .accessibilityAddTraits(.isButton)
+        }
+    }
+}
+
+/// Gluon's setting row: title, muted description, control on the right, hairline below.
+public struct SettingRow<Trailing: View>: View {
+    let title: String
+    let description: String?
+    let last: Bool
+    let trailing: Trailing
+
+    public init(_ title: String, description: String? = nil, last: Bool = false, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.description = description
+        self.last = last
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.herald(14.5, .semibold)).foregroundStyle(Theme.foreground)
+                    if let description {
+                        Text(description)
+                            .font(.herald(12.5))
+                            .foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                trailing
+            }
+            .padding(.vertical, 12)
+            if !last { Rectangle().fill(Theme.border).frame(height: 1) }
+        }
+    }
+}
+
+extension SettingRow where Trailing == EmptyView {
+    public init(_ title: String, description: String? = nil, last: Bool = false) {
+        self.init(title, description: description, last: last) { EmptyView() }
     }
 }

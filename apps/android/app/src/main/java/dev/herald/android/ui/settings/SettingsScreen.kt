@@ -24,24 +24,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,9 +57,25 @@ import dev.herald.android.model.Severity
 import dev.herald.android.notify.Channels
 import dev.herald.android.transport.SocketClient
 import dev.herald.android.transport.TransportManager.FcmState
+import dev.herald.android.ui.components.FilterPill
+import dev.herald.android.ui.components.PillButton
+import dev.herald.android.ui.components.PillVariant
+import dev.herald.android.ui.components.SourceAvatar
 import dev.herald.android.ui.components.severityColor
+import dev.herald.android.ui.theme.Herald
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -78,6 +86,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var confirmUnpair by remember { mutableStateOf(false) }
+    val c = Herald.colors
 
     // Permission / battery state can change in system settings: re-read on every resume.
     var resumeTick by remember { mutableIntStateOf(0) }
@@ -91,100 +100,115 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
 
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.consumeMessage() } }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
-            )
-        },
-    ) { padding ->
+    Scaffold(containerColor = c.background, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         val s = settings ?: return@Scaffold
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Section("Account")
-            Info("Server", s.serverUrl)
-            s.userEmail?.let { Info("Signed in as", it) }
-            s.deviceName?.let { Info("Device name", it) }
+        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 32.dp)) {
+            // Gluon's settings header: back, large bold title, muted description.
+            IconButton(onClick = onBack, modifier = Modifier.padding(top = 4.dp).offset(x = (-12).dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.secondaryLabel)
+            }
+            Text("Settings", style = MaterialTheme.typography.headlineLarge, color = c.foreground)
+            Text("This phone and how Herald reaches it.", style = MaterialTheme.typography.bodyMedium, color = c.muted, modifier = Modifier.padding(top = 2.dp))
 
-            Section("Delivery")
-            Info("Firebase Cloud Messaging", fcmLabel(fcm))
-            Info("WebSocket", socketLabel(socket, serviceRunning))
-            Text("Instant delivery (persistent connection)", style = MaterialTheme.typography.bodyLarge)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                val modes = InstantDelivery.entries
-                modes.forEachIndexed { i, mode ->
-                    SegmentedButton(
-                        selected = s.instantDelivery == mode,
-                        onClick = { vm.setInstantDelivery(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(i, modes.size),
-                    ) { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) }
+            // Account card
+            Row(
+                Modifier.padding(top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SourceAvatar(s.userEmail ?: s.deviceName ?: "Herald", size = 46.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(s.userEmail ?: "Not signed in", style = MaterialTheme.typography.titleMedium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(s.serverUrl.removePrefix("https://"), style = MaterialTheme.typography.bodySmall, color = c.muted, maxLines = 1)
+                    s.deviceName?.let { Text("This device: $it", style = MaterialTheme.typography.bodySmall, color = c.muted, maxLines = 1) }
                 }
             }
-            Text(
-                deliveryExplanation(s.instantDelivery, fcm),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+            SettingsHeading("Delivery")
+            SettingRow("Push (Firebase)", fcmLabel(fcm), trailing = { StatusDot(fcm is FcmState.Registered) })
+            SettingRow("Live connection", socketLabel(socket, serviceRunning), trailing = { StatusDot(socket == SocketClient.State.CONNECTED) })
+            Column(Modifier.padding(vertical = 14.dp)) {
+                Text("Instant delivery", style = MaterialTheme.typography.titleMedium, color = c.foreground)
+                Text(deliveryExplanation(s.instantDelivery, fcm), style = MaterialTheme.typography.bodySmall, color = c.muted, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    InstantDelivery.entries.forEach { mode ->
+                        FilterPill(mode.name.lowercase().replaceFirstChar { it.uppercase() }, selected = s.instantDelivery == mode) { vm.setInstantDelivery(mode) }
+                    }
+                }
+                Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PillButton(onClick = vm::recheckTransport, height = 34.dp) { Text("Re-check") }
+                    PillButton(onClick = vm::syncNow, height = 34.dp) { Text("Sync now") }
+                }
+            }
+
+            SettingsHeading("Notifications")
+            SettingRow(
+                "Permission",
+                if (notificationsAllowed) "Herald can show notifications." else "Notifications are blocked for Herald.",
+                trailing = {
+                    if (notificationsAllowed) {
+                        StatusDot(true)
+                    } else {
+                        PillButton(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= 33 &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    openAppNotificationSettings(context)
+                                }
+                            },
+                            variant = PillVariant.Brand,
+                            height = 32.dp,
+                        ) { Text("Allow") }
+                    }
+                },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = vm::recheckTransport) { Text("Re-check") }
-                OutlinedButton(onClick = vm::syncNow) { Text("Sync now") }
-            }
-
-            Section("Notifications")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Info("Permission", if (notificationsAllowed) "Allowed" else "Not allowed", Modifier.weight(1f))
-                if (!notificationsAllowed) {
-                    TextButton(onClick = {
-                        if (Build.VERSION.SDK_INT >= 33 &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            openAppNotificationSettings(context)
-                        }
-                    }) { Text("Allow") }
-                }
-            }
-            Text("Channels (sound, vibration, Do Not Disturb per severity)", style = MaterialTheme.typography.bodyMedium)
+            SettingRow(
+                "Mark as read when dismissed",
+                "Swiping a notification away marks it read on every device.",
+                trailing = { HeraldSwitch(s.dismissMarksRead, vm::setDismissMarksRead) },
+            )
+            Text(
+                "Sound and vibration per severity",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.muted,
+                modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+            )
             Severity.entries.reversed().forEach { sev ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { openChannelSettings(context, sev.channelId) }.padding(vertical = 10.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { openChannelSettings(context, sev.channelId) }
+                        .padding(vertical = 11.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("●", color = severityColor(sev))
+                    Box(Modifier.size(9.dp).clip(CircleShape).background(severityColor(sev)))
                     Spacer(Modifier.width(12.dp))
-                    Text(stringResource(Channels.nameRes(sev)), modifier = Modifier.weight(1f))
-                    Text("Configure", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(Channels.nameRes(sev)), style = MaterialTheme.typography.bodyLarge, color = c.foreground, modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Configure", tint = c.faint)
                 }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Mark as read when dismissed", style = MaterialTheme.typography.bodyLarge)
-                    Text("Swiping a notification away marks it read on every device.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = s.dismissMarksRead, onCheckedChange = vm::setDismissMarksRead)
             }
 
-            Section("Battery")
-            Info(
-                "Battery optimization",
-                if (batteryExempt) "Unrestricted" else "Optimized (the connection may be delayed or killed in the background)",
+            SettingsHeading("Battery")
+            SettingRow(
+                "Background activity",
+                if (batteryExempt) "Unrestricted: the live connection stays up." else "Optimized: the live connection may be delayed or stopped in the background.",
+                trailing = {
+                    if (batteryExempt) StatusDot(true)
+                    else PillButton(onClick = { requestBatteryExemption(context) }, height = 32.dp) { Text("Allow") }
+                },
             )
-            if (!batteryExempt) {
-                OutlinedButton(onClick = { requestBatteryExemption(context) }) { Text("Allow running in background") }
-            }
 
-            Section("About")
-            Info("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})")
-            Info("Firebase config in this build", if (BuildConfig.HAS_GOOGLE_SERVICES) "Yes" else "No (WebSocket only)")
+            SettingsHeading("About")
+            SettingRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})")
+            SettingRow("Firebase in this build", if (BuildConfig.HAS_GOOGLE_SERVICES) "Included" else "Not included (live connection only)", last = true)
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Button(
+            PillButton(
                 onClick = { confirmUnpair = true },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Unpair this device") }
+                variant = PillVariant.Destructive,
+                height = 46.dp,
+                modifier = Modifier.padding(top = 24.dp).fillMaxWidth(),
+            ) { Text("Unpair this device", fontWeight = FontWeight.SemiBold) }
         }
     }
 
@@ -193,23 +217,59 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             onDismissRequest = { confirmUnpair = false },
             title = { Text("Unpair this device?") },
             text = { Text("It stops receiving notifications and its token is revoked on the server.") },
-            confirmButton = { TextButton(onClick = { confirmUnpair = false; vm.unpair() }) { Text("Unpair") } },
-            dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { confirmUnpair = false; vm.unpair() }) { Text("Unpair", color = Color(0xFFDC2626)) } },
+            dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel", color = c.foreground) } },
+            containerColor = c.background,
         )
     }
 }
 
+/** Gluon's settings section heading: bold, with space above. */
 @Composable
-private fun Section(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
+private fun SettingsHeading(title: String) {
+    Text(title, style = MaterialTheme.typography.titleLarge, color = Herald.colors.foreground, modifier = Modifier.padding(top = 28.dp, bottom = 2.dp))
+}
+
+/** Gluon's setting row: title, muted description, control on the right, hairline below. */
+@Composable
+private fun SettingRow(title: String, description: String? = null, last: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+    val c = Herald.colors
+    Column {
+        Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = c.foreground)
+                description?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.muted, modifier = Modifier.padding(top = 2.dp)) }
+            }
+            if (trailing != null) {
+                Spacer(Modifier.width(14.dp))
+                trailing()
+            }
+        }
+        if (!last) HorizontalDivider(color = c.border)
+    }
 }
 
 @Composable
-private fun Info(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
-    }
+private fun StatusDot(ok: Boolean) {
+    Box(Modifier.size(9.dp).clip(CircleShape).background(if (ok) Color(0xFF16A34A) else Herald.colors.faint))
+}
+
+/** Gluon's switch: grey track, green when on, white thumb. */
+@Composable
+private fun HeraldSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val c = Herald.colors
+    Switch(
+        checked = checked,
+        onCheckedChange = onChange,
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = Color(0xFF16A34A),
+            checkedBorderColor = Color.Transparent,
+            uncheckedThumbColor = Color.White,
+            uncheckedTrackColor = if (c == dev.herald.android.ui.theme.DarkHerald) Color(0xFF3D3934) else Color(0xFFE0DCD4),
+            uncheckedBorderColor = Color.Transparent,
+        ),
+    )
 }
 
 private fun fcmLabel(s: FcmState): String = when (s) {

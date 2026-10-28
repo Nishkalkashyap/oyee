@@ -7,6 +7,7 @@ import SwiftUI
 struct MenuBarLabel: View {
     let model: HeraldModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         let unread = model.store.unreadCount
@@ -24,6 +25,10 @@ struct MenuBarLabel: View {
             if !model.isPaired { showInboxWindow(openWindow) }
         }
         .onChange(of: model.pairingRequest) { showInboxWindow(openWindow) }
+        .onChange(of: model.settingsRequest) {
+            openSettings()
+            NSApp.activate()
+        }
     }
 
     private func symbolName(unread: Int) -> String {

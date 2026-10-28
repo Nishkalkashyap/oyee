@@ -57,3 +57,7 @@ so a source has the same color everywhere.
   brand header, compact rows and a pill footer.
 - **Android:** Gluon's mobile header (large title, live state, round Settings button), pills, rows and the same
   conversation view. The system notification shade is drawn by Android; Herald sets the orange accent.
+- **Settings (macOS, Android):** Gluon's settings layout. Large bold title with a muted description, an account card
+  (avatar, email, server, this device, connection, reconnect / unpair), bold section headings, and rows with a semibold
+  title, a muted description and the control on the right, separated by hairlines. Switches use Gluon's style: grey
+  track, green when on, white thumb. On macOS, `herald://settings` opens the window.

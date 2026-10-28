@@ -56,6 +56,8 @@ public final class HeraldModel {
     public var selectedNotificationID: String?
     /// Incremented when something wants the inbox window shown (macOS opens its window when this changes).
     public private(set) var inboxRequest = 0
+    /// Bumped by `herald://settings`; the menu-bar label opens the Settings window.
+    public var settingsRequest = 0
     /// Incremented when a pairing link arrives (macOS shows the pairing UI).
     public private(set) var pairingRequest = 0
 
@@ -201,6 +203,10 @@ public final class HeraldModel {
         if let link = Pairing.parseLink(url) {
             pendingPairLink = link
             pairingRequest += 1
+            return true
+        }
+        if url.scheme?.lowercased() == "herald", url.host()?.lowercased() == "settings" {
+            settingsRequest += 1
             return true
         }
         if url.scheme?.lowercased() == "herald" {
