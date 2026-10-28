@@ -37,8 +37,9 @@ Free and open source (MIT).
 Then pair the device: on the web, **Devices → Pair a device**, and enter the code in the app.
 
 **Updates:** the macOS app updates itself from GitHub Releases in the background (download, checksum check, restart;
-can be turned off in Settings). The Android app notifies you about a new release and installs it with one tap
-(Android always asks you to confirm installs from outside the Play Store). Releases are built and
+can be turned off in Settings). The Android app notifies you about a new release; **Update** downloads the APK in
+your browser, and you tap it to install. (The app doesn't install APKs itself: Play Protect blocks sideloaded apps
+that can.) Releases are built and
 signed by GitHub Actions ([release.yml](.github/workflows/release.yml)); each one includes `SHA256SUMS.txt`.
 
 ## Quick start

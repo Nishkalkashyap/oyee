@@ -11,8 +11,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Sideloaded app (never on Play): lets the user exempt Oyee from battery optimisation in one tap. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- Self-update from GitHub Releases (the system still asks the user to confirm). -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".OyeeApp"
@@ -26,16 +24,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Oyee"
         tools:targetApi="36">
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.updates"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/update_paths" />
-        </provider>
 
         <activity
             android:name=".ui.MainActivity"

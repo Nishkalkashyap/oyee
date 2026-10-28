@@ -29,9 +29,6 @@ fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
     val c = Oyee.colors
     val (title, action) = when (val s = state) {
         is AppUpdater.State.Available -> "Oyee ${s.release.version} is available" to "Update"
-        is AppUpdater.State.Downloading -> "Downloading Oyee ${s.release.version}… ${(s.progress * 100).toInt()}%" to null
-        is AppUpdater.State.NeedsPermission -> "Allow Oyee to install updates, then tap Update" to "Update"
-        is AppUpdater.State.Failed -> if (s.release != null) "Update failed: ${s.message}" to "Retry" else return
         else -> return
     }
     Row(
@@ -55,17 +52,15 @@ fun UpdateStatus(updater: AppUpdater): Pair<String, @Composable () -> Unit> {
     val description = if (!updater.enabled) "Debug build: updates are installed by rebuilding." else when (val s = state) {
         AppUpdater.State.Checking -> "Checking GitHub Releases…"
         AppUpdater.State.UpToDate -> "Up to date."
-        is AppUpdater.State.Available -> "Version ${s.release.version} is available."
-        is AppUpdater.State.Downloading -> "Downloading ${s.release.version}… ${(s.progress * 100).toInt()}%"
-        is AppUpdater.State.NeedsPermission -> "Allow Oyee to install updates (Install unknown apps), then tap Update."
+        is AppUpdater.State.Available -> "Version ${s.release.version} is available: Update downloads it in your browser."
         is AppUpdater.State.Failed -> s.message
         AppUpdater.State.Idle -> "Checked automatically every 12 hours."
     }
     val trailing: @Composable () -> Unit = {
         when (state) {
-            is AppUpdater.State.Available, is AppUpdater.State.NeedsPermission ->
+            is AppUpdater.State.Available ->
                 PillButton(onClick = updater::update, variant = PillVariant.Brand, height = 32.dp) { Text("Update") }
-            is AppUpdater.State.Downloading, AppUpdater.State.Checking -> Unit
+            AppUpdater.State.Checking -> Unit
             else -> if (updater.enabled) {
                 PillButton(onClick = { scope.launch { updater.check(notify = false) } }, height = 32.dp) { Text("Check") }
             }
