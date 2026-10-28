@@ -23,12 +23,14 @@ public struct PairingView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: compact ? 10 : 16) {
             if !compact {
-                Label("Pair this device", systemImage: "link.badge.plus")
-                    .font(.title2.weight(.semibold))
+                BrandMark(size: 52)
+                Text("Pair this device")
+                    .font(.herald(28, .heavy))
+                    .padding(.top, 6)
             }
             Text("In the Herald web app, open **Devices → Pair a device** and enter the code shown there (or open the pairing link on this device).")
-                .font(compact ? .caption : .callout)
-                .foregroundStyle(.secondary)
+                .font(.herald(compact ? 12.5 : 14))
+                .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if model.isPaired, model.pendingPairLink != nil {
@@ -38,9 +40,13 @@ public struct PairingView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Server URL").font(.caption).foregroundStyle(.secondary)
+                Text("Server URL").font(.herald(12.5, .semibold)).foregroundStyle(Theme.secondaryLabel)
                 TextField("https://herald.example.com", text: $server)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(.herald(14))
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .background(Theme.secondary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .autocorrectionDisabled()
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
@@ -48,10 +54,14 @@ public struct PairingView: View {
                     #endif
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Pairing code").font(.caption).foregroundStyle(.secondary)
+                Text("Pairing code").font(.herald(12.5, .semibold)).foregroundStyle(Theme.secondaryLabel)
                 TextField("XXXX-XXXX", text: $code)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.title3, design: .monospaced))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 22, weight: .medium, design: .monospaced))
+                    .tracking(2)
+                    .padding(.horizontal, 14)
+                    .frame(height: 50)
+                    .background(Theme.secondary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .autocorrectionDisabled()
                     #if os(iOS)
                     .textInputAutocapitalization(.characters)
@@ -65,14 +75,15 @@ public struct PairingView: View {
 
             if let error {
                 Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
+                    .font(.herald(13.5))
+                    .foregroundStyle(Color(hex: 0xDC2626))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
                 if model.pendingPairLink != nil {
                     Button("Cancel") { model.pendingPairLink = nil }
+                        .buttonStyle(PillButtonStyle(.ghost, size: compact ? .regular : .large))
                 }
                 Spacer()
                 Button(action: submit) {
@@ -82,7 +93,7 @@ public struct PairingView: View {
                     }
                     .frame(minWidth: 60)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PillButtonStyle(.brand, size: compact ? .regular : .large))
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSubmit)
             }

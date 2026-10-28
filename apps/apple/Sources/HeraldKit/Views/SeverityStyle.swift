@@ -1,13 +1,14 @@
 import SwiftUI
 
 extension Severity {
+    /// Severity colors from the shared palette (dot on avatars, soft pills).
     public var color: Color {
         switch self {
-        case .debug: .gray
-        case .info: .blue
-        case .success: .green
-        case .warning: .orange
-        case .critical: .red
+        case .debug: Theme.faint
+        case .info: Color(hex: 0x3B82F6)
+        case .success: Color(hex: 0x16A34A)
+        case .warning: Color(hex: 0xD97706)
+        case .critical: Color(hex: 0xDC2626)
         }
     }
 
@@ -86,24 +87,46 @@ public struct ConnectionStatusDot: View {
     }
 }
 
-/// Native progress bar (determinate or indeterminate) with its label.
+/// Ink progress bar (determinate or sliding indeterminate) with its label, as in the web app.
 public struct NotificationProgressView: View {
     let progress: Progress
+    var showLabel: Bool
+    @ViewState private var phase: CGFloat = -0.35
 
-    public init(progress: Progress) { self.progress = progress }
+    public init(progress: Progress, showLabel: Bool = true) {
+        self.progress = progress
+        self.showLabel = showLabel
+    }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if progress.indeterminate {
-                ProgressView().progressViewStyle(.linear)
-            } else {
-                ProgressView(value: progress.fraction)
-                    .animation(.easeInOut(duration: 0.3), value: progress.fraction)
+        VStack(alignment: .leading, spacing: 5) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.accent)
+                    if progress.indeterminate {
+                        Capsule()
+                            .fill(Theme.foreground)
+                            .frame(width: geo.size.width * 0.35)
+                            .offset(x: geo.size.width * phase)
+                            .onAppear {
+                                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1 }
+                            }
+                    } else {
+                        Capsule()
+                            .fill(Theme.foreground)
+                            .frame(width: max(6, geo.size.width * progress.fraction))
+                            .animation(.easeInOut(duration: 0.3), value: progress.fraction)
+                    }
+                }
+                .clipShape(Capsule())
             }
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            .frame(height: 6)
+            if showLabel {
+                Text(label)
+                    .font(.herald(12))
+                    .foregroundStyle(Theme.muted)
+                    .monospacedDigit()
+            }
         }
     }
 

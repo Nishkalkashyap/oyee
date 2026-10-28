@@ -28,6 +28,8 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: iOS
+      - path: Resources/Fonts
+        type: folder
     dependencies:
       - package: HeraldKit
         product: HeraldKit
@@ -48,6 +50,8 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/HeraldMac
+      - path: Resources/Fonts
+        type: folder
     dependencies:
       - package: HeraldKit
         product: HeraldKit

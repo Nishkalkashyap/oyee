@@ -11,6 +11,7 @@ struct HeraldMacApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView(model: appDelegate.model)
+                .tint(Theme.brand)
         } label: {
             MenuBarLabel(model: appDelegate.model)
         }
@@ -18,11 +19,14 @@ struct HeraldMacApp: App {
 
         Window("Herald", id: WindowID.inbox) {
             InboxWindowView(model: appDelegate.model)
+                .tint(Theme.brand)
         }
-        .defaultSize(width: 960, height: 640)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 980, height: 660)
 
         Settings {
             SettingsView(model: appDelegate.model)
+                .tint(Theme.brand)
         }
     }
 }
@@ -42,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             enableSystemNotifications: NotificationPresenter.isSupported))
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        HeraldFonts.register()
         // Handle herald:// URLs ourselves: an LSUIElement app often has no window for SwiftUI's onOpenURL.
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),

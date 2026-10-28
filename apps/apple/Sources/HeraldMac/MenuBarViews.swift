@@ -43,32 +43,29 @@ struct MenuBarContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             content
-            Divider()
             footer
         }
-        .frame(width: 380)
+        .frame(width: 360)
+        .background(Theme.background)
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("Herald").font(.headline)
-            if model.isPaired {
-                ConnectionStatusDot(state: model.connectionState)
-                Text(model.connectionState.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 9) {
+            BrandMark(size: 24)
+            Text("Herald").font(.herald(15, .bold))
             Spacer()
-            if model.isPaired, store.unreadCount > 0 {
-                Button("Mark all read") { Task { await store.markAllRead() } }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+            if model.isPaired {
+                HStack(spacing: 5) {
+                    ConnectionStatusDot(state: model.connectionState)
+                    Text(model.connectionState.label).font(.herald(12, .semibold))
+                }
+                .foregroundStyle(model.connectionState == .connected ? Color(hex: 0x16A34A) : Theme.muted)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -85,28 +82,32 @@ struct MenuBarContentView: View {
             .padding(12)
         } else if store.activeOrUnread.isEmpty {
             VStack(spacing: 6) {
-                Image(systemName: "checkmark.circle")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text("All caught up").font(.headline)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Theme.chipForeground)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.chip, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text("All caught up").font(.herald(15, .bold))
                 Text("Active and unread notifications appear here.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.herald(12.5))
+                    .foregroundStyle(Theme.muted)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 0) {
                     ForEach(store.activeOrUnread.prefix(40)) { notification in
                         NotificationCardView(notification: notification, store: store, compact: true)
-                            .contentShape(Rectangle())
+                            .background(Theme.background)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .onTapGesture {
                                 model.requestInbox(select: notification.id)
                             }
                     }
                 }
-                .padding(10)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 4)
             }
             .frame(maxHeight: 460)
             .fixedSize(horizontal: false, vertical: true)
@@ -114,24 +115,25 @@ struct MenuBarContentView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Button {
-                showInboxWindow(openWindow)
-            } label: {
-                Label("Open Inbox", systemImage: "tray.full")
+        HStack(spacing: 6) {
+            Button("Open inbox") { showInboxWindow(openWindow) }
+                .buttonStyle(PillButtonStyle(.secondary, size: .small))
+            if model.isPaired, store.unreadCount > 0 {
+                Button("Read all") { Task { await store.markAllRead() } }
+                    .buttonStyle(PillButtonStyle(.ghost, size: .small))
             }
-            Button {
+            Button("Settings") {
                 openSettings()
                 NSApp.activate()
-            } label: {
-                Label("Settings…", systemImage: "gearshape")
             }
+            .buttonStyle(PillButtonStyle(.ghost, size: .small))
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
+                .buttonStyle(PillButtonStyle(.ghost, size: .small))
                 .keyboardShortcut("q")
         }
-        .buttonStyle(.borderless)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Divider().overlay(Theme.border) }
     }
 }

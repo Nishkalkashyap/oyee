@@ -31,7 +31,7 @@ public struct InboxFilterControls: View {
     }
 }
 
-/// The inbox list with search, filters, pull-to-refresh and infinite scroll.
+/// The inbox list in Gluon's language: large title, search pill, peach filter chips and rounded rows.
 public struct InboxListView: View {
     @Bindable var store: InboxStore
     @Binding var selection: String?
@@ -43,65 +43,60 @@ public struct InboxListView: View {
     }
 
     public var body: some View {
-        List(selection: $selection) {
-            if let error = store.lastError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            ForEach(store.visibleNotifications) { notification in
-                NotificationRowView(notification: notification)
-                    .tag(notification.id)
-                    .contextMenu { contextMenu(for: notification) }
-                    #if os(iOS)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            Task { await store.delete(notification.id) }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        if notification.status == .active {
-                            Button {
-                                Task { await store.resolve(notification.id) }
-                            } label: {
-                                Label("Resolve", systemImage: "checkmark")
-                            }
-                            .tint(.green)
-                        }
-                    }
-                    .swipeActions(edge: .leading) {
-                        if !notification.isRead {
-                            Button {
-                                Task { await store.markRead(notification.id) }
-                            } label: {
-                                Label("Read", systemImage: "envelope.open")
-                            }
-                            .tint(.blue)
-                        }
-                    }
-                    #endif
-            }
-            if store.nextCursor != nil {
-                HStack {
-                    Spacer()
-                    ProgressView().controlSize(.small)
-                    Spacer()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                searchField
+                chips
+                if let error = store.lastError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.herald(12))
+                        .foregroundStyle(Color(hex: 0xD97706))
+                        .padding(.horizontal, 4)
                 }
-                .onAppear { Task { await store.loadMore() } }
+                LazyVStack(spacing: 2) {
+                    ForEach(store.visibleNotifications) { notification in
+                        Button {
+                            selection = notification.id
+                        } label: {
+                            NotificationRowView(notification: notification, selected: selection == notification.id)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { contextMenu(for: notification) }
+                    }
+                    if store.nextCursor != nil {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity)
+                            .padding(8)
+                            .onAppear { Task { await store.loadMore() } }
+                    }
+                }
+                .padding(.horizontal, -8)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 18)
         }
-        .searchable(text: $store.filter.query, prompt: "Search notifications")
+        .scrollIndicators(.never)
         .refreshable { await store.refresh() }
         .overlay {
             if store.visibleNotifications.isEmpty {
                 if store.isLoading && !store.hasLoaded {
                     ProgressView()
-                } else if store.filter.isDefault {
-                    ContentUnavailableView(
-                        "No notifications", systemImage: "bell.slash",
-                        description: Text("Notifications sent to Herald show up here."))
                 } else {
-                    ContentUnavailableView.search
+                    VStack(spacing: 8) {
+                        Image(systemName: store.filter.isDefault ? "tray" : "magnifyingglass")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Theme.chipForeground)
+                            .frame(width: 48, height: 48)
+                            .background(Theme.chip, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Text(store.filter.isDefault ? "No notifications yet" : "Nothing matches")
+                            .font(.herald(15, .bold))
+                        Text(store.filter.isDefault ? "Notifications sent to Herald show up here." : "Try another filter.")
+                            .font(.herald(13))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .padding(.top, 120)
                 }
             }
         }
@@ -114,6 +109,57 @@ public struct InboxListView: View {
                 await store.refresh()
             }
         }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Inbox").font(.herald(24, .bold))
+            if store.unreadCount > 0 {
+                Text("\(store.unreadCount) unread").font(.herald(13, .semibold)).foregroundStyle(Theme.brand)
+            }
+            Spacer()
+            Button {
+                Task { await store.markAllRead() }
+            } label: {
+                Label("Read all", systemImage: "checkmark")
+            }
+            .buttonStyle(PillButtonStyle(.ghost, size: .small))
+            .disabled(store.unreadCount == 0)
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            TextField("Search", text: $store.filter.query)
+                .textFieldStyle(.plain)
+                .font(.herald(14))
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 38)
+        .background(Theme.secondary, in: Capsule())
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                FilterChip("All", isOn: store.filter.isDefault || (store.filter.source == nil && !store.filter.unreadOnly && store.filter.status == nil)) {
+                    store.filter.unreadOnly = false
+                    store.filter.status = nil
+                    store.filter.source = nil
+                }
+                FilterChip("Unread", isOn: store.filter.unreadOnly) { store.filter.unreadOnly.toggle() }
+                FilterChip("Active", isOn: store.filter.status == .active) {
+                    store.filter.status = store.filter.status == .active ? nil : .active
+                }
+                ForEach(store.knownSources, id: \.self) { source in
+                    FilterChip(source, isOn: store.filter.source == source) {
+                        store.filter.source = store.filter.source == source ? nil : source
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.never)
     }
 
     @ViewBuilder
@@ -132,27 +178,125 @@ public struct InboxListView: View {
     }
 }
 
-/// Detail pane: the full card. Marks the notification read when shown.
+/// The conversation view: the agent's card as a bubble, quiet update lines, your answers as peach bubbles on the
+/// right and a composer at the bottom. Marks the notification read when shown.
 public struct NotificationDetailView: View {
     let notification: HeraldNotification
     let store: InboxStore
+    @ViewState private var confirmDelete = false
 
     public init(notification: HeraldNotification, store: InboxStore) {
         self.notification = notification
         self.store = store
     }
 
+    private var n: HeraldNotification { notification }
+
     public var body: some View {
-        ScrollView {
-            NotificationCardView(notification: notification, store: store)
-                .padding()
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(Theme.border)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(n.createdAt.formatted(date: .abbreviated, time: .shortened)).systemLine()
+                    NotificationCardView(notification: n, store: store)
+                        .padding(.trailing, 40)
+                    if n.version > 1, n.updatedAt != n.createdAt {
+                        Text("Updated \(n.updatedAt.formatted(.relative(presentation: .named))) · v\(n.version)").systemLine()
+                    }
+                    ForEach(Array(n.responses.enumerated()), id: \.offset) { _, response in
+                        responseBubble(response)
+                    }
+                    if n.isResolved, let at = n.resolvedAt {
+                        Label("Resolved \(at.formatted(.relative(presentation: .named)))", systemImage: "checkmark").systemLine()
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+            }
+            if let reply = n.reply, n.status == .active {
+                ReplyComposer(placeholder: reply.placeholder ?? "Reply to \(n.source)…") { text in
+                    await store.reply(text, to: n)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+            }
         }
-        .navigationTitle(notification.title)
-        .task(id: notification.id) {
-            if !notification.isRead { await store.markRead(notification.id) }
+        .background(Theme.thread)
+        .confirmationDialog("Delete this notification on every device?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { Task { await store.delete(n.id) } }
         }
+        .task(id: n.id) {
+            if !n.isRead { await store.markRead(n.id) }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 11) {
+            SourceAvatar(name: n.source, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(n.source).font(.herald(15, .bold)).foregroundStyle(Theme.foreground)
+                Text(recipients).font(.herald(12)).foregroundStyle(Theme.muted).lineLimit(1)
+            }
+            Spacer()
+            if n.status == .active {
+                Button {
+                    Task { await store.resolve(n.id) }
+                } label: {
+                    Label("Resolve", systemImage: "checkmark")
+                }
+                .buttonStyle(PillButtonStyle(.secondary, size: .small))
+            }
+            Button {
+                confirmDelete = true
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(PillButtonStyle(.ghost, size: .small))
+            .help("Delete")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 62)
+        .background(Theme.background)
+    }
+
+    private var recipients: String {
+        var parts: [String] = []
+        if let targets = n.targetDeviceIds {
+            parts.append(targets.count == 1 ? "Sent to 1 device" : "Sent to \(targets.count) devices")
+        } else {
+            parts.append("All devices")
+        }
+        if let thread = n.threadId { parts.append(thread) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func responseBubble(_ r: Response) -> some View {
+        let label = r.actionId.flatMap { id in n.actions.first(where: { $0.id == id })?.label ?? id }
+        return VStack(alignment: .trailing, spacing: 4) {
+            (Text(label ?? "").font(.herald(14.5, .semibold))
+                + Text(label != nil && r.text != nil ? " · " : "").font(.herald(14.5))
+                + Text(r.text ?? "").font(.herald(14.5)))
+                .foregroundStyle(Theme.foreground)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 6, topTrailingRadius: 22,
+                        style: .continuous
+                    )
+                    .fill(Theme.chip)
+                )
+                .textSelection(.enabled)
+            Text("\(r.deviceName ?? "Unknown device") · \(r.at.formatted(.relative(presentation: .named)))")
+                .font(.herald(12))
+                .foregroundStyle(Theme.muted)
+        }
+        .padding(.leading, 60)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 
@@ -174,6 +318,8 @@ public struct NotificationLoaderView: View {
                 NotificationDetailView(notification: n, store: store)
             } else if failed {
                 ContentUnavailableView("Notification not found", systemImage: "questionmark.circle")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.thread)
             } else {
                 ProgressView()
             }

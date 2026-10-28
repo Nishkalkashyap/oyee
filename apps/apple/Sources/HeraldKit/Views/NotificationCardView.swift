@@ -1,15 +1,14 @@
 import SwiftUI
 
-/// A full Herald card: severity, markdown body, fields, live progress, image, actions, reply, responses, and
-/// read/resolve/delete controls. `compact` trims it down for the menu bar.
+/// A Herald card in Gluon's language. Full size it is the white message bubble of the conversation view (severity
+/// pill, bold title, body, fields, ink progress, image, link, pill actions); `compact` is the menu-bar row with an
+/// avatar, the essentials and small pill actions.
 public struct NotificationCardView: View {
     let notification: HeraldNotification
     let store: InboxStore
     var compact: Bool
 
-    @ViewState private var replyText = ""
     @ViewState private var busyAction: String?
-    @ViewState private var confirmDelete = false
 
     public init(notification: HeraldNotification, store: InboxStore, compact: Bool = false) {
         self.notification = notification
@@ -20,105 +19,136 @@ public struct NotificationCardView: View {
     private var n: HeraldNotification { notification }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            NotificationIconView(notification: n, size: compact ? 22 : 30)
-            VStack(alignment: .leading, spacing: compact ? 4 : 8) {
-                header
-                if let body = n.body, !body.isEmpty {
-                    Text(MarkdownSubset.attributed(body))
-                        .font(compact ? .callout : .body)
-                        .lineLimit(compact ? 3 : nil)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+        if compact { compactBody } else { bubble }
+    }
+
+    // MARK: Bubble
+
+    private var bubble: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FlowRow {
+                SeverityPill(n.severity)
+                if n.isResolved {
+                    Label("Resolved", systemImage: "checkmark")
+                        .font(.herald(11.5, .semibold))
+                        .foregroundStyle(Theme.background)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22)
+                        .background(Theme.foreground, in: Capsule())
                 }
-                if !n.fields.isEmpty { fieldsGrid }
-                if let progress = n.progress { NotificationProgressView(progress: progress) }
-                if !compact, let imageURL = n.imageURL { image(imageURL) }
-                if !n.actions.isEmpty, n.status == .active { actionButtons }
-                if let reply = n.reply, n.status == .active, !compact { replyField(reply) }
-                if !compact, !n.responses.isEmpty { responsesList }
-                if !compact { footer }
+                ForEach(n.tags.prefix(5), id: \.self) { tag in
+                    Text("#\(tag)")
+                        .font(.herald(11.5, .semibold))
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22)
+                        .background(Theme.secondary, in: Capsule())
+                }
+            }
+            Text(n.title)
+                .font(.herald(18, .bold))
+                .foregroundStyle(Theme.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if let body = n.body, !body.isEmpty {
+                Text(MarkdownSubset.attributed(body))
+                    .font(.herald(14.5))
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .lineSpacing(2)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let imageURL = n.imageURL { image(imageURL) }
+            if !n.fields.isEmpty { fieldsGrid(limit: 10) }
+            if let progress = n.progress { NotificationProgressView(progress: progress).padding(.top, 2) }
+            if let url = n.openURL {
+                Button {
+                    store.openURL(url)
+                } label: {
+                    Label(url.host() ?? url.absoluteString, systemImage: "arrow.up.right")
+                        .font(.herald(13, .medium))
+                        .foregroundStyle(Theme.foreground)
+                        .underline(color: Theme.faint)
+                }
+                .buttonStyle(.plain)
+            }
+            if !n.actions.isEmpty, n.status == .active { actionButtons(size: .regular).padding(.top, 2) }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22,
+                style: .continuous
+            )
+            .fill(Theme.bubble)
+        )
+    }
+
+    // MARK: Compact (menu bar)
+
+    private var compactBody: some View {
+        HStack(alignment: .top, spacing: 10) {
+            SourceAvatar(name: n.source, size: 32, severity: n.severity)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(n.title)
+                        .font(.herald(13.5, .semibold))
+                        .foregroundStyle(Theme.foreground)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    Text(n.createdAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                        .font(.herald(11.5, n.isRead ? .regular : .semibold))
+                        .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
+                }
+                Text(subtitle)
+                    .font(.herald(12.5))
+                    .foregroundStyle(n.isRead ? Theme.muted : Theme.secondaryLabel)
+                    .lineLimit(2)
+                if let progress = n.progress, n.status == .active {
+                    NotificationProgressView(progress: progress, showLabel: false).padding(.top, 4)
+                }
+                if !n.actions.isEmpty, n.status == .active {
+                    actionButtons(size: .small).padding(.top, 5)
+                }
             }
         }
-        .padding(compact ? 8 : 14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(n.severity.color.opacity(n.isResolved ? 0.04 : 0.09))
-        )
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(n.severity.color)
-                .frame(width: 3)
-                .padding(.vertical, 6)
-                .opacity(n.isResolved ? 0.3 : 1)
-        }
-        .confirmationDialog("Delete this notification?", isPresented: $confirmDelete) {
-            Button("Delete", role: .destructive) { run("delete") { await store.delete(n.id) } }
-        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .contentShape(Rectangle())
+    }
+
+    private var subtitle: String {
+        let body = n.body.map(MarkdownSubset.plainText) ?? ""
+        return body.isEmpty ? n.source : "\(n.source) · \(body)"
     }
 
     // MARK: Parts
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(n.title)
-                    .font(compact ? .subheadline.weight(.semibold) : .headline)
-                    .lineLimit(compact ? 2 : nil)
-                    .strikethrough(false)
-                Spacer(minLength: 4)
-                if !n.isRead {
-                    Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityLabel("Unread")
-                }
-                Text(n.createdAt, format: .relative(presentation: .named))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: 6) {
-                Text(n.source)
-                if let thread = n.threadId { Text("· \(thread)").lineLimit(1) }
-                if n.isResolved {
-                    Label("Resolved", systemImage: "checkmark.seal.fill")
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.green)
-                }
-                if !compact, !n.tags.isEmpty {
-                    ForEach(n.tags.prefix(5), id: \.self) { tag in
-                        Text(tag)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
-                    }
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private var fieldsGrid: some View {
-        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
-            ForEach(Array(n.fields.prefix(compact ? 4 : 10).enumerated()), id: \.offset) { _, field in
+    private func fieldsGrid(limit: Int) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
+            ForEach(Array(n.fields.prefix(limit).enumerated()), id: \.offset) { _, field in
                 GridRow {
                     Text(field.label)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .gridColumnAlignment(.leading)
                     Text(field.value)
+                        .font(.herald(13.5, .medium))
+                        .foregroundStyle(Theme.foreground)
                         .textSelection(.enabled)
-                        .lineLimit(compact ? 1 : nil)
                 }
             }
         }
-        .font(.callout)
+        .font(.herald(13.5))
     }
 
     private func image(_ url: URL) -> some View {
         AsyncImage(url: url) { phase in
             switch phase {
             case .success(let image):
-                image.resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 8))
+                image.resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             case .failure:
-                Label("Image unavailable", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
+                Label("Image unavailable", systemImage: "photo").font(.herald(12)).foregroundStyle(Theme.muted)
             default:
                 ProgressView().frame(maxWidth: .infinity, minHeight: 80)
             }
@@ -126,178 +156,193 @@ public struct NotificationCardView: View {
         .frame(maxHeight: 320)
     }
 
-    private var actionButtons: some View {
-        HStack(spacing: 8) {
+    private func actionButtons(size: PillButtonStyle.Size) -> some View {
+        HStack(spacing: 6) {
             ForEach(n.actions) { action in
-                actionButton(action)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func actionButton(_ action: Action) -> some View {
-        let button = Button(role: action.style == .destructive ? .destructive : nil) {
-            run(action.id) { await store.perform(action, on: n) }
-        } label: {
-            HStack(spacing: 4) {
-                if busyAction == action.id {
-                    ProgressView().controlSize(.small)
-                } else if action.url != nil {
-                    Image(systemName: "arrow.up.right.square")
-                }
-                Text(action.label).lineLimit(1)
-            }
-        }
-        .controlSize(compact ? .small : .regular)
-        .disabled(busyAction != nil)
-
-        if action.style == .primary {
-            button.buttonStyle(.borderedProminent)
-        } else {
-            button.buttonStyle(.bordered)
-        }
-    }
-
-    private func replyField(_ reply: Reply) -> some View {
-        HStack {
-            TextField(reply.placeholder ?? "Reply…", text: $replyText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...4)
-                .onSubmit(sendReply)
-            Button(reply.buttonLabel ?? "Send", action: sendReply)
-                .buttonStyle(.borderedProminent)
-                .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busyAction != nil)
-        }
-    }
-
-    private func sendReply() {
-        let text = replyText
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        run("reply") {
-            await store.reply(text, to: n)
-            replyText = ""
-        }
-    }
-
-    private var responsesList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Responses").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            ForEach(Array(n.responses.enumerated()), id: \.offset) { _, response in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: response.text != nil ? "text.bubble" : "hand.tap")
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(responseSummary(response)).font(.callout)
-                        Text(
-                            "\(response.deviceName ?? "Unknown device") · \(response.at.formatted(.relative(presentation: .named)))"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                Button {
+                    busyAction = action.id
+                    Task {
+                        await store.perform(action, on: n)
+                        busyAction = nil
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        if busyAction == action.id {
+                            ProgressView().controlSize(.mini)
+                        } else if action.url != nil {
+                            Image(systemName: "arrow.up.right")
+                        }
+                        Text(action.label)
                     }
                 }
+                .buttonStyle(PillButtonStyle(variant(for: action), size: size))
+                .disabled(busyAction != nil)
             }
         }
     }
 
-    private func responseSummary(_ response: Response) -> String {
-        var parts: [String] = []
-        if let actionId = response.actionId {
-            parts.append(n.actions.first(where: { $0.id == actionId })?.label ?? actionId)
-        }
-        if let text = response.text { parts.append("“\(text)”") }
-        return parts.joined(separator: " — ")
-    }
-
-    private var footer: some View {
-        HStack(spacing: 12) {
-            if let url = n.openURL {
-                Button {
-                    store.openURL(url)
-                } label: {
-                    Label("Open link", systemImage: "safari")
-                }
-            }
-            Spacer()
-            if !n.isRead {
-                Button {
-                    run("read") { await store.markRead(n.id) }
-                } label: {
-                    Label("Mark read", systemImage: "envelope.open")
-                }
-            }
-            if n.status == .active {
-                Button {
-                    run("resolve") { await store.resolve(n.id) }
-                } label: {
-                    Label("Resolve", systemImage: "checkmark.circle")
-                }
-            }
-            Button(role: .destructive) {
-                confirmDelete = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .buttonStyle(.borderless)
-        .font(.callout)
-        .disabled(busyAction != nil)
-    }
-
-    private func run(_ key: String, _ work: @escaping @MainActor () async -> Void) {
-        busyAction = key
-        Task {
-            await work()
-            busyAction = nil
+    private func variant(for action: Action) -> PillButtonStyle.Variant {
+        switch action.style {
+        case .primary: .primary
+        case .destructive: .destructive
+        default: .secondary
         }
     }
 }
 
-/// A one-line summary row for lists.
+/// Gluon's list row: the source's tinted avatar with a severity dot, title, time (orange while unread), preview.
 public struct NotificationRowView: View {
     let notification: HeraldNotification
+    var selected: Bool
 
-    public init(notification: HeraldNotification) { self.notification = notification }
+    public init(notification: HeraldNotification, selected: Bool = false) {
+        self.notification = notification
+        self.selected = selected
+    }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            NotificationIconView(notification: notification, size: 22)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(notification.title)
-                        .font(.subheadline.weight(notification.isRead ? .regular : .semibold))
+        let n = notification
+        HStack(spacing: 12) {
+            SourceAvatar(name: n.source, size: 44, severity: n.severity)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(n.title)
+                        .font(.herald(15, .semibold))
+                        .foregroundStyle(n.isResolved && n.isRead ? Theme.muted : Theme.foreground)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(notification.createdAt, format: .relative(presentation: .numeric))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Text(n.createdAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                        .font(.herald(12, n.isRead ? .regular : .semibold))
+                        .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
+                        .monospacedDigit()
                 }
-                if let body = notification.body, !body.isEmpty {
-                    Text(MarkdownSubset.plainText(body))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                if let progress = notification.progress, notification.status == .active {
-                    if progress.indeterminate {
-                        ProgressView().progressViewStyle(.linear).controlSize(.mini)
-                    } else {
-                        ProgressView(value: progress.fraction).controlSize(.mini)
+                HStack(spacing: 8) {
+                    Text(preview)
+                        .font(.herald(13.5))
+                        .foregroundStyle(n.isRead ? Theme.muted : Theme.secondaryLabel)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if !n.responses.isEmpty {
+                        Label("\(n.responses.count)", systemImage: "arrowshape.turn.up.left")
+                            .font(.herald(11.5))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    if n.isResolved {
+                        Image(systemName: "checkmark").font(.herald(12, .bold)).foregroundStyle(Color(hex: 0x16A34A))
+                    }
+                    if !n.isRead {
+                        Circle().fill(Theme.brand).frame(width: 9, height: 9).accessibilityLabel("Unread")
                     }
                 }
-                HStack(spacing: 4) {
-                    Text(notification.source)
-                    if notification.isResolved {
-                        Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                    }
+                if let progress = n.progress, n.status == .active {
+                    NotificationProgressView(progress: progress, showLabel: false).padding(.top, 5)
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-            if !notification.isRead {
-                Circle().fill(Color.accentColor).frame(width: 7, height: 7).padding(.top, 5)
             }
         }
-        .padding(.vertical, 3)
-        .opacity(notification.isResolved ? 0.7 : 1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(selected ? Theme.rowSelected : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var preview: String {
+        let body = notification.body.map(MarkdownSubset.plainText)?.replacingOccurrences(of: "\n", with: " ") ?? ""
+        return body.isEmpty ? notification.source : "\(notification.source) · \(body)"
+    }
+}
+
+/// Gluon's composer: a rounded bubble field with an orange send button.
+public struct ReplyComposer: View {
+    let placeholder: String
+    let onSend: (String) async -> Void
+    @ViewState private var text = ""
+    @ViewState private var sending = false
+
+    public init(placeholder: String, onSend: @escaping (String) async -> Void) {
+        self.placeholder = placeholder
+        self.onSend = onSend
+    }
+
+    private var canSend: Bool { !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    public var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.herald(14.5))
+                .lineLimit(1...5)
+                .padding(.vertical, 8)
+                .onSubmit(send)
+            Button(action: send) {
+                Image(systemName: sending ? "ellipsis" : "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.brandForeground)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.brand.opacity(canSend ? 1 : 0.4), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(Theme.bubble, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+    }
+
+    private func send() {
+        let value = text
+        guard canSend else { return }
+        sending = true
+        Task {
+            await onSend(value)
+            text = ""
+            sending = false
+        }
+    }
+}
+
+/// Wraps its children onto new lines (pills, tags).
+struct FlowRow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, maxX: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += line + spacing
+                line = 0
+            }
+            x += size.width + spacing
+            maxX = max(maxX, x - spacing)
+            line = max(line, size.height)
+        }
+        return CGSize(width: maxX, height: y + line)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += line + spacing
+                line = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            line = max(line, size.height)
+        }
+    }
+}
+
+extension View {
+    /// A system-style "secondary text" line centered in the conversation (updates, resolution, timestamps).
+    func systemLine() -> some View {
+        self.font(.herald(12)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
     }
 }

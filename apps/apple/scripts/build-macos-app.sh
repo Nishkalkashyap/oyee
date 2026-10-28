@@ -35,6 +35,10 @@ if BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)"; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 fi
 
+# Fonts (Figtree, OFL): registered at launch by HeraldFonts.register().
+mkdir -p "$APP/Contents/Resources/Fonts"
+cp "$ROOT/Resources/Fonts/"*.ttf "$APP/Contents/Resources/Fonts/"
+
 # SwiftPM resource bundles, if any target ever gets resources.
 find "$BIN_DIR" -maxdepth 1 -name '*.bundle' -print0 2>/dev/null | while IFS= read -r -d '' bundle; do
   cp -R "$bundle" "$APP/Contents/Resources/"
