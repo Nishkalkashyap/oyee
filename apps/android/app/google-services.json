@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "274103845543",
+    "project_id": "herald-8c157",
+    "storage_bucket": "herald-8c157.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:274103845543:android:c577330adf67f5f26ad182",
+        "android_client_info": {
+          "package_name": "dev.herald.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoPcY4wSQ_0nxEfqMBwX0eUDv9i0FvjpU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

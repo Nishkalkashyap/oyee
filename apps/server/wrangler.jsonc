@@ -33,7 +33,7 @@
   // FCM_SERVICE_ACCOUNT_JSON) are set with `wrangler secret put` (or .dev.vars locally).
   "vars": {
     "PUBLIC_URL": "https://push.nishkal.in",
-    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_CLIENT_ID": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
     "ALLOWED_EMAILS": "",
     "VAPID_PUBLIC_KEY": "BPuyNA-LTKSdtQQM0GxBPINAzJxyQYzgRHlmYDFqqKJpI7a2rvLpxuVXSwk46FOlub4CoTLtO7hsZ2Cttlps2do",
     "VAPID_SUBJECT": "https://push.nishkal.in",
