@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4
+- Android: Update downloads the APK with Android's download manager instead of the browser (Brave could stall at
+  100%). The banner shows progress, then **Install** opens Downloads; or tap the "Download complete" notification.
+
 ## 0.2.3
 - Update check demo: Android shows "Oyee 0.2.3 is available"; macOS installs it automatically.
 

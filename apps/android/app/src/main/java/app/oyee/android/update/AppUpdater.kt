@@ -1,10 +1,13 @@
 package app.oyee.android.update
 
 import android.app.Application
+import android.app.DownloadManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -20,6 +23,8 @@ import app.oyee.android.notify.Channels
 import app.oyee.android.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,12 +56,13 @@ object Versions {
 }
 
 /**
- * Update notifications from GitHub Releases (release builds only). Checks `releases/latest`; "Update" opens the APK
- * download in the browser and the user installs it from there.
+ * Update notifications from GitHub Releases (release builds only). Checks `releases/latest`; "Update" hands the APK to
+ * the system DownloadManager, whose "Download complete" notification (or the Downloads app) opens the installer.
  *
- * The app deliberately does not download or install APKs itself: Play Protect blocks sideloaded apps that hold
- * REQUEST_INSTALL_PACKAGES ("Harmful app blocked"). Authenticity is still guaranteed by Android, which only accepts an
- * update signed with the same key as the installed app.
+ * The app deliberately never installs APKs itself: Play Protect blocks sideloaded apps that hold
+ * REQUEST_INSTALL_PACKAGES ("Harmful app blocked"). Browsers are a poor fallback too (Brave stalls APK downloads at
+ * 100%), so they are only used where DownloadManager can't write to Downloads without a permission (Android 9 and
+ * older). Authenticity is guaranteed by Android, which only accepts an update signed with the same key.
  */
 class AppUpdater(private val app: Application, private val http: OkHttpClient, private val scope: CoroutineScope) {
     sealed interface State {
@@ -64,6 +70,9 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
         data object Checking : State
         data object UpToDate : State
         data class Available(val release: Release) : State
+        /** [progress] is 0..1, or null before the size is known. */
+        data class Downloading(val release: Release, val progress: Float?) : State
+        data class Downloaded(val release: Release) : State
         data class Failed(val message: String) : State
     }
 
@@ -74,6 +83,8 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
     /** Self-update only makes sense for the signed builds published on GitHub. */
     val enabled: Boolean = !BuildConfig.DEBUG
     private val prefs = app.getSharedPreferences("updates", Context.MODE_PRIVATE)
+    private val downloads = app.getSystemService(DownloadManager::class.java)
+    private var watcher: Job? = null
 
     fun schedule() {
         if (!enabled) return
@@ -84,11 +95,13 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
     /** Checks GitHub for a newer release. With [notify], posts a notification once per new version. */
     suspend fun check(notify: Boolean): Release? {
         if (!enabled) return null
+        (_state.value as? State.Downloading)?.let { return it.release }
         _state.value = State.Checking
         return try {
             val release = fetchLatest()
             if (release != null && Versions.isNewer(release.version, currentVersion)) {
                 _state.value = State.Available(release)
+                resumeDownload(release)
                 if (notify && prefs.getString("notified", null) != release.version) {
                     postNotification(release)
                     prefs.edit().putString("notified", release.version).apply()
@@ -96,6 +109,7 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
                 release
             } else {
                 _state.value = State.UpToDate
+                forgetDownload()
                 null
             }
         } catch (e: Exception) {
@@ -105,12 +119,99 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
         }
     }
 
-    /** Opens the latest APK download in the browser (checking first if needed). */
+    /** Downloads the latest APK (checking first if needed), or opens Downloads once it's there. */
     fun update() {
         scope.launch {
+            when (_state.value) {
+                is State.Downloading -> return@launch
+                is State.Downloaded -> return@launch openDownloads()
+                else -> Unit
+            }
             val release = (_state.value as? State.Available)?.release ?: check(notify = false) ?: return@launch
-            app.startActivity(Intent(Intent.ACTION_VIEW, release.apkUrl.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            if (_state.value is State.Downloaded) return@launch openDownloads()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@launch openInBrowser(release)
+            try {
+                forgetDownload()
+                val request = DownloadManager.Request(release.apkUrl.toUri())
+                    .setTitle("Oyee ${release.version}")
+                    .setDescription("Tap when complete to install")
+                    .setMimeType(APK_MIME)
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, release.apkName)
+                val id = downloads.enqueue(request)
+                prefs.edit().putLong(KEY_DOWNLOAD_ID, id).putString(KEY_DOWNLOAD_VERSION, release.version).apply()
+                watch(release, id)
+            } catch (e: Exception) {
+                Log.d(TAG, "download manager unavailable: ${e.message}")
+                openInBrowser(release)
+            }
         }
+    }
+
+    /** The Downloads app, where the finished APK can be tapped to install. */
+    fun openDownloads() {
+        runCatching {
+            app.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { Log.d(TAG, "no downloads app: ${it.message}") }
+    }
+
+    private fun openInBrowser(release: Release) {
+        app.startActivity(Intent(Intent.ACTION_VIEW, release.apkUrl.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** Picks up a download started before the app was restarted. */
+    private suspend fun resumeDownload(release: Release) {
+        if (prefs.getString(KEY_DOWNLOAD_VERSION, null) != release.version) return
+        val id = prefs.getLong(KEY_DOWNLOAD_ID, -1).takeIf { it >= 0 } ?: return
+        if (query(id) == null) forgetDownload() else watch(release, id)
+    }
+
+    /** Mirrors DownloadManager's progress into [state] until the download finishes. */
+    private fun watch(release: Release, id: Long) {
+        watcher?.cancel()
+        watcher = scope.launch {
+            while (true) {
+                val status = query(id)
+                when (status?.status) {
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        _state.value = State.Downloaded(release)
+                        return@launch
+                    }
+                    DownloadManager.STATUS_FAILED, null -> {
+                        _state.value = State.Failed("Download failed: try again")
+                        forgetDownload()
+                        return@launch
+                    }
+                    else -> _state.value = State.Downloading(release, status.progress)
+                }
+                delay(500)
+            }
+        }
+    }
+
+    private class Status(val status: Int, val progress: Float?)
+
+    private suspend fun query(id: Long): Status? = withContext(Dispatchers.IO) {
+        runCatching {
+            downloads.query(DownloadManager.Query().setFilterById(id))?.use { c ->
+                if (!c.moveToFirst()) return@use null
+                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                val done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                Status(
+                    status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)),
+                    progress = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null,
+                )
+            }
+        }.getOrNull()
+    }
+
+    /** Removes the previous update download (the APK file too) so Downloads doesn't fill with old versions. */
+    private fun forgetDownload() {
+        val id = prefs.getLong(KEY_DOWNLOAD_ID, -1)
+        if (id < 0) return
+        watcher?.cancel()
+        runCatching { downloads.remove(id) }
+        prefs.edit().remove(KEY_DOWNLOAD_ID).remove(KEY_DOWNLOAD_VERSION).apply()
     }
 
     private suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
@@ -159,6 +260,9 @@ class AppUpdater(private val app: Application, private val http: OkHttpClient, p
         const val REPO = "Nishkalkashyap/oyee"
         private const val TAG = "OyeeUpdater"
         private const val UPDATE_NOTIFICATION_ID = 0x0E0E
+        private const val APK_MIME = "application/vnd.android.package-archive"
+        private const val KEY_DOWNLOAD_ID = "downloadId"
+        private const val KEY_DOWNLOAD_VERSION = "downloadVersion"
     }
 }
 

@@ -22,13 +22,15 @@ import app.oyee.android.ui.components.PillVariant
 import app.oyee.android.ui.theme.Oyee
 import kotlinx.coroutines.launch
 
-/** Peach banner at the top of the inbox while an update is available or downloading. */
+/** Peach banner at the top of the inbox while an update is available, downloading or ready to install. */
 @Composable
 fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
     val state by updater.state.collectAsStateWithLifecycle()
     val c = Oyee.colors
     val (title, action) = when (val s = state) {
         is AppUpdater.State.Available -> "Oyee ${s.release.version} is available" to "Update"
+        is AppUpdater.State.Downloading -> "Downloading Oyee ${s.release.version}${percent(s.progress)}" to null
+        is AppUpdater.State.Downloaded -> "Oyee ${s.release.version} downloaded" to "Install"
         else -> return
     }
     Row(
@@ -52,7 +54,10 @@ fun UpdateStatus(updater: AppUpdater): Pair<String, @Composable () -> Unit> {
     val description = if (!updater.enabled) "Debug build: updates are installed by rebuilding." else when (val s = state) {
         AppUpdater.State.Checking -> "Checking GitHub Releases…"
         AppUpdater.State.UpToDate -> "Up to date."
-        is AppUpdater.State.Available -> "Version ${s.release.version} is available: Update downloads it in your browser."
+        is AppUpdater.State.Available -> "Version ${s.release.version} is available."
+        is AppUpdater.State.Downloading -> "Downloading ${s.release.version}${percent(s.progress)}"
+        is AppUpdater.State.Downloaded ->
+            "${s.release.version} is downloaded: tap Install, then the Oyee APK in Downloads. Allow installs from that app if Android asks."
         is AppUpdater.State.Failed -> s.message
         AppUpdater.State.Idle -> "Checked automatically every 12 hours."
     }
@@ -60,7 +65,9 @@ fun UpdateStatus(updater: AppUpdater): Pair<String, @Composable () -> Unit> {
         when (state) {
             is AppUpdater.State.Available ->
                 PillButton(onClick = updater::update, variant = PillVariant.Brand, height = 32.dp) { Text("Update") }
-            AppUpdater.State.Checking -> Unit
+            is AppUpdater.State.Downloaded ->
+                PillButton(onClick = updater::update, variant = PillVariant.Brand, height = 32.dp) { Text("Install") }
+            AppUpdater.State.Checking, is AppUpdater.State.Downloading -> Unit
             else -> if (updater.enabled) {
                 PillButton(onClick = { scope.launch { updater.check(notify = false) } }, height = 32.dp) { Text("Check") }
             }
@@ -68,3 +75,5 @@ fun UpdateStatus(updater: AppUpdater): Pair<String, @Composable () -> Unit> {
     }
     return "Version ${updater.currentVersion} · $description" to trailing
 }
+
+private fun percent(progress: Float?): String = progress?.let { " · ${(it * 100).toInt()}%" } ?: "…"

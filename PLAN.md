@@ -204,8 +204,10 @@ oyee/
   release keystore must be kept: every APK has to be signed with it for updates to install. No Play Store.
 - **Self-update:** release builds check GitHub Releases (`releases/latest`). macOS (`OyeeAutoUpdate` in Info.plist,
   set by the release build) downloads the zip, verifies SHA256SUMS, swaps the bundle and relaunches automatically.
-  Android notifies and shows a banner; Update opens the APK download in the browser (no REQUEST_INSTALL_PACKAGES:
-  Play Protect blocks sideloaded apps that hold it with "Harmful app blocked").
+  Android notifies and shows a banner; Update downloads the APK with the system DownloadManager (public Downloads,
+  Android 10+; older versions fall back to the browser), and the "Download complete" notification or the Downloads
+  app opens the installer. No REQUEST_INSTALL_PACKAGES: Play Protect blocks sideloaded apps that hold it with
+  "Harmful app blocked". Not the browser either: Brave stalls APK downloads at 100%.
 - Android from source: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`.
 - macOS from source: `apps/apple/scripts/build-macos-app.sh` → `Oyee.app` (ad-hoc signed; `UNIVERSAL=1` for both
   architectures). No notarization.
