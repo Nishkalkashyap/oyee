@@ -4,9 +4,10 @@
 > Send a notification with one HTTP call or one MCP tool call, receive it on your phone, laptop and browser —
 > with live-updating progress, action buttons and inline replies.
 
-Herald is a free, open-source project. It is not monetized. The web app/backend is hosted on Cloudflare Workers;
-the native clients are **not distributed as signed binaries** — users build them from source (or sideload an
-unsigned/debug build).
+Herald is a free, open-source project (public repo, MIT). It is not monetized. The web app/backend is hosted on
+Cloudflare Workers. The Android APK (release-signed) and the macOS app (universal, ad-hoc signed, not notarized) are
+published on **GitHub Releases** by CI on every `v*` tag; anyone can also build them from source. iOS is
+build-from-source only (distribution needs a paid Apple account).
 
 ---
 
@@ -197,8 +198,13 @@ herald/
 [docs/setup.md](docs/setup.md).**
 
 - Web/server: `pnpm install && pnpm deploy` (builds the web app, applies D1 migrations, deploys the worker). Secrets live in Cloudflare and persist across deploys.
-- Android: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`. No Play Store.
-- macOS: `apps/apple/scripts/build-macos-app.sh` → `Herald.app` (ad-hoc signed). No notarization.
+- **Releases:** `git tag vX.Y.Z && git push origin vX.Y.Z` → `.github/workflows/release.yml` builds and publishes
+  `Herald-X.Y.Z.apk` (signed with the release key from Actions secrets; versionCode = X·10000 + Y·100 + Z) and
+  `Herald-X.Y.Z-macOS.zip` (universal arm64 + x86_64, ad-hoc signed), with `SHA256SUMS.txt` and install notes. The
+  release keystore must be kept: every APK has to be signed with it for updates to install. No Play Store.
+- Android from source: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`.
+- macOS from source: `apps/apple/scripts/build-macos-app.sh` → `Herald.app` (ad-hoc signed; `UNIVERSAL=1` for both
+  architectures). No notarization.
 - iOS: `cd apps/apple && xcodegen && open Herald.xcodeproj` → run on device with your own (free or paid) team.
 - Every client lets you configure the **server URL**, so self-hosted instances work everywhere.
 

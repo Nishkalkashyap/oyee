@@ -1,5 +1,9 @@
 # Setting up Herald (web + Android + macOS)
 
+> **Just want the apps?** Download the Android APK and the macOS app from
+> [GitHub Releases](https://github.com/nishkalkashyap/herald/releases/latest) and use <https://push.nishkal.in>.
+> This guide is for running your own instance or building from source.
+
 This is the exact procedure used to bring up the hosted instance at `https://push.nishkal.in`. Follow it to run
 your own instance, or to redeploy from a new machine. iOS is not covered yet (see PLAN.md §10).
 
@@ -185,3 +189,12 @@ pnpm dev                                                   # wrangler dev :8787 
 ```
 Sign in at `http://localhost:8787/auth/dev-login?email=you@example.com&redirect=/`. Android emulator → server
 `http://10.0.2.2:8787`. Debug builds allow cleartext to local addresses.
+
+## 10. Publishing releases (maintainers)
+
+1. Android release key (once): `keytool -genkeypair -keystore herald-release.jks -storetype PKCS12 -alias herald
+   -keyalg RSA -keysize 4096 -validity 36500`. **Back it up**; every APK must be signed with it.
+2. Repo secrets (once): `ANDROID_KEYSTORE_BASE64` (`base64 -i herald-release.jks`), `ANDROID_KEYSTORE_PASSWORD`,
+   `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+3. Release: `git tag v0.2.0 && git push origin v0.2.0`. The workflow runs the Android and Swift tests, builds the signed
+   APK and the universal macOS app, and publishes the GitHub Release with checksums.

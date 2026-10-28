@@ -2,6 +2,9 @@
 # Builds Herald.app (macOS menu-bar app) without Xcode:
 #   swift build -c release → assemble the bundle → ad-hoc codesign.
 # Output: apps/apple/build/Herald.app
+#
+#   UNIVERSAL=1        build for Apple Silicon and Intel (used for GitHub Releases)
+#   HERALD_VERSION=x   sets CFBundleShortVersionString (default: the Info.plist value)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,9 +20,12 @@ if [[ -z "${DEVELOPER_DIR:-}" ]] && ! xcrun --find swift >/dev/null 2>&1; then
   export DEVELOPER_DIR=/Library/Developer/CommandLineTools
 fi
 
-echo "==> swift build -c $CONFIG --product HeraldMac"
-swift build -c "$CONFIG" --product HeraldMac
-BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
+ARCH_FLAGS=()
+if [[ "${UNIVERSAL:-0}" == "1" ]]; then ARCH_FLAGS=(--arch arm64 --arch x86_64); fi
+
+echo "==> swift build -c $CONFIG --product HeraldMac ${ARCH_FLAGS[*]:-}"
+swift build -c "$CONFIG" --product HeraldMac "${ARCH_FLAGS[@]}"
+BIN_DIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 EXECUTABLE="$BIN_DIR/HeraldMac"
 [[ -x "$EXECUTABLE" ]] || { echo "error: $EXECUTABLE not found" >&2; exit 1; }
 
@@ -29,6 +35,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$EXECUTABLE" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/Resources/HeraldMac-Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+
+if [[ -n "${HERALD_VERSION:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $HERALD_VERSION" "$APP/Contents/Info.plist"
+fi
 
 # Version from git (optional): CFBundleVersion = commit count.
 if BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)"; then

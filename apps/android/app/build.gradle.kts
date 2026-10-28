@@ -16,6 +16,14 @@ if (hasGoogleServices) {
 // Override with -PheraldServerUrl=https://my-herald.example.com or in ~/.gradle/gradle.properties.
 val defaultServerUrl = (findProperty("heraldServerUrl") as String?) ?: "https://push.nishkal.in"
 
+// Release signing comes from the environment (GitHub Actions secrets, see .github/workflows/release.yml). Every
+// published APK must be signed with the same key, or Android refuses to install it as an update.
+val releaseKeystore = System.getenv("HERALD_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+
+// CI passes the tag's version: -PheraldVersionName=0.2.0 -PheraldVersionCode=200.
+val heraldVersionName = (findProperty("heraldVersionName") as String?) ?: "0.1.0"
+val heraldVersionCode = (findProperty("heraldVersionCode") as String?)?.toInt() ?: 1
+
 android {
     namespace = "dev.herald.android"
     compileSdk = 36
@@ -24,22 +32,35 @@ android {
         applicationId = "dev.herald.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = heraldVersionCode
+        versionName = heraldVersionName
 
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"$defaultServerUrl\"")
         buildConfigField("boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("HERALD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("HERALD_KEY_ALIAS")
+                keyPassword = System.getenv("HERALD_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
-            // Debug builds are the distribution format (sideloaded). Cleartext to local hosts is allowed by the
-            // debug-only network security config + ServerUrl validation.
+            // For local development and self-builds. Cleartext to local hosts is allowed by the debug-only network
+            // security config + ServerUrl validation.
             isMinifyEnabled = false
         }
         release {
+            // Published on GitHub Releases, signed with the release key. HTTPS only.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
