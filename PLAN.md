@@ -210,18 +210,21 @@ herald/
 
 ## 10. Status (2026-10-28)
 
-M1 is implemented. What has been verified:
+M1 is implemented. Live at **https://push.nishkal.in**.
 
-| Part | Verified | Not yet verified |
+### Platforms
+
+| Platform | Status | Verified |
 |---|---|---|
-| `apps/server` | typecheck, 52 tests (RFC 8291 vector, MCP, WS, adapters), `wrangler dev` smoke test, deploy dry-run | real Google OAuth, real FCM / Web Push delivery |
-| `apps/web` | typecheck, 74 tests, build, live smoke test against the local server | visual review (mobile/dark), Web Push in a real browser |
-| `apps/android` | `assembleDebug` with and without `google-services.json`, 46 unit tests, lint (0 errors), unsigned `assembleRelease` | anything on a device or emulator |
-| `apps/apple` | `swift build`, 60 Swift Testing tests, `Herald.app` bundle (ad-hoc signed), XcodeGen spec, iOS sources typechecked against Mac Catalyst | iOS SDK build, running either app's GUI |
+| **Web** | ✅ Tested in production | Google sign-in, live inbox, Web Push in Brave (needs "Use Google services for push messaging"), answering an ask, dismissal syncing across devices |
+| **Android** | ✅ Tested in production | Galaxy S23 Ultra, Android 16: pairing, FCM + socket, progress updating in place, ask buttons answered from the notification, grouping |
+| **macOS** | ✅ Tested in production | Menu-bar app (Xcode and no-Xcode builds): pairing, live socket, progress updating in place, inbox window, dismissal syncing across devices |
+| **Server** | ✅ Deployed | Cloudflare Worker + DO + D1 (Drizzle migrations), MCP tools exercised end to end, FCM v1 and Web Push in production, 52 tests |
+| **iOS** | ⏳ Pending | Code written. Not yet built with the iOS SDK or run on a device (deprioritized) |
+| Windows / Linux | ⏳ Pending | Not started (M2) |
 
-Open follow-ups:
+### Open follow-ups
 - Security hardening: an Origin check on cookie-authenticated POSTs; SSRF filtering for action callback URLs.
 - Web Push payload has no `alert` flag, so the browser re-alerts on visible updates.
 - Android pins libraries compatible with compileSdk 36; bumping to 37 unlocks the newer AndroidX/Compose/OkHttp/Coil.
 - Apple: no notification service extension; there is no templates UI and no device-rename UI.
-- The repo URL used in the web app's build-from-source links is a placeholder (`VITE_REPO_URL`).

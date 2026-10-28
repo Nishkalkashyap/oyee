@@ -19,4 +19,4 @@ export function isMockMode(): boolean {
 }
 
 /** Where users find the native apps' source. Override with VITE_REPO_URL. */
-export const REPO_URL: string = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/herald-oss/herald";
+export const REPO_URL: string = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/nishkalkashyap/herald";
