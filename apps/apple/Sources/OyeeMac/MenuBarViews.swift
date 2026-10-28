@@ -12,7 +12,11 @@ struct MenuBarLabel: View {
     var body: some View {
         let unread = model.store.unreadCount
         HStack(spacing: 3) {
-            Image(systemName: symbolName(unread: unread))
+            if model.isPaired, model.connectionState == .unauthorized {
+                Image(systemName: "bell.slash")
+            } else {
+                Image(nsImage: MenuBarIcon.image)
+            }
             if unread > 0 {
                 Text(unread > 99 ? "99+" : "\(unread)")
                     .monospacedDigit()
@@ -31,15 +35,12 @@ struct MenuBarLabel: View {
         }
     }
 
-    private func symbolName(unread: Int) -> String {
-        if model.isPaired, model.connectionState == .unauthorized { return "bell.slash" }
-        return unread > 0 ? "bell.badge.fill" : "bell"
-    }
 }
 
 /// The menu bar window: live list of active/unread notifications with progress and quick actions.
 struct MenuBarContentView: View {
     let model: OyeeModel
+    let updater: Updater
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -48,6 +49,7 @@ struct MenuBarContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            UpdateBanner(updater: updater)
             content
             footer
         }
@@ -140,5 +142,60 @@ struct MenuBarContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .overlay(alignment: .top) { Divider().overlay(Theme.border) }
+    }
+}
+
+/// The Oyee mark as a template image for the menu bar (macOS tints it for light/dark menu bars).
+enum MenuBarIcon {
+    @MainActor static let image: NSImage = {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: true) { rect in
+            let inset = rect.insetBy(dx: 0.5, dy: 0.5)
+            let ring = NSBezierPath(cgPath: OyeeMarkGeometry.ring(in: inset).cgPath)
+            ring.windingRule = .evenOdd
+            NSColor.black.setFill()
+            ring.fill()
+            NSBezierPath(cgPath: OyeeMarkGeometry.solids(in: inset).cgPath).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
+}
+
+/// Peach banner while an update is available, downloading or failed.
+struct UpdateBanner: View {
+    let updater: Updater
+
+    var body: some View {
+        let (text, action): (String?, String?) =
+            switch updater.state {
+            case .available(let v): ("Oyee \(v) is available", "Update")
+            case .downloading(let v): ("Downloading Oyee \(v)…", nil)
+            case .installing(let v): ("Installing Oyee \(v)…", nil)
+            case .failed(let message): (message, "Retry")
+            default: (nil, nil)
+            }
+        if let text {
+            HStack(spacing: 8) {
+                Text(text).font(.oyee(12.5, .semibold)).foregroundStyle(Theme.chipForeground)
+                Spacer(minLength: 0)
+                if let action {
+                    Button(action) {
+                        Task {
+                            if case .failed = updater.state { await updater.check(installIfAuto: false) }
+                            await updater.install()
+                        }
+                    }
+                    .buttonStyle(PillButtonStyle(.brand, size: .small))
+                }
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(Theme.chip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+        }
     }
 }

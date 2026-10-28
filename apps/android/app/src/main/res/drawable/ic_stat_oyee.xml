@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Status-bar icon: the "o" ring (white, alpha-only as required for small icons). -->
+<!-- Status-bar icon: the Oyee mark (white, alpha-only as required for small icons). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="3.6"
-        android:pathData="M12,4.6a7.4,7.4 0,1 1,0 14.8a7.4,7.4 0,1 1,0 -14.8z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M3.3,13.5a7.2,7.2 0,1 0,14.4 0a7.2,7.2 0,1 0,-14.4 0zM7.2,13.5a3.3,3.3 0,1 0,6.6 0a3.3,3.3 0,1 0,-6.6 0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M4.4,17.2L3,21.6l5.4,-1.4z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M16,5a3,3 0,1 0,6 0a3,3 0,1 0,-6 0z" />
 </vector>

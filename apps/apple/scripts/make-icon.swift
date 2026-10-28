@@ -1,4 +1,4 @@
-// Renders the Oyee app icon (white "o" ring on the orange squircle) into an .iconset directory.
+// Renders the Oyee app icon (the white mark on the orange squircle) into an .iconset directory.
 // Usage: swift scripts/make-icon.swift <output.iconset>
 import AppKit
 
@@ -19,12 +19,23 @@ func render(pixels: Int) -> Data? {
     NSColor(srgbRed: 0xD9 / 255, green: 0x48 / 255, blue: 0x0F / 255, alpha: 1).setFill()  // brand orange
     path.fill()
 
-    // The "o" mark: a white ring.
-    let radius = rect.width * 0.235
-    let ring = NSBezierPath(ovalIn: NSRect(x: rect.midX - radius, y: rect.midY - radius, width: radius * 2, height: radius * 2))
-    ring.lineWidth = rect.width * 0.105
-    NSColor.white.setStroke()
-    ring.stroke()
+    // The Oyee mark (docs/brand/oyee-mark.svg): an "o" speech bubble with an unread dot, on a 24-unit grid.
+    let content = rect.width * 0.62, s = content / 24
+    let ox = rect.midX - content / 2, top = rect.midY + content / 2
+    func oval(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) -> NSRect {
+        NSRect(x: ox + (cx - r) * s, y: top - (cy + r) * s, width: 2 * r * s, height: 2 * r * s)
+    }
+    func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: ox + x * s, y: top - y * s) }
+    NSColor.white.setFill()
+    let ring = NSBezierPath()
+    ring.appendOval(in: oval(10.5, 13.5, 7.2))
+    ring.appendOval(in: oval(10.5, 13.5, 3.3))
+    ring.windingRule = .evenOdd
+    ring.fill()
+    let solids = NSBezierPath()
+    solids.move(to: pt(4.4, 17.2)); solids.line(to: pt(3, 21.6)); solids.line(to: pt(8.4, 20.2)); solids.close()
+    solids.appendOval(in: oval(19, 5, 3))
+    solids.fill()
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])
 }

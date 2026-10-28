@@ -6,6 +6,7 @@ import UserNotifications
 
 struct SettingsView: View {
     let model: OyeeModel
+    @Bindable var updater: Updater
     @Environment(\.openWindow) private var openWindow
     @ViewState private var launchAtLogin = LaunchAtLogin.isEnabled
     @ViewState private var launchStatus = LaunchAtLogin.statusText
@@ -66,6 +67,34 @@ struct SettingsView: View {
                     Button("Send") { model.presenter?.sendTestNotification() }
                         .buttonStyle(PillButtonStyle(.secondary, size: .small))
                         .disabled(model.presenter == nil)
+                }
+
+                heading("Updates")
+                SettingRow("Oyee \(updater.currentVersion)", description: updater.statusText) {
+                    switch updater.state {
+                    case .available:
+                        Button("Update") { Task { await updater.install() } }
+                            .buttonStyle(PillButtonStyle(.brand, size: .small))
+                    case .checking, .downloading, .installing:
+                        ProgressView().controlSize(.small)
+                    default:
+                        if updater.enabled {
+                            Button("Check") { Task { await updater.check(installIfAuto: updater.autoInstall) } }
+                                .buttonStyle(PillButtonStyle(.secondary, size: .small))
+                        }
+                    }
+                }
+                if updater.enabled {
+                    Toggle(isOn: $updater.autoInstall) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Install updates automatically").font(.oyee(14.5, .semibold)).foregroundStyle(Theme.foreground)
+                            Text("Downloads, verifies and restarts Oyee in the background.")
+                                .font(.oyee(12.5))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .toggleStyle(OyeeToggleStyle())
+                    .padding(.vertical, 12)
                 }
 
                 heading("About")

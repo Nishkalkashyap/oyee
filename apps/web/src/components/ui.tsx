@@ -372,17 +372,25 @@ export function CountBadge({ count, size = "md", className }: { count: number; s
   );
 }
 
-/** The orange "o" mark that stands for Oyee. */
+/** The Oyee mark: an "o" speech bubble with an unread dot (docs/brand/oyee-mark.svg). Inherits `currentColor`. */
+export function OyeeMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+      <path fillRule="evenodd" d="M3.3 13.5a7.2 7.2 0 1 0 14.4 0a7.2 7.2 0 1 0-14.4 0ZM7.2 13.5a3.3 3.3 0 1 0 6.6 0a3.3 3.3 0 1 0-6.6 0Z" />
+      <path d="M4.4 17.2L3 21.6l5.4-1.4Z" />
+      <circle cx="19" cy="5" r="3" />
+    </svg>
+  );
+}
+
+/** The brand tile: the mark in white on orange. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={cx(
-        "flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand text-[15px] font-extrabold text-brand-foreground",
-        className,
-      )}
+      className={cx("flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground", className)}
     >
-      o
+      <OyeeMark className="size-[62%]" />
     </span>
   );
 }

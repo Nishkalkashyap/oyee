@@ -38,6 +38,8 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 if [[ -n "${OYEE_VERSION:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $OYEE_VERSION" "$APP/Contents/Info.plist"
+  # Published builds update themselves from GitHub Releases (see Sources/OyeeMac/Updater.swift).
+  /usr/libexec/PlistBuddy -c "Add :OyeeAutoUpdate bool true" "$APP/Contents/Info.plist"
 fi
 
 # Version from git (optional): CFBundleVersion = commit count.

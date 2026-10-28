@@ -58,6 +58,8 @@ import app.oyee.android.notify.Channels
 import app.oyee.android.transport.SocketClient
 import app.oyee.android.transport.TransportManager.FcmState
 import app.oyee.android.ui.components.FilterPill
+import app.oyee.android.update.AppUpdater
+import app.oyee.android.update.UpdateStatus
 import app.oyee.android.ui.components.PillButton
 import app.oyee.android.ui.components.PillVariant
 import app.oyee.android.ui.components.SourceAvatar
@@ -77,7 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
-fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, updater: AppUpdater? = null) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val fcm by vm.fcm.collectAsStateWithLifecycle()
     val socket by vm.socket.collectAsStateWithLifecycle()
@@ -198,6 +200,12 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                     else PillButton(onClick = { requestBatteryExemption(context) }, height = 32.dp) { Text("Allow") }
                 },
             )
+
+            if (updater != null) {
+                SettingsHeading("Updates")
+                val (description, trailing) = UpdateStatus(updater)
+                SettingRow("Oyee for Android", description, last = true, trailing = trailing)
+            }
 
             SettingsHeading("About")
             SettingRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})")

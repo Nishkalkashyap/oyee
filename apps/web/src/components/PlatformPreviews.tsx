@@ -11,7 +11,7 @@ import { webPushActions, webPushPresentation } from "../lib/webpush";
 import { BellIcon, ChevronDownIcon } from "./Icons";
 import { NotificationCard } from "./NotificationCard";
 import { ProgressBar } from "./NotificationParts";
-import { Segmented, cx } from "./ui";
+import { Segmented, cx, OyeeMark } from "./ui";
 
 function AppGlyph({ className }: { className?: string }) {
   return (
@@ -21,7 +21,7 @@ function AppGlyph({ className }: { className?: string }) {
         className,
       )}
     >
-      o
+      <OyeeMark className="size-[62%]" />
     </span>
   );
 }

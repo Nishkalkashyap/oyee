@@ -125,14 +125,56 @@ extension Font {
 
 // MARK: - Components
 
-/// The orange "o" mark.
+/// The Oyee mark on its 24-unit grid: an "o" speech bubble with an unread dot (docs/brand/oyee-mark.svg).
+public enum OyeeMarkGeometry {
+    /// The bubble's ring (draw with the even-odd rule).
+    public static func ring(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height) / 24
+        func oval(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) -> CGRect {
+            CGRect(x: rect.minX + (cx - r) * s, y: rect.minY + (cy - r) * s, width: 2 * r * s, height: 2 * r * s)
+        }
+        var p = Path()
+        p.addEllipse(in: oval(10.5, 13.5, 7.2))
+        p.addEllipse(in: oval(10.5, 13.5, 3.3))
+        return p
+    }
+
+    /// The bubble's tail and the unread dot.
+    public static func solids(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height) / 24
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * s, y: rect.minY + y * s) }
+        var p = Path()
+        p.move(to: pt(4.4, 17.2))
+        p.addLine(to: pt(3, 21.6))
+        p.addLine(to: pt(8.4, 20.2))
+        p.closeSubpath()
+        p.addEllipse(in: CGRect(x: rect.minX + 16 * s, y: rect.minY + 2 * s, width: 6 * s, height: 6 * s))
+        return p
+    }
+}
+
+/// The Oyee mark, filled with the current foreground style.
+public struct OyeeMark: View {
+    public init() {}
+    public var body: some View {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
+            context.fill(OyeeMarkGeometry.ring(in: rect), with: .foreground, style: FillStyle(eoFill: true))
+            context.fill(OyeeMarkGeometry.solids(in: rect), with: .foreground)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The brand tile: the mark in white on orange.
 public struct BrandMark: View {
     var size: CGFloat
     public init(size: CGFloat = 28) { self.size = size }
     public var body: some View {
-        Text("o")
-            .font(.oyee(size * 0.55, .heavy))
+        OyeeMark()
             .foregroundStyle(Theme.brandForeground)
+            .frame(width: size * 0.62, height: size * 0.62)
             .frame(width: size, height: size)
             .background(Theme.brand, in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
             .accessibilityHidden(true)

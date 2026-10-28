@@ -10,7 +10,7 @@ struct OyeeMacApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContentView(model: appDelegate.model)
+            MenuBarContentView(model: appDelegate.model, updater: appDelegate.updater)
                 .tint(Theme.brand)
         } label: {
             MenuBarLabel(model: appDelegate.model)
@@ -25,7 +25,7 @@ struct OyeeMacApp: App {
         .defaultSize(width: 980, height: 660)
 
         Settings {
-            SettingsView(model: appDelegate.model)
+            SettingsView(model: appDelegate.model, updater: appDelegate.updater)
                 .tint(Theme.brand)
         }
     }
@@ -39,6 +39,7 @@ enum WindowID {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Created when the delegate is (before launch finishes), so the notification delegate is installed in time to
     /// receive the response that launched the app.
+    let updater = Updater()
     let model = OyeeModel(
         configuration: .init(
             platform: .macos,
@@ -55,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
+        updater.start()
         if model.isPaired {
             // The socket is the delivery transport, so it stays connected for the app's whole lifetime.
             model.connect()

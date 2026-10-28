@@ -102,10 +102,12 @@ class MainActivity : ComponentActivity() {
             pairLink = PairLink(server = data.getQueryParameter("server"), code = data.getQueryParameter("code"))
         }
         intent.getStringExtra(EXTRA_OPEN_NOTIFICATION)?.let { openNotification = it }
+        if (intent.getBooleanExtra(EXTRA_UPDATE, false)) (application as OyeeApp).container.updater.update()
     }
 
     companion object {
         const val EXTRA_OPEN_NOTIFICATION = "app.oyee.android.OPEN_NOTIFICATION"
+        const val EXTRA_UPDATE = "app.oyee.android.UPDATE"
     }
 }
 
@@ -196,7 +198,7 @@ private fun OyeeRoot(
         Screen.Inbox -> {
             // Keyed by device so a re-pair (possibly another account/server) starts with a fresh inbox.
             val vm: InboxViewModel = viewModel(key = "inbox:${current.deviceId}") { InboxViewModel(container) }
-            InboxScreen(vm, onOpen = { backStack.add(Screen.Detail(it)) }, onSettings = { backStack.add(Screen.Settings) })
+            InboxScreen(vm, onOpen = { backStack.add(Screen.Detail(it)) }, onSettings = { backStack.add(Screen.Settings) }, updater = container.updater)
         }
         is Screen.Detail -> {
             CompositionLocalProvider(LocalViewModelStoreOwner provides rememberEntryStoreOwner(screen.encode())) {
@@ -206,7 +208,7 @@ private fun OyeeRoot(
         }
         Screen.Settings -> {
             val vm: SettingsViewModel = viewModel { SettingsViewModel(container) }
-            SettingsScreen(vm, onBack = pop)
+            SettingsScreen(vm, onBack = pop, updater = container.updater)
         }
     }
 }

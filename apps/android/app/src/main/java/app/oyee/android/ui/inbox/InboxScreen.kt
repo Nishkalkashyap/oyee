@@ -58,6 +58,8 @@ import app.oyee.android.model.NotificationStatus
 import app.oyee.android.model.Severity
 import app.oyee.android.transport.SocketClient
 import app.oyee.android.ui.components.FilterPill
+import app.oyee.android.update.AppUpdater
+import app.oyee.android.update.UpdateBanner
 import app.oyee.android.ui.components.InkProgress
 import app.oyee.android.ui.components.SourceAvatar
 import app.oyee.android.ui.theme.Oyee
@@ -70,7 +72,7 @@ import app.oyee.android.util.Markdown
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> Unit) {
+fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> Unit, updater: AppUpdater? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val c = Oyee.colors
     val listState = rememberLazyListState()
@@ -105,6 +107,7 @@ fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> 
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = c.secondaryLabel, modifier = Modifier.size(20.dp)) }
             }
+            updater?.let { UpdateBanner(it) }
             FilterBar(state, vm::setFilters)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
                 when {

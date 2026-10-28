@@ -1,5 +1,6 @@
 package app.oyee.android
 
+import app.oyee.android.update.AppUpdater
 import android.app.Application
 import android.os.Build
 import android.util.Log
@@ -73,6 +74,7 @@ class AppContainer(private val app: Application) {
     val sync = SyncManager(api, settings, processor)
     val socket = SocketClient(app, http, settings, processor, scope) { onUnauthorized() }
     val transport = TransportManager(app, settings, api)
+    val updater = AppUpdater(app, http, scope)
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     /** One-off user-facing messages (e.g. "This device was removed from your account"). */
@@ -81,12 +83,14 @@ class AppContainer(private val app: Application) {
     private val unpairMutex = Mutex()
 
     fun start() {
+        updater.schedule()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 // Live inbox while the app is visible, even when FCM is the background transport.
                 socket.acquire(UI_HOLDER)
                 scope.launch { runCatching { sync.catchUp() }.onFailure { Log.d(TAG, "catch-up failed: ${it.message}") } }
                 scope.launch { transport.refresh() }
+                scope.launch { updater.check(notify = true) }
             }
 
             override fun onStop(owner: LifecycleOwner) {

@@ -1,0 +1,241 @@
+package app.oyee.android.update
+
+import android.app.Application
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.content.FileProvider
+import androidx.core.net.toUri
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import app.oyee.android.BuildConfig
+import app.oyee.android.OyeeApp
+import app.oyee.android.R
+import app.oyee.android.notify.Channels
+import app.oyee.android.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+
+/** A published release on GitHub. */
+data class Release(val version: String, val apkName: String, val apkUrl: String, val sumsUrl: String?, val pageUrl: String)
+
+/** Semantic versions like "0.2.1" (a leading "v" is ignored). */
+object Versions {
+    fun parse(v: String): List<Int>? =
+        v.trim().removePrefix("v").split('.').takeIf { it.size == 3 }?.map { it.toIntOrNull() ?: return null }
+
+    fun isNewer(candidate: String, current: String): Boolean {
+        val a = parse(candidate) ?: return false
+        val b = parse(current) ?: return true
+        for (i in 0..2) if (a[i] != b[i]) return a[i] > b[i]
+        return false
+    }
+}
+
+/**
+ * Self-update from GitHub Releases (release builds only). Checks `releases/latest`, and on request downloads the APK,
+ * verifies it against the release's SHA256SUMS.txt and hands it to the system installer. Android always asks the user to
+ * confirm installing an app from outside the Play Store; nothing can skip that.
+ */
+class AppUpdater(private val app: Application, private val http: OkHttpClient, private val scope: CoroutineScope) {
+    sealed interface State {
+        data object Idle : State
+        data object Checking : State
+        data object UpToDate : State
+        data class Available(val release: Release) : State
+        data class Downloading(val release: Release, val progress: Float) : State
+        data class NeedsPermission(val release: Release) : State
+        data class Failed(val message: String, val release: Release? = null) : State
+    }
+
+    private val _state = MutableStateFlow<State>(State.Idle)
+    val state: StateFlow<State> = _state.asStateFlow()
+    val currentVersion: String = BuildConfig.VERSION_NAME
+
+    /** Self-update only makes sense for the signed builds published on GitHub. */
+    val enabled: Boolean = !BuildConfig.DEBUG
+    private val prefs = app.getSharedPreferences("updates", Context.MODE_PRIVATE)
+
+    fun schedule() {
+        if (!enabled) return
+        val work = PeriodicWorkRequestBuilder<UpdateCheckWorker>(12, TimeUnit.HOURS).build()
+        WorkManager.getInstance(app).enqueueUniquePeriodicWork("update-check", ExistingPeriodicWorkPolicy.KEEP, work)
+    }
+
+    /** Checks GitHub for a newer release. With [notify], posts a notification once per new version. */
+    suspend fun check(notify: Boolean): Release? {
+        if (!enabled) return null
+        val busy = _state.value
+        if (busy is State.Downloading) return busy.release
+        _state.value = State.Checking
+        return try {
+            val release = fetchLatest()
+            if (release != null && Versions.isNewer(release.version, currentVersion)) {
+                _state.value = State.Available(release)
+                if (notify && prefs.getString("notified", null) != release.version) {
+                    postNotification(release)
+                    prefs.edit().putString("notified", release.version).apply()
+                }
+                release
+            } else {
+                _state.value = State.UpToDate
+                null
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "update check failed: ${e.message}")
+            _state.value = State.Failed("Couldn't check for updates")
+            null
+        }
+    }
+
+    /** Downloads, verifies and installs the available update (checking first if needed). */
+    fun update() {
+        scope.launch {
+            val release = when (val s = _state.value) {
+                is State.Available -> s.release
+                is State.NeedsPermission -> s.release
+                is State.Failed -> s.release ?: check(notify = false)
+                is State.Downloading -> return@launch
+                else -> check(notify = false)
+            } ?: return@launch
+            if (!app.packageManager.canRequestPackageInstalls()) {
+                _state.value = State.NeedsPermission(release)
+                app.startActivity(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${app.packageName}".toUri())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                return@launch
+            }
+            try {
+                val apk = download(release)
+                _state.value = State.Available(release)
+                install(apk)
+            } catch (e: Exception) {
+                Log.w(TAG, "update failed", e)
+                _state.value = State.Failed(e.message ?: "Update failed", release)
+            }
+        }
+    }
+
+    private suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("https://api.github.com/repos/$REPO/releases/latest")
+            .header("Accept", "application/vnd.github+json")
+            .build()
+        http.newCall(req).execute().use { res ->
+            if (!res.isSuccessful) error("GitHub responded ${res.code}")
+            val json = Json.parseToJsonElement(res.body.string()).jsonObject
+            val tag = json["tag_name"]?.jsonPrimitive?.content ?: return@withContext null
+            val assets = json["assets"]?.jsonArray?.map { it.jsonObject }.orEmpty()
+            fun url(a: JsonObject) = a["browser_download_url"]?.jsonPrimitive?.content
+            val apk = assets.firstOrNull { it["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true } ?: return@withContext null
+            val sums = assets.firstOrNull { it["name"]?.jsonPrimitive?.content == "SHA256SUMS.txt" }
+            Release(
+                version = tag.removePrefix("v"),
+                apkName = apk["name"]!!.jsonPrimitive.content,
+                apkUrl = url(apk) ?: return@withContext null,
+                sumsUrl = sums?.let { url(it) },
+                pageUrl = json["html_url"]?.jsonPrimitive?.content ?: "https://github.com/$REPO/releases",
+            )
+        }
+    }
+
+    private suspend fun download(release: Release): File = withContext(Dispatchers.IO) {
+        val dir = File(app.cacheDir, "updates").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+        val file = File(dir, release.apkName)
+        _state.value = State.Downloading(release, 0f)
+        val digest = MessageDigest.getInstance("SHA-256")
+        http.newCall(Request.Builder().url(release.apkUrl).build()).execute().use { res ->
+            if (!res.isSuccessful) error("Download failed (${res.code})")
+            val total = res.body.contentLength().takeIf { it > 0 }
+            res.body.byteStream().use { input ->
+                file.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var read = 0L
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        digest.update(buf, 0, n)
+                        read += n
+                        if (total != null) _state.value = State.Downloading(release, read.toFloat() / total)
+                    }
+                }
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        release.sumsUrl?.let { sumsUrl ->
+            val sums = http.newCall(Request.Builder().url(sumsUrl).build()).execute().use { it.body.string() }
+            val expected = sums.lines().firstOrNull { it.trim().endsWith(release.apkName) }?.trim()?.split(Regex("\\s+"))?.firstOrNull()
+            if (expected == null || !expected.equals(actual, ignoreCase = true)) {
+                file.delete()
+                error("Checksum mismatch, update discarded")
+            }
+        }
+        file
+    }
+
+    private fun install(apk: File) {
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.updates", apk)
+        app.startActivity(
+            Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
+    private fun postNotification(release: Release) {
+        val open = PendingIntent.getActivity(
+            app,
+            UPDATE_NOTIFICATION_ID,
+            Intent(app, MainActivity::class.java).putExtra(MainActivity.EXTRA_UPDATE, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(app, Channels.UPDATES)
+            .setSmallIcon(R.drawable.ic_stat_oyee)
+            .setColor(app.getColor(R.color.brand))
+            .setContentTitle("Oyee ${release.version} is available")
+            .setContentText("Tap to update from ${currentVersion}.")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { app.getSystemService(NotificationManager::class.java).notify(UPDATE_NOTIFICATION_ID, n) }
+    }
+
+    companion object {
+        const val REPO = "Nishkalkashyap/oyee"
+        private const val TAG = "OyeeUpdater"
+        private const val UPDATE_NOTIFICATION_ID = 0x0E0E
+    }
+}
+
+/** Periodic background check (posts the "update available" notification). */
+class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        (applicationContext as OyeeApp).container.updater.check(notify = true)
+        return Result.success()
+    }
+}

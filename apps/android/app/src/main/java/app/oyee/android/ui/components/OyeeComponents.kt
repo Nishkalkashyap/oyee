@@ -43,9 +43,11 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.oyee.android.R
 import app.oyee.android.model.Progress
 import app.oyee.android.model.Severity
 import app.oyee.android.ui.theme.Oyee
@@ -66,14 +68,19 @@ fun avatarTint(name: String): Pair<Color, Color> {
     return Tints[Math.floorMod(hash, Tints.size)]
 }
 
-/** The orange "o" mark. */
+/** The brand tile: the Oyee mark (an "o" speech bubble with an unread dot) in white on orange. */
 @Composable
 fun BrandMark(size: Dp = 28.dp) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(Oyee.colors.brand),
         contentAlignment = Alignment.Center,
     ) {
-        Text("o", color = Oyee.colors.brandForeground, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.55f).sp)
+        Icon(
+            painterResource(R.drawable.ic_oyee_mark),
+            contentDescription = null,
+            tint = Oyee.colors.brandForeground,
+            modifier = Modifier.size(size * 0.62f),
+        )
     }
 }
 

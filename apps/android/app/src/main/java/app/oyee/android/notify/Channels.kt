@@ -12,6 +12,7 @@ import app.oyee.android.model.Severity
 /** One channel per severity (protocol §9) + a low-importance channel for the foreground-service notification. */
 object Channels {
     const val SERVICE = "oyee.service"
+    const val UPDATES = "oyee.updates"
     private const val GROUP_ALERTS = "oyee.alerts"
     private const val GROUP_SYSTEM = "oyee.system"
 
@@ -88,6 +89,11 @@ object Channels {
             enableVibration(false)
             setSound(null, null)
         }
-        nm.createNotificationChannels(channels + service)
+        val updates = NotificationChannel(UPDATES, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "A new version of Oyee is available"
+            group = GROUP_SYSTEM
+            setShowBadge(false)
+        }
+        nm.createNotificationChannels(channels + service + updates)
     }
 }
