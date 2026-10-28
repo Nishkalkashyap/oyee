@@ -1,0 +1,12 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+.kotlin/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+# NOTE: app/google-services.json is intentionally NOT ignored: the maintainer commits the hosted
+# instance's file. Self-hosters replace it with their own.

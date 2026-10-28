@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Herald</string>
+    <string name="channel_critical">Critical</string>
+    <string name="channel_critical_desc">Outages and urgent requests. Heads-up, sound and vibration.</string>
+    <string name="channel_warning">Warnings</string>
+    <string name="channel_warning_desc">Things that need attention soon. Sound and vibration.</string>
+    <string name="channel_info">Info</string>
+    <string name="channel_info_desc">Regular notifications.</string>
+    <string name="channel_success">Success</string>
+    <string name="channel_success_desc">Finished jobs and good news.</string>
+    <string name="channel_debug">Debug</string>
+    <string name="channel_debug_desc">Low-priority diagnostics. No sound.</string>
+    <string name="channel_service">Connection status</string>
+    <string name="channel_service_desc">The persistent \"Herald connected\" notification shown while instant delivery is on.</string>
+    <string name="service_connected">Herald connected</string>
+    <string name="service_connecting">Herald connecting…</string>
+    <string name="service_offline">Herald offline, waiting for network</string>
+    <string name="service_text">Instant delivery is on</string>
+    <string name="reply_default_label">Reply</string>
+    <string name="reply_sent">Reply sent</string>
+    <string name="action_sent">Sent: %1$s</string>
+    <string name="action_failed">Couldn\'t send. Will retry when online.</string>
+    <plurals name="group_summary_title">
+        <item quantity="one">%1$d notification</item>
+        <item quantity="other">%1$d notifications</item>
+    </plurals>
+</resources>

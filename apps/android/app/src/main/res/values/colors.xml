@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FF2A2363</color>
+    <color name="severity_critical">#FFD32F2F</color>
+    <color name="severity_warning">#FFF59E0B</color>
+    <color name="severity_info">#FF2563EB</color>
+    <color name="severity_success">#FF16A34A</color>
+    <color name="severity_debug">#FF6B7280</color>
+</resources>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG ONLY. Allows cleartext HTTP so you can pair with `wrangler dev` on localhost, the emulator host alias
+  (10.0.2.2) or a LAN IP. Network security config can't express IP ranges (192.168.*, 10.*), so cleartext is
+  permitted at the base level and the app itself (util/ServerUrl.kt) refuses http:// URLs whose host is not
+  loopback, 10.0.2.2, a private (RFC 1918 / link-local) IP or *.local. Release builds are HTTPS only.
+  User-installed CAs are deliberately NOT trusted: debug APKs are what people actually install.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
