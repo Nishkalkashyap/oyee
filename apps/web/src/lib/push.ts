@@ -57,7 +57,11 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<WebPushSu
       sub = null;
     }
   }
-  sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  try {
+    sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  } catch (e) {
+    throw new Error(pushSubscribeHint(e));
+  }
   const json = sub.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error("The browser returned an incomplete subscription.");
   return {
@@ -65,6 +69,20 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<WebPushSu
     expirationTime: json.expirationTime ?? null,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
   };
+}
+
+/** Brave exposes `navigator.brave`; its UA string is identical to Chrome's. */
+export function isBrave(): boolean {
+  return typeof navigator !== "undefined" && "brave" in navigator;
+}
+
+/** Turns the browser's opaque subscribe() failure into an actionable message. */
+export function pushSubscribeHint(e: unknown, brave: boolean = isBrave()): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (brave) {
+    return "Brave blocks Web Push by default. Open brave://settings/privacy, turn on \"Use Google services for push messaging\", restart Brave and try again.";
+  }
+  return `Registration failed: ${msg}. Check that notifications aren't blocked for this site and that your browser's push service is enabled.`;
 }
 
 export async function unsubscribeFromPush(): Promise<void> {
@@ -83,7 +101,9 @@ export function getWebDeviceId(): string | null {
 
 /** "Chrome on macOS" style default device name. */
 export function browserDeviceName(ua: string = navigator.userAgent): string {
-  const browser = /Edg\//.test(ua)
+  const browser = isBrave()
+    ? "Brave"
+    : /Edg\//.test(ua)
     ? "Edge"
     : /OPR\//.test(ua)
       ? "Opera"
