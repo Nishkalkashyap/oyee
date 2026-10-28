@@ -1,4 +1,4 @@
-# Publishes Herald's Android APK and macOS app on GitHub Releases.
+# Publishes Oyee's Android APK and macOS app on GitHub Releases.
 #
 #   git tag v0.2.0 && git push origin v0.2.0
 #
@@ -58,20 +58,20 @@ jobs:
       - name: Signed release APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          HERALD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          HERALD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          HERALD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          OYEE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OYEE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OYEE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then echo "ANDROID_KEYSTORE_BASE64 secret is missing" >&2; exit 1; fi
-          export HERALD_KEYSTORE_FILE="$RUNNER_TEMP/herald-release.jks"
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$HERALD_KEYSTORE_FILE"
+          export OYEE_KEYSTORE_FILE="$RUNNER_TEMP/oyee-release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OYEE_KEYSTORE_FILE"
           ./gradlew --no-daemon assembleRelease \
-            -PheraldVersionName=${{ needs.version.outputs.name }} \
-            -PheraldVersionCode=${{ needs.version.outputs.code }}
+            -PoyeeVersionName=${{ needs.version.outputs.name }} \
+            -PoyeeVersionCode=${{ needs.version.outputs.code }}
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/Herald-${{ needs.version.outputs.name }}.apk"
-          rm -f "$HERALD_KEYSTORE_FILE"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/Oyee-${{ needs.version.outputs.name }}.apk"
+          rm -f "$OYEE_KEYSTORE_FILE"
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -93,12 +93,12 @@ jobs:
           xcode-version: latest-stable
       - name: Tests
         run: swift test
-      - name: Universal Herald.app
+      - name: Universal Oyee.app
         run: |
-          UNIVERSAL=1 HERALD_VERSION=${{ needs.version.outputs.name }} scripts/build-macos-app.sh
-          lipo -archs build/Herald.app/Contents/MacOS/Herald
+          UNIVERSAL=1 OYEE_VERSION=${{ needs.version.outputs.name }} scripts/build-macos-app.sh
+          lipo -archs build/Oyee.app/Contents/MacOS/Oyee
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          ditto -c -k --keepParent build/Herald.app "$GITHUB_WORKSPACE/dist/Herald-${{ needs.version.outputs.name }}-macOS.zip"
+          ditto -c -k --keepParent build/Oyee.app "$GITHUB_WORKSPACE/dist/Oyee-${{ needs.version.outputs.name }}-macOS.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -121,15 +121,15 @@ jobs:
           cat > notes.md <<EOF
           ## Install
 
-          **Web:** <https://push.nishkal.in>, nothing to install. Turn on browser notifications under *Devices*.
+          **Web:** <https://oyee.app>, nothing to install. Turn on browser notifications under *Devices*.
 
-          **Android** (8.0+): download \`Herald-$v.apk\` on your phone and open it, allowing *Install unknown apps* when asked.
+          **Android** (8.0+): download \`Oyee-$v.apk\` on your phone and open it, allowing *Install unknown apps* when asked.
           Updates install over the previous release. If you installed a self-built debug APK before, uninstall it once first
           (different signing key).
 
-          **macOS** (14+, Apple Silicon and Intel): download \`Herald-$v-macOS.zip\`, unzip, move \`Herald.app\` to
+          **macOS** (14+, Apple Silicon and Intel): download \`Oyee-$v-macOS.zip\`, unzip, move \`Oyee.app\` to
           *Applications*. The app isn't notarized, so the first time **right-click → Open** (or run
-          \`xattr -dr com.apple.quarantine /Applications/Herald.app\`). It lives in the menu bar.
+          \`xattr -dr com.apple.quarantine /Applications/Oyee.app\`). It lives in the menu bar.
 
           **iOS:** build from source ([docs/setup.md](https://github.com/${{ github.repository }}/blob/main/docs/setup.md)).
 
@@ -143,7 +143,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "${{ github.repository }}" \
-            --title "Herald ${{ needs.version.outputs.name }}" \
+            --title "Oyee ${{ needs.version.outputs.name }}" \
             --notes-file notes.md \
             --generate-notes \
             --verify-tag

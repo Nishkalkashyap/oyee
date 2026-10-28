@@ -12,7 +12,7 @@ import type {
   RespondInput,
   SendNotificationInput,
   UpsertTemplateInput,
-} from "@herald/schema";
+} from "@oyee/schema";
 import { api } from "./api";
 import {
   applyEventToDetail,

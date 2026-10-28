@@ -6,7 +6,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Herald uses Gluon's design language (docs/design.md): a warm paper ground, white panels with 22px corners,
+ * Oyee uses Gluon's design language (docs/design.md): a warm paper ground, white panels with 22px corners,
  * near-black ink, pill buttons, peach selection, and orange reserved for the brand mark, unread counts and send.
  */
 :root {

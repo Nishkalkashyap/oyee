@@ -17,7 +17,7 @@ importers:
 
   apps/server:
     dependencies:
-      '@herald/schema':
+      '@oyee/schema':
         specifier: workspace:*
         version: link:../../packages/schema
       '@modelcontextprotocol/sdk':
@@ -54,7 +54,7 @@ importers:
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.3.0
         version: 5.3.0
-      '@herald/schema':
+      '@oyee/schema':
         specifier: workspace:*
         version: link:../../packages/schema
       '@tanstack/react-query':

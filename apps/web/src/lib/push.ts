@@ -1,7 +1,7 @@
 /** Web Push helpers (service worker registration + VAPID subscription). */
-import type { WebPushSubscription } from "@herald/schema";
+import type { WebPushSubscription } from "@oyee/schema";
 
-const DEVICE_KEY = "herald:webDeviceId";
+const DEVICE_KEY = "oyee:webDeviceId";
 
 export function isPushSupported(): boolean {
   return (

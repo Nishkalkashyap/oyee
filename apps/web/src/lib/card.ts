@@ -3,7 +3,7 @@ import {
   type Notification,
   type SendNotificationInput,
   type TemplateCard,
-} from "@herald/schema";
+} from "@oyee/schema";
 
 export type Vars = Record<string, string | number | boolean>;
 

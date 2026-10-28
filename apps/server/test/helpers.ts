@@ -1,7 +1,7 @@
 import { SELF } from "cloudflare:test";
 import { expect } from "vitest";
 
-export const BASE = "https://herald.test";
+export const BASE = "https://oyee.test";
 
 let counter = 0;
 export const uniqueEmail = () => `user${Date.now()}${++counter}@example.com`;
@@ -14,11 +14,11 @@ export async function devLogin(email = uniqueEmail()): Promise<string> {
   expect(res.status).toBe(302);
   expect(res.headers.get("Location")).toBe("/inbox");
   const setCookie = res.headers.get("Set-Cookie") ?? "";
-  const m = /herald_session=([^;]+)/.exec(setCookie);
+  const m = /oyee_session=([^;]+)/.exec(setCookie);
   expect(m).not.toBeNull();
   expect(setCookie).toMatch(/HttpOnly/i);
   expect(setCookie).toMatch(/SameSite=Lax/i);
-  return `herald_session=${m![1]}`;
+  return `oyee_session=${m![1]}`;
 }
 
 export type Auth = { cookie: string } | { bearer: string } | null;

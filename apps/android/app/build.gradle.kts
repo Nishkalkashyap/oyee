@@ -8,32 +8,33 @@ plugins {
 
 // FCM is optional at build time. The google-services plugin is applied only when the config file exists, so the
 // app builds (and falls back to the WebSocket transport) without it.
-val hasGoogleServices = file("google-services.json").exists()
+// It must list this app's package; a config for another package (e.g. before re-registering in Firebase) is ignored.
+val hasGoogleServices = file("google-services.json").let { it.exists() && it.readText().contains("\"app.oyee.android\"") }
 if (hasGoogleServices) {
     apply(plugin = "com.google.gms.google-services")
 }
 
-// Override with -PheraldServerUrl=https://my-herald.example.com or in ~/.gradle/gradle.properties.
-val defaultServerUrl = (findProperty("heraldServerUrl") as String?) ?: "https://push.nishkal.in"
+// Override with -PoyeeServerUrl=https://my-oyee.example.com or in ~/.gradle/gradle.properties.
+val defaultServerUrl = (findProperty("oyeeServerUrl") as String?) ?: "https://oyee.app"
 
 // Release signing comes from the environment (GitHub Actions secrets, see .github/workflows/release.yml). Every
 // published APK must be signed with the same key, or Android refuses to install it as an update.
-val releaseKeystore = System.getenv("HERALD_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+val releaseKeystore = System.getenv("OYEE_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
 
-// CI passes the tag's version: -PheraldVersionName=0.2.0 -PheraldVersionCode=200.
-val heraldVersionName = (findProperty("heraldVersionName") as String?) ?: "0.1.0"
-val heraldVersionCode = (findProperty("heraldVersionCode") as String?)?.toInt() ?: 1
+// CI passes the tag's version: -PoyeeVersionName=0.2.0 -PoyeeVersionCode=200.
+val oyeeVersionName = (findProperty("oyeeVersionName") as String?) ?: "0.1.0"
+val oyeeVersionCode = (findProperty("oyeeVersionCode") as String?)?.toInt() ?: 1
 
 android {
-    namespace = "dev.herald.android"
+    namespace = "app.oyee.android"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.herald.android"
+        applicationId = "app.oyee.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = heraldVersionCode
-        versionName = heraldVersionName
+        versionCode = oyeeVersionCode
+        versionName = oyeeVersionName
 
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"$defaultServerUrl\"")
         buildConfigField("boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
@@ -43,9 +44,9 @@ android {
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = releaseKeystore
-                storePassword = System.getenv("HERALD_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("HERALD_KEY_ALIAS")
-                keyPassword = System.getenv("HERALD_KEY_PASSWORD")
+                storePassword = System.getenv("OYEE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("OYEE_KEY_ALIAS")
+                keyPassword = System.getenv("OYEE_KEY_PASSWORD")
             }
         }
     }

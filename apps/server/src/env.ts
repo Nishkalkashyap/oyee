@@ -18,11 +18,11 @@ export interface Env {
   DEV_LOGIN?: string;
 }
 
-type HeraldEnv = Env;
+type OyeeEnv = Env;
 declare global {
   namespace Cloudflare {
     // Types `env` from "cloudflare:test" / "cloudflare:workers".
-    interface Env extends HeraldEnv {}
+    interface Env extends OyeeEnv {}
   }
 }
 
@@ -32,7 +32,7 @@ export function isDevLogin(env: Env): boolean {
   return env.DEV_LOGIN === "true";
 }
 
-/** Public origin, e.g. https://herald.example.workers.dev (no trailing slash). Falls back to the request origin. */
+/** Public origin, e.g. https://oyee.example.workers.dev (no trailing slash). Falls back to the request origin. */
 export function publicUrl(env: Env, req: Request): string {
   const configured = env.PUBLIC_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");

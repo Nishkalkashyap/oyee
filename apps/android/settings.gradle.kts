@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "herald-android"
+rootProject.name = "oyee-android"
 include(":app")

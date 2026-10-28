@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type ThemePref = "system" | "light" | "dark";
-const KEY = "herald:theme";
+const KEY = "oyee:theme";
 
 function apply(pref: ThemePref) {
   const dark = pref === "dark" || (pref === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

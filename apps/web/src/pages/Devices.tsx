@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import type { Device, PairingCode, Platform } from "@herald/schema";
+import type { Device, PairingCode, Platform } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { REPO_URL, isMockMode } from "../lib/env";
 import { formatCountdown, formatDateTime, formatPairingCode, relativeTime } from "../lib/format";
@@ -70,7 +70,7 @@ function PairingInstructions({ code }: { code: string }) {
               </a>{" "}
               (<code className="text-xs">./gradlew assembleDebug</code>) and sideload the APK.
             </li>
-            <li>Open Herald and scan this QR code, or tap “Enter code” and type <strong className="font-mono">{code}</strong>.</li>
+            <li>Open Oyee and scan this QR code, or tap “Enter code” and type <strong className="font-mono">{code}</strong>.</li>
             <li>Allow notifications when asked.</li>
           </Steps>
         )}
@@ -81,10 +81,10 @@ function PairingInstructions({ code }: { code: string }) {
               <a className={a} href={link("apps/apple")} target="_blank" rel="noreferrer">
                 apps/apple
               </a>{" "}
-              (<code className="text-xs">xcodegen && open Herald.xcodeproj</code>, run on your device).
+              (<code className="text-xs">xcodegen && open Oyee.xcodeproj</code>, run on your device).
             </li>
-            <li>Scan the QR code with the Camera app (opens Herald), or enter <strong className="font-mono">{code}</strong> in the app.</li>
-            <li>iOS has no background push in Herald: notifications arrive while the app is open or recently used.</li>
+            <li>Scan the QR code with the Camera app (opens Oyee), or enter <strong className="font-mono">{code}</strong> in the app.</li>
+            <li>iOS has no background push in Oyee: notifications arrive while the app is open or recently used.</li>
           </Steps>
         )}
         {platform === "macos" && (
@@ -96,7 +96,7 @@ function PairingInstructions({ code }: { code: string }) {
               </a>{" "}
               (<code className="text-xs">apps/apple/scripts/build-macos-app.sh</code>).
             </li>
-            <li>Open Herald from the menu bar → “Pair”, then enter <strong className="font-mono">{code}</strong>.</li>
+            <li>Open Oyee from the menu bar → “Pair”, then enter <strong className="font-mono">{code}</strong>.</li>
             <li>Turn on “Launch at login” to keep receiving notifications.</li>
           </Steps>
         )}
@@ -245,7 +245,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
 
   const test = () =>
     send.mutate(
-      { title: "Test from Herald", body: "If you can see this as a **system notification**, Web Push works.", severity: "info", source: "web" },
+      { title: "Test from Oyee", body: "If you can see this as a **system notification**, Web Push works.", severity: "info", source: "web" },
       { onError: (e) => toast.error("Couldn't send test", errorMessage(e)) },
     );
 
@@ -266,7 +266,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
     body = (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         This browser can't receive Web Push here. It needs HTTPS (or localhost) and Push API support. On iPhone/iPad, add
-        Herald to your Home Screen first, then open it from there.
+        Oyee to your Home Screen first, then open it from there.
       </p>
     );
   } else if (permission === "denied") {
@@ -308,7 +308,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Browser notifications</h2>
           <p className="mt-0.5 mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-            Get system notifications from this browser even when Herald isn't open (Web Push). Up to two action buttons;
+            Get system notifications from this browser even when Oyee isn't open (Web Push). Up to two action buttons;
             replies open the inbox.
           </p>
           {body}

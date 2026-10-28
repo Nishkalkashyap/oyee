@@ -1,4 +1,4 @@
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { BASE, call, createToken, devLogin, sleep } from "./helpers";
@@ -31,7 +31,7 @@ async function tool<T = any>(path: string, name: string, args: unknown, headers:
 async function setup() {
   const cookie = await devLogin();
   const tok = await createToken(cookie, "mcp", "Claude Code", "claude-code");
-  expect(tok.url).toBe(`https://herald.test/mcp/${tok.secret}`);
+  expect(tok.url).toBe(`https://oyee.test/mcp/${tok.secret}`);
   return { cookie, secret: tok.secret, path: `/mcp/${tok.secret}` };
 }
 
@@ -44,7 +44,7 @@ describe("MCP", () => {
       clientInfo: { name: "test", version: "1" },
     });
     expect(init.status).toBe(200);
-    expect(init.body.result.serverInfo.name).toBe("herald");
+    expect(init.body.result.serverInfo.name).toBe("oyee");
     expect(init.body.result.capabilities.tools).toBeDefined();
 
     const list = await mcp(path, "tools/list");
@@ -133,7 +133,7 @@ describe("MCP", () => {
 
   it("rejects bad tokens and GET", async () => {
     const { path } = await setup();
-    expect((await mcp("/mcp/hrd_mcp_nope", "tools/list")).status).toBe(401);
+    expect((await mcp("/mcp/oyee_mcp_nope", "tools/list")).status).toBe(401);
     expect((await mcp("/mcp", "tools/list")).status).toBe(401);
     expect((await SELF.fetch(`${BASE}${path}`)).status).toBe(405);
   });

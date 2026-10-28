@@ -1,10 +1,10 @@
-# Herald — Plan
+# Oyee — Plan
 
 > One inbox for everything that wants your attention: AI agents, cron jobs, Home Assistant, CI, infra monitors.
 > Send a notification with one HTTP call or one MCP tool call, receive it on your phone, laptop and browser —
 > with live-updating progress, action buttons and inline replies.
 
-Herald is a free, open-source project (public repo, MIT). It is not monetized. The web app/backend is hosted on
+Oyee is a free, open-source project (public repo, MIT). It is not monetized. The web app/backend is hosted on
 Cloudflare Workers. The Android APK (release-signed) and the macOS app (universal, ad-hoc signed, not notarized) are
 published on **GitHub Releases** by CI on every `v*` tag; anyone can also build them from source. iOS is
 build-from-source only (distribution needs a paid Apple account).
@@ -20,11 +20,11 @@ build-from-source only (distribution needs a paid Apple account).
    over many apps.
 3. **Home Assistant and other tools only need a webhook.** Paste a URL into HA, and notifications arrive on every device.
 4. **Simple push isn't enough for agents.** Agents produce *runs* that make progress, finish, fail and sometimes
-   need an answer. Herald treats notifications as live objects: they can be updated in place, resolved, answered and
+   need an answer. Oyee treats notifications as live objects: they can be updated in place, resolved, answered and
    grouped into threads, and all of that stays in sync across devices.
 
 Existing tools (ntfy, Pushover, Gotify, Pushcut, Bark, and MCP-specific apps like Pushary/AlertMCP) each cover part
-of this. Herald combines **MCP + webhook ingestion + live updates + two-way actions + cross-device sync + rich cards**
+of this. Oyee combines **MCP + webhook ingestion + live updates + two-way actions + cross-device sync + rich cards**
 in one open-source, self-hostable package that we fully control.
 
 ## 2. Product summary
@@ -84,15 +84,15 @@ in one open-source, self-hostable package that we fully control.
 ### Repository layout (pnpm monorepo)
 
 ```
-herald/
+oyee/
 ├── PLAN.md                 ← this file
 ├── README.md
 ├── docs/protocol.md        ← THE contract: REST API, WebSocket protocol, FCM payload, card schema, auth
-├── packages/schema/        ← @herald/schema: TypeScript types + zod schemas for the contract (source of truth for TS)
-├── apps/server/            ← @herald/server: Cloudflare Worker + Durable Objects + D1 (Hono, MCP, webhooks, push)
-├── apps/web/               ← @herald/web: React + Vite SPA (inbox, connect, devices, templates); built into server assets
+├── packages/schema/        ← @oyee/schema: TypeScript types + zod schemas for the contract (source of truth for TS)
+├── apps/server/            ← @oyee/server: Cloudflare Worker + Durable Objects + D1 (Hono, MCP, webhooks, push)
+├── apps/web/               ← @oyee/web: React + Vite SPA (inbox, connect, devices, templates); built into server assets
 ├── apps/android/           ← Kotlin + Jetpack Compose app (Gradle; not a pnpm package)
-└── apps/apple/             ← Swift: HeraldKit package (shared) + macOS menu-bar app + iOS app (XcodeGen; not a pnpm package)
+└── apps/apple/             ← Swift: OyeeKit package (shared) + macOS menu-bar app + iOS app (XcodeGen; not a pnpm package)
 ```
 
 ### Tech choices
@@ -103,7 +103,7 @@ herald/
 - **Web**: React, Vite, TypeScript, React Router, TanStack Query, Tailwind CSS v4. Service worker for Web Push.
 - **Android**: Kotlin, Jetpack Compose (Material 3), OkHttp (REST + WebSocket), kotlinx.serialization, DataStore,
   Firebase Messaging (optional at build time). minSdk 26, compile/target SDK 36. Uses `Notification.ProgressStyle` on API 36+.
-- **Apple**: Swift 6, SwiftUI. `HeraldKit` Swift package (models, API client, `URLSessionWebSocketTask` client, local
+- **Apple**: Swift 6, SwiftUI. `OyeeKit` Swift package (models, API client, `URLSessionWebSocketTask` client, local
   notification presenter, shared SwiftUI card views). macOS app buildable **without Xcode** via `swift build` + a script
   that assembles an ad-hoc-signed `.app` bundle. iOS app via XcodeGen `project.yml` (requires Xcode).
 
@@ -150,11 +150,11 @@ herald/
 | threadId / source | `setGroup` | `threadIdentifier` | `tag` | grouping |
 
 ### 5.6 Security
-- Tokens are random and 32+ bytes, prefixed (`hrd_wh_`, `hrd_mcp_`, `hrd_dev_`), stored as SHA-256 hashes, shown in plaintext once, and revocable.
+- Tokens are random and 32+ bytes, prefixed (`oyee_wh_`, `oyee_mcp_`, `oyee_dev_`), stored as SHA-256 hashes, shown in plaintext once, and revocable.
 - Scopes: session = everything; `mcp` = notification + template tools; `webhook` = send only; `device` = read/act on notifications, register its own push transport, open a WebSocket.
 - Optional `ALLOWED_EMAILS` allowlist so an instance can be private.
 - Per-token rate limit (default 60 sends/min) and payload size limits.
-- Callback URLs are called server-side with a signed `X-Herald-Signature` (HMAC-SHA256 with a per-token secret).
+- Callback URLs are called server-side with a signed `X-Oyee-Signature` (HMAC-SHA256 with a per-token secret).
 - `DEV_LOGIN=true` enables a local-only login bypass for development and tests. It must never be enabled in production.
 
 ### 5.7 Retention
@@ -164,7 +164,7 @@ herald/
 
 | Variable | Purpose |
 |---|---|
-| `PUBLIC_URL` | e.g. `https://herald.example.workers.dev` (used in snippets, OAuth redirect, deep links) |
+| `PUBLIC_URL` | e.g. `https://oyee.example.workers.dev` (used in snippets, OAuth redirect, deep links) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth (web app sign-in) |
 | `SESSION_SECRET` | HMAC key for session cookies and callback signatures |
 | `ALLOWED_EMAILS` | optional comma-separated allowlist |
@@ -182,7 +182,7 @@ herald/
   Devices (pairing code + QR, Web Push toggle), Templates editor with platform previews, Composer.
 - `apps/android`: pairing, inbox, FCM + WebSocket foreground service, rich notifications (channels, progress, actions,
   reply, grouping, in-place updates, cross-device dismissal), settings.
-- `apps/apple`: HeraldKit, macOS menu-bar app (live WebSocket, local notifications with dynamic actions/reply, inbox
+- `apps/apple`: OyeeKit, macOS menu-bar app (live WebSocket, local notifications with dynamic actions/reply, inbox
   window, launch at login), iOS app (pairing, inbox, foreground socket, background refresh).
 
 **M2 — later**
@@ -199,13 +199,13 @@ herald/
 
 - Web/server: `pnpm install && pnpm deploy` (builds the web app, applies D1 migrations, deploys the worker). Secrets live in Cloudflare and persist across deploys.
 - **Releases:** `git tag vX.Y.Z && git push origin vX.Y.Z` → `.github/workflows/release.yml` builds and publishes
-  `Herald-X.Y.Z.apk` (signed with the release key from Actions secrets; versionCode = X·10000 + Y·100 + Z) and
-  `Herald-X.Y.Z-macOS.zip` (universal arm64 + x86_64, ad-hoc signed), with `SHA256SUMS.txt` and install notes. The
+  `Oyee-X.Y.Z.apk` (signed with the release key from Actions secrets; versionCode = X·10000 + Y·100 + Z) and
+  `Oyee-X.Y.Z-macOS.zip` (universal arm64 + x86_64, ad-hoc signed), with `SHA256SUMS.txt` and install notes. The
   release keystore must be kept: every APK has to be signed with it for updates to install. No Play Store.
 - Android from source: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`.
-- macOS from source: `apps/apple/scripts/build-macos-app.sh` → `Herald.app` (ad-hoc signed; `UNIVERSAL=1` for both
+- macOS from source: `apps/apple/scripts/build-macos-app.sh` → `Oyee.app` (ad-hoc signed; `UNIVERSAL=1` for both
   architectures). No notarization.
-- iOS: `cd apps/apple && xcodegen && open Herald.xcodeproj` → run on device with your own (free or paid) team.
+- iOS: `cd apps/apple && xcodegen && open Oyee.xcodeproj` → run on device with your own (free or paid) team.
 - Every client lets you configure the **server URL**, so self-hosted instances work everywhere.
 
 ## 9. Definition of done (M1)
@@ -214,12 +214,12 @@ herald/
 - `wrangler dev` runs locally. With `DEV_LOGIN=true`, a full flow works end to end: log in → create webhook → curl a
   notification → it appears live in the web inbox → update/resolve via MCP → the inbox updates.
 - Android: `./gradlew assembleDebug` succeeds (with and without `google-services.json`).
-- Apple: `swift build` + `swift test` for HeraldKit succeed; the macOS `.app` bundle script succeeds. The iOS project is
+- Apple: `swift build` + `swift test` for OyeeKit succeed; the macOS `.app` bundle script succeeds. The iOS project is
   generated by XcodeGen and is unverified until Xcode is installed.
 
 ## 10. Status (2026-10-28)
 
-M1 is implemented. Live at **https://push.nishkal.in**.
+M1 is implemented. Live at **https://oyee.app**.
 
 ### Platforms
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ServerMessage } from "@herald/schema";
+import type { ServerMessage } from "@oyee/schema";
 import { LiveConnection, type LiveState } from "../lib/live";
 import { formatCountdown } from "../lib/format";
 import { cx } from "./ui";

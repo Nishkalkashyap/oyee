@@ -1,6 +1,6 @@
 /** Runtime mode + small environment helpers. */
 
-const MOCK_KEY = "herald:mock";
+const MOCK_KEY = "oyee:mock";
 
 /**
  * Mock mode serves fixtures from an in-memory fake API (no backend needed).
@@ -19,4 +19,4 @@ export function isMockMode(): boolean {
 }
 
 /** Where users find the native apps' source. Override with VITE_REPO_URL. */
-export const REPO_URL: string = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/nishkalkashyap/herald";
+export const REPO_URL: string = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/nishkalkashyap/oyee";

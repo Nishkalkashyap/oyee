@@ -1,8 +1,8 @@
-import HeraldKit
+import OyeeKit
 import SwiftUI
 
 struct RootView: View {
-    @Bindable var model: HeraldModel
+    @Bindable var model: OyeeModel
 
     var body: some View {
         Group {
@@ -17,7 +17,7 @@ struct RootView: View {
                                 .padding(.horizontal, 24)
                         }
                     }
-                    .navigationTitle("Herald")
+                    .navigationTitle("Oyee")
                 }
             }
         }
@@ -43,7 +43,7 @@ struct RootView: View {
 }
 
 struct InboxScreen: View {
-    @Bindable var model: HeraldModel
+    @Bindable var model: OyeeModel
     @ViewState private var showSettings = false
 
     var body: some View {
@@ -112,7 +112,7 @@ struct InboxScreen: View {
 struct DeliveryNote: View {
     var body: some View {
         Label {
-            Text("iOS only gets instant notifications while Herald is open. Without APNs (which needs a paid Apple Developer account), iOS can't wake the app, so when it's in the background Herald catches up periodically when iOS allows it, and fully when you open the app.")
+            Text("iOS only gets instant notifications while Oyee is open. Without APNs (which needs a paid Apple Developer account), iOS can't wake the app, so when it's in the background Oyee catches up periodically when iOS allows it, and fully when you open the app.")
         } icon: {
             Image(systemName: "info.circle")
         }

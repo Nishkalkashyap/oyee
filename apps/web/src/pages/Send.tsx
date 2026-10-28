@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { ActionStyle, SendNotificationInput, type Severity, type TemplateCard } from "@herald/schema";
+import { ActionStyle, SendNotificationInput, type Severity, type TemplateCard } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { composeCard, parseVars, templateVariables, toPreviewNotification } from "../lib/card";
 import { buildSendInput, COMPOSER_PRESETS, emptyComposer, type ComposerAction, type ComposerState } from "../lib/composer";

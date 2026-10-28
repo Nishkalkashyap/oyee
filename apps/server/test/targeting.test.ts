@@ -41,7 +41,7 @@ function interceptFcm() {
     }
     if (req.url.startsWith("https://fcm.googleapis.com/")) {
       tokens.push((await req.json<{ message: { token: string } }>()).message.token);
-      return Response.json({ name: "projects/herald-test/messages/1" });
+      return Response.json({ name: "projects/oyee-test/messages/1" });
     }
     return realFetch(input as RequestInfo, init as RequestInit);
   });

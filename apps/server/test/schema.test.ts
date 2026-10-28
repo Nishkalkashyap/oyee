@@ -1,4 +1,4 @@
-/** Unit tests for @herald/schema helpers (kept here so packages/schema stays untouched). */
+/** Unit tests for @oyee/schema helpers (kept here so packages/schema stays untouched). */
 import {
   Action,
   ClientMessage,
@@ -9,7 +9,7 @@ import {
   progressText,
   renderTemplateString,
   renderTemplateValue,
-} from "@herald/schema";
+} from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import { resolveSendInput } from "../src/inbox/model";
 

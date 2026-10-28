@@ -11,7 +11,7 @@ import {
   type McpWaitResult,
   type Notification,
   type Page,
-  type Response as HeraldResponse,
+  type Response as OyeeResponse,
   type RespondInput,
   type SendNotificationInput,
   type ServerMessage,
@@ -21,7 +21,7 @@ import {
   type UpdateNotificationInput,
   type UpsertTemplateInput,
   renderTemplateValue,
-} from "@herald/schema";
+} from "@oyee/schema";
 import type { Env } from "../env";
 import { ApiError, badRequest, notFound, type RpcResult } from "../lib/errors";
 import { b64urlDecodeString, b64urlEncode } from "../lib/encoding";
@@ -92,7 +92,7 @@ async function guard<T>(fn: () => T | Promise<T>): Promise<RpcResult<T>> {
 
 export class InboxDO extends DurableObject<Env> {
   private sql: SqlStorage;
-  private waiters = new Map<string, Set<(r: HeraldResponse) => void>>();
+  private waiters = new Map<string, Set<(r: OyeeResponse) => void>>();
   private alarmEnsured = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -304,7 +304,7 @@ export class InboxDO extends DurableObject<Env> {
       const action = input.actionId !== undefined ? rec.n.actions.find((a) => a.id === input.actionId) : undefined;
       if (input.actionId !== undefined && !action) throw badRequest(`actionId: unknown action "${input.actionId}"`);
       const now = new Date().toISOString();
-      const response: HeraldResponse = {
+      const response: OyeeResponse = {
         actionId: input.actionId ?? null,
         text: input.text ?? null,
         deviceId: actor.deviceId,
@@ -497,7 +497,7 @@ export class InboxDO extends DurableObject<Env> {
           if (set.size === 0 && this.waiters.get(id) === set) this.waiters.delete(id);
           resolve({ status: "pending" });
         }, ms);
-        const fn = (response: HeraldResponse) => {
+        const fn = (response: OyeeResponse) => {
           clearTimeout(timer);
           resolve({ status: "answered", response });
         };
@@ -568,8 +568,8 @@ export class InboxDO extends DurableObject<Env> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return Response.json({ error: { code: "bad_request", message: "Expected a WebSocket upgrade" } }, { status: 426 });
     }
-    const userId = request.headers.get("X-Herald-User-Id") ?? "";
-    const deviceId = request.headers.get("X-Herald-Device-Id") || null;
+    const userId = request.headers.get("X-Oyee-User-Id") ?? "";
+    const deviceId = request.headers.get("X-Oyee-Device-Id") || null;
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server, [deviceId ?? "browser"]);

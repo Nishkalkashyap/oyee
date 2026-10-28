@@ -1,4 +1,4 @@
-import { PAIRING_ALPHABET, TOKEN_PREFIX } from "@herald/schema";
+import { PAIRING_ALPHABET, TOKEN_PREFIX } from "@oyee/schema";
 import { b64urlEncode, randomBytes } from "./encoding";
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -39,14 +39,15 @@ export function ulid(now = Date.now()): string {
 export type IdPrefix = "usr" | "ntf" | "tok" | "dev" | "tpl";
 export const newId = (prefix: IdPrefix) => `${prefix}_${ulid()}`;
 
-/** A new secret token like `hrd_wh_<43 chars>` (32 random bytes, base64url). */
+/** A new secret token like `oyee_wh_<43 chars>` (32 random bytes, base64url). */
 export function newSecret(kind: keyof typeof TOKEN_PREFIX): string {
   return TOKEN_PREFIX[kind] + b64urlEncode(randomBytes(32));
 }
 
-/** Display prefix for a token, e.g. `hrd_wh_ab12`. */
+/** Display prefix for a token, e.g. `oyee_wh_ab12`. */
 export function secretPrefix(secret: string): string {
-  const m = /^(hrd_(?:wh|mcp|dev)_)(.*)$/.exec(secret);
+  // `hrd_` is the prefix tokens had before the rename from Herald; they keep working.
+  const m = /^((?:oyee|hrd)_(?:wh|mcp|dev)_)(.*)$/.exec(secret);
   return m ? m[1]! + m[2]!.slice(0, 4) : secret.slice(0, 8);
 }
 

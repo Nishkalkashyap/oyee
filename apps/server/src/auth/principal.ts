@@ -1,4 +1,4 @@
-import type { User } from "@herald/schema";
+import type { User } from "@oyee/schema";
 import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv } from "../app";
@@ -6,7 +6,7 @@ import { findDeviceByToken, getSessionUser, getUser, SESSION_TTL_DAYS, type Devi
 import { forbidden, unauthorized } from "../lib/errors";
 import type { Actor } from "../inbox/model";
 
-export const SESSION_COOKIE = "herald_session";
+export const SESSION_COOKIE = "oyee_session";
 
 export type Principal =
   | { kind: "session"; user: User; sessionId: string }
@@ -42,14 +42,14 @@ export async function resolvePrincipal(c: Context<AppEnv>, allowQueryToken = fal
   const db = c.env.DB;
   const token = bearer(c) ?? (allowQueryToken ? c.req.query("token") ?? null : null);
   if (token) {
-    if (token.startsWith("hrd_dev_")) {
+    if ((token.startsWith("oyee_dev_") || token.startsWith("hrd_dev_"))) {
       const device = await findDeviceByToken(db, token);
       if (!device) throw unauthorized("Invalid or revoked device token");
       const user = await getUser(db, device.userId);
       if (!user) throw unauthorized("Invalid or revoked device token");
       return { kind: "device", user, device };
     }
-    if (token.startsWith("hrd_wh_") || token.startsWith("hrd_mcp_")) {
+    if (/^(oyee|hrd)_(wh|mcp)_/.test(token)) {
       throw forbidden("Webhook and MCP tokens can't be used with the REST API (use /hook/<token> or /mcp)");
     }
     throw unauthorized("Invalid token");

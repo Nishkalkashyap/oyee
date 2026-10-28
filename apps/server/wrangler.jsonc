@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "herald",
+  "name": "herald", // Name of the hosted Worker (kept: renaming creates a new Worker without its secrets/data). Self-hosters can use any name.
   "main": "src/index.ts",
   "compatibility_date": "2026-10-20",
   "compatibility_flags": ["nodejs_compat"],
@@ -17,8 +17,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "herald",
-      // Hosted instance (push.nishkal.in). Self-hosters: replace with the id printed by `wrangler d1 create herald`.
+      "database_name": "oyee",
+      // Hosted instance (oyee.app). Self-hosters: replace with the id printed by `wrangler d1 create oyee`.
       "database_id": "3ec8f056-1cc1-4e96-8e69-13963b8b7a7b",
       "migrations_dir": "migrations"
     }
@@ -32,16 +32,16 @@
   // Non-secret configuration. Secrets (GOOGLE_CLIENT_SECRET, SESSION_SECRET, VAPID_PRIVATE_KEY,
   // FCM_SERVICE_ACCOUNT_JSON) are set with `wrangler secret put` (or .dev.vars locally).
   "vars": {
-    "PUBLIC_URL": "https://push.nishkal.in",
+    "PUBLIC_URL": "https://oyee.app",
     "GOOGLE_CLIENT_ID": "274103845543-2lp1kbj9pa3hb6hu3faltbl8kpg29su8.apps.googleusercontent.com",
     "ALLOWED_EMAILS": "",
     "VAPID_PUBLIC_KEY": "BPuyNA-LTKSdtQQM0GxBPINAzJxyQYzgRHlmYDFqqKJpI7a2rvLpxuVXSwk46FOlub4CoTLtO7hsZ2Cttlps2do",
-    "VAPID_SUBJECT": "https://push.nishkal.in",
+    "VAPID_SUBJECT": "https://oyee.app",
     "DEV_LOGIN": "false"
   },
 
   // Hosted instance. Self-hosters: change or remove (the worker is then served on <name>.<subdomain>.workers.dev).
-  "routes": [{ "pattern": "push.nishkal.in", "custom_domain": true }],
+  "routes": [{ "pattern": "oyee.app", "custom_domain": true }],
 
   "dev": { "port": 8787 }
 }

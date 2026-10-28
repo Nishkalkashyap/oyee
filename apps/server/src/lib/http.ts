@@ -1,4 +1,4 @@
-import { LIMITS } from "@herald/schema";
+import { LIMITS } from "@oyee/schema";
 import type { Context } from "hono";
 import type { z } from "zod";
 import { ApiError, badRequest, parseOrThrow } from "./errors";

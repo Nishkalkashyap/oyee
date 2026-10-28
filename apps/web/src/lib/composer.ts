@@ -1,5 +1,5 @@
 /** Composer form state → SendNotificationInput. Pure, so it's unit-testable. */
-import type { ActionStyle, SendNotificationInput, Severity } from "@herald/schema";
+import type { ActionStyle, SendNotificationInput, Severity } from "@oyee/schema";
 import type { Vars } from "./card";
 
 export interface ComposerAction {

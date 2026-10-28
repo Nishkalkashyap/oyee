@@ -1,5 +1,5 @@
 /**
- * Herald Protocol v1 — TypeScript source of truth.
+ * Oyee Protocol v1 — TypeScript source of truth.
  * Human-readable spec: docs/protocol.md. Kotlin (apps/android) and Swift (apps/apple) models mirror this file.
  */
 import { z } from "zod";
@@ -256,7 +256,7 @@ export const CreateTokenResult = z.object({
   token: TokenInfo,
   secret: z.string(),
   url: z.string(),
-  /** HMAC key for X-Herald-Signature on action callbacks. Shown once. */
+  /** HMAC key for X-Oyee-Signature on action callbacks. Shown once. */
   callbackSecret: z.string().optional(),
 });
 export type CreateTokenResult = z.infer<typeof CreateTokenResult>;
@@ -419,14 +419,14 @@ export type McpWaitResult = { status: "answered"; response: Response } | { statu
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const TOKEN_PREFIX = { webhook: "hrd_wh_", mcp: "hrd_mcp_", device: "hrd_dev_" } as const;
+export const TOKEN_PREFIX = { webhook: "oyee_wh_", mcp: "oyee_mcp_", device: "oyee_dev_" } as const;
 export const PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const ANDROID_CHANNELS: Record<Severity, string> = {
-  critical: "herald.critical",
-  warning: "herald.warning",
-  info: "herald.info",
-  success: "herald.success",
-  debug: "herald.debug",
+  critical: "oyee.critical",
+  warning: "oyee.warning",
+  info: "oyee.info",
+  success: "oyee.success",
+  debug: "oyee.debug",
 };
 export const LIMITS = {
   maxFields: 10,

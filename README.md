@@ -1,10 +1,10 @@
-# Herald
+# Oyee
 
 **One inbox for AI agents, scripts and webhooks.** Send a notification with one HTTP call or one MCP tool call, and
 receive it on Android, macOS and the web, with live-updating progress, action buttons, inline replies and sync across
 devices.
 
-![Herald web inbox: a notification from an agent asking a question, with answer buttons and a reply box](docs/screenshots/web-inbox-light.png)
+![Oyee web inbox: a notification from an agent asking a question, with answer buttons and a reply box](docs/screenshots/web-inbox-light.png)
 
 - 🤖 **MCP server URL**: give Claude Code, Codex or any MCP client `send_notification`, `update_notification`, `ask`,
   `wait_for_response` and more. Target one device (`devices: ["macbook"]`) or all of them.
@@ -29,9 +29,9 @@ Free and open source (MIT).
 
 | Platform | Get it |
 |---|---|
-| **Web** | <https://push.nishkal.in>: sign in with Google, nothing to install |
-| **Android** (8.0+) | `Herald-x.y.z.apk` from [Releases](../../releases/latest). Allow *Install unknown apps* when asked |
-| **macOS** (14+, Apple Silicon and Intel) | `Herald-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: the first time, **right-click → Open** (or `xattr -dr com.apple.quarantine /Applications/Herald.app`) |
+| **Web** | <https://oyee.app>: sign in with Google, nothing to install |
+| **Android** (8.0+) | `Oyee-x.y.z.apk` from [Releases](../../releases/latest). Allow *Install unknown apps* when asked |
+| **macOS** (14+, Apple Silicon and Intel) | `Oyee-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: the first time, **right-click → Open** (or `xattr -dr com.apple.quarantine /Applications/Oyee.app`) |
 | **iOS** | Build from source ([docs/setup.md](docs/setup.md)). iOS can't be distributed without a paid Apple account |
 
 Then pair the device: on the web, **Devices → Pair a device**, and enter the code in the app. Releases are built and
@@ -39,16 +39,16 @@ signed by GitHub Actions ([release.yml](.github/workflows/release.yml)); each on
 
 ## Quick start
 
-1. Sign in at <https://push.nishkal.in> (or [run your own instance](docs/setup.md)).
+1. Sign in at <https://oyee.app> (or [run your own instance](docs/setup.md)).
 2. On **Connect**, create an MCP server URL for your agent or a webhook for everything else.
 3. Send something:
 
 ```bash
 # Webhook
-curl -d "Backup finished" "https://push.nishkal.in/hook/<webhook-token>?title=Backup&severity=success"
+curl -d "Backup finished" "https://oyee.app/hook/<webhook-token>?title=Backup&severity=success"
 
 # Claude Code
-claude mcp add --transport http herald https://push.nishkal.in/mcp/<mcp-token>
+claude mcp add --transport http oyee https://oyee.app/mcp/<mcp-token>
 ```
 
 ## Docs
@@ -68,7 +68,7 @@ claude mcp add --transport http herald https://push.nishkal.in/mcp/<mcp-token>
 | `apps/server` | Cloudflare Worker: API, MCP, webhooks, Durable Objects, D1 (Drizzle), push fan-out |
 | `apps/web` | React web app (served by the worker) |
 | `apps/android` | Android app (Kotlin, Compose) |
-| `apps/apple` | macOS menu-bar app + iOS app (SwiftUI) + HeraldKit |
+| `apps/apple` | macOS menu-bar app + iOS app (SwiftUI) + OyeeKit |
 
 ## Develop
 

@@ -1,4 +1,4 @@
-import type { Severity } from "@herald/schema";
+import type { Severity } from "@oyee/schema";
 
 export const SEVERITIES: Severity[] = ["critical", "warning", "success", "info", "debug"];
 

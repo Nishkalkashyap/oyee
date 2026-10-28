@@ -25,3 +25,5 @@ xcuserdata/
 # Local credentials (never commit)
 secrets/
 .prod.vars
+# Extra custom domains for the hosted Worker (see apps/server/scripts/deploy.mjs)
+.extra-domains

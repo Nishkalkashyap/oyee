@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { mcpSnippets, shellQuote, webhookSnippets, withQuery } from "../lib/snippets";
 
-const MCP = "https://herald.example.com/mcp/hrd_mcp_abc123";
-const HOOK = "https://herald.example.com/hook/hrd_wh_xyz789";
+const MCP = "https://oyee.example.com/mcp/oyee_mcp_abc123";
+const HOOK = "https://oyee.example.com/hook/oyee_wh_xyz789";
 
 const byId = <T extends { id: string }>(xs: T[], id: string) => {
   const x = xs.find((s) => s.id === id);
@@ -24,13 +24,13 @@ describe("shell helpers", () => {
 describe("mcpSnippets", () => {
   const s = mcpSnippets(MCP);
   it("Claude Code command", () => {
-    expect(byId(s, "claude-code").code).toBe(`claude mcp add --transport http herald '${MCP}'`);
+    expect(byId(s, "claude-code").code).toBe(`claude mcp add --transport http oyee '${MCP}'`);
   });
   it("Codex TOML", () => {
-    expect(byId(s, "codex").code).toBe(`[mcp_servers.herald]\nurl = "${MCP}"`);
+    expect(byId(s, "codex").code).toBe(`[mcp_servers.oyee]\nurl = "${MCP}"`);
   });
   it("generic JSON is valid and has the http server", () => {
-    expect(JSON.parse(byId(s, "json").code)).toEqual({ mcpServers: { herald: { type: "http", url: MCP } } });
+    expect(JSON.parse(byId(s, "json").code)).toEqual({ mcpServers: { oyee: { type: "http", url: MCP } } });
   });
 });
 
@@ -73,7 +73,7 @@ describe("webhookSnippets", () => {
     expect(ha).toContain("method: POST_JSON");
     expect(ha).toContain("title_param_name: title");
     expect(ha).toContain("message_param_name: body");
-    expect(byId(s, "home-assistant-automation").code).toContain("action: notify.herald");
+    expect(byId(s, "home-assistant-automation").code).toContain("action: notify.oyee");
   });
 
   it("Alertmanager receiver sends resolved alerts", () => {
@@ -84,7 +84,7 @@ describe("webhookSnippets", () => {
 
   it("GitHub Actions step reads the URL from a secret", () => {
     const gh = byId(s, "github-actions").code;
-    expect(gh).toContain("${{ secrets.HERALD_WEBHOOK_URL }}");
+    expect(gh).toContain("${{ secrets.OYEE_WEBHOOK_URL }}");
     expect(gh).not.toContain(HOOK);
   });
 });

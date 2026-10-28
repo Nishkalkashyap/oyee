@@ -1,7 +1,7 @@
 /** D1 data access via Drizzle: users, sessions, tokens, devices, pairing codes, OAuth states. */
 import { and, desc, eq, isNotNull, lt, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { Device, Platform, TokenInfo, TokenKind, Transport, User, WebPushSubscription } from "@herald/schema";
+import type { Device, Platform, TokenInfo, TokenKind, Transport, User, WebPushSubscription } from "@oyee/schema";
 import { b64urlEncode, randomBytes, sha256Hex } from "../lib/encoding";
 import { newId, newSecret, secretPrefix } from "../lib/ids";
 import * as schema from "./schema";

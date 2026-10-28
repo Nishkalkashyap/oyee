@@ -1,14 +1,14 @@
-# Herald for Android
+# Oyee for Android
 
-Native Android client for [Herald](../../README.md), written in Kotlin with Jetpack Compose (Material 3).
+Native Android client for [Oyee](../../README.md), written in Kotlin with Jetpack Compose (Material 3).
 It handles pairing, a live inbox, and rich system notifications: one channel per severity, in-place updates,
 progress (`Notification.ProgressStyle` on Android 16 / API 36+), images, action buttons, inline replies,
 grouping, and dismissal across devices.
 Delivery uses **FCM** when it's available and falls back to a **WebSocket foreground service** when it isn't.
 
-Herald is never on the Play Store. You build the APK yourself and sideload it.
+Oyee is never on the Play Store. You build the APK yourself and sideload it.
 
-- minSdk 26 (Android 8.0), compile/target SDK 36, applicationId `dev.herald.android`
+- minSdk 26 (Android 8.0), compile/target SDK 36, applicationId `app.oyee.android`
 - Implements [`docs/protocol.md`](../../docs/protocol.md) (REST, pairing, WebSocket §6, FCM §7, rendering §9)
 
 ## Build
@@ -30,13 +30,13 @@ cd apps/android
 ```
 
 The server URL pre-filled on the pairing screen comes from `BuildConfig.DEFAULT_SERVER_URL`
-(default `https://push.nishkal.in`, the hosted instance). To change it:
+(default `https://oyee.app`, the hosted instance). To change it:
 
 ```bash
-./gradlew assembleDebug -PheraldServerUrl=https://herald.mydomain.dev
+./gradlew assembleDebug -PoyeeServerUrl=https://oyee.mydomain.dev
 ```
 
-(or put `heraldServerUrl=…` in `~/.gradle/gradle.properties`).
+(or put `oyeeServerUrl=…` in `~/.gradle/gradle.properties`).
 
 The debug build is the one you distribute. A release build (`assembleRelease`) produces an unsigned APK that
 only allows HTTPS. Sign it yourself if you want it.
@@ -53,9 +53,9 @@ debug keystore. Building on another machine means uninstalling first.
 
 ## Pair
 
-1. In the Herald web app, open **Devices → Pair a device**. You'll see a code like `K7Q2-9XMA` and a QR code.
+1. In the Oyee web app, open **Devices → Pair a device**. You'll see a code like `K7Q2-9XMA` and a QR code.
 2. Do one of these:
-   - Scan the QR code with the camera. It opens `herald://pair?server=…&code=…`, which pre-fills the form.
+   - Scan the QR code with the camera. It opens `oyee://pair?server=…&code=…`, which pre-fills the form.
      Check the server and tap **Pair**. (The app asks you to confirm instead of pairing silently, so a malicious
      link can't attach your phone to someone else's server.)
    - Open the app, enter the server URL and the code. The code is case-insensitive and the dash is optional.
@@ -69,7 +69,7 @@ Test the deep link from a computer:
 
 ```bash
 adb shell am start -a android.intent.action.VIEW \
-  -d "herald://pair?server=http%3A%2F%2F10.0.2.2%3A8787&code=K7Q2-9XMA"
+  -d "oyee://pair?server=http%3A%2F%2F10.0.2.2%3A8787&code=K7Q2-9XMA"
 ```
 
 ## FCM setup (optional at build time)
@@ -85,7 +85,7 @@ Firebase is **optional**. The `com.google.gms.google-services` Gradle plugin is 
 - **Hosted instance:** the maintainer commits the hosted Firebase project's `google-services.json` to
   `apps/android/app/google-services.json`, so a plain `./gradlew assembleDebug` gets push via FCM against the
   hosted backend. (This file is meant to be public; it is not a secret.)
-- **Self-hosters:** create a Firebase project, add an Android app with package name `dev.herald.android`,
+- **Self-hosters:** create a Firebase project, add an Android app with package name `app.oyee.android`,
   download its `google-services.json` into `apps/android/app/` (replacing the committed one), and rebuild.
   On the server, set `FCM_SERVICE_ACCOUNT_JSON` to a service-account key **from the same Firebase project**.
   If the server has no FCM credentials (`GET /api/config` → `fcmEnabled: false`), the app detects it and uses the
@@ -115,7 +115,7 @@ Notes:
   app updates (`MY_PACKAGE_REPLACED`).
 - **Foreground service type `specialUse`.** `dataSync` is capped at 6 h per 24 h on Android 15 and can't start
   from `BOOT_COMPLETED`. `remoteMessaging` is meant for continuing a messaging conversation across devices. The
-  service shows a silent, minimum-importance "Herald connected" notification. To hide it, long-press it and
+  service shows a silent, minimum-importance "Oyee connected" notification. To hide it, long-press it and
   turn off the *Connection status* channel; the service keeps running.
 - **REST catch-up.** When the app comes to the foreground (and after FCM errors or deleted-message events) it
   calls `GET /api/notifications?updatedSince=<newest updatedAt seen>`. This cancels anything read or resolved
@@ -123,10 +123,10 @@ Notes:
 
 ## Notifications
 
-- **Channels:** `herald.critical`, `herald.warning`, `herald.info`, `herald.success`, `herald.debug`.
+- **Channels:** `oyee.critical`, `oyee.warning`, `oyee.info`, `oyee.success`, `oyee.debug`.
   Critical and warning are high importance (heads-up) with sound and vibration. Info and success use default
   importance. Debug is low importance and silent. Tune them under **Settings → Notifications → Channels**.
-- **Identity:** each notification's tag is the Herald id, and its numeric id is a stable FNV-1a hash of that id.
+- **Identity:** each notification's tag is the Oyee id, and its numeric id is a stable FNV-1a hash of that id.
   Updates replace the notification in place with `setOnlyAlertOnce(true)` unless the event has `alert: true`.
   `silent: true` never makes sound.
 - **Cancellation:** a notification is cancelled when it's read (`readAt` set), resolved or deleted anywhere.
@@ -180,16 +180,16 @@ If you rely on the **WebSocket service** (no Play services, a self-hosted server
 ## Code map
 
 ```
-app/src/main/java/dev/herald/android/
-├── HeraldApp.kt                 Application + AppContainer (manual DI, process lifecycle, unpair)
+app/src/main/java/app/oyee/android/
+├── OyeeApp.kt                 Application + AppContainer (manual DI, process lifecycle, unpair)
 ├── model/                       kotlinx.serialization mirror of packages/schema (Notification, Device, WS + FCM messages)
-├── data/                        SettingsStore (DataStore), TokenCipher (Keystore AES-GCM), HeraldApi (OkHttp REST),
+├── data/                        SettingsStore (DataStore), TokenCipher (Keystore AES-GCM), OyeeApi (OkHttp REST),
 │                                EventProcessor (dedupe + fan-out), SyncManager (REST catch-up)
 ├── notify/                      Channels, NotificationRenderer, Intents (PendingIntents), NotificationActionReceiver,
 │                                NotificationOpenActivity (tap trampoline), Images, Spans, PostedLog
 ├── transport/                   SocketClient (OkHttp WebSocket), SocketService (FGS), TransportManager, FcmSupport,
-│                                HeraldMessagingService (FCM), BootReceiver
-├── work/HeraldWorker.kt         WorkManager jobs: read, respond (offline retry), sync, FCM re-registration
+│                                OyeeMessagingService (FCM), BootReceiver
+├── work/OyeeWorker.kt         WorkManager jobs: read, respond (offline retry), sync, FCM re-registration
 ├── util/                        PairingCode, ServerUrl, Formatting (progress text, fields), Markdown parser,
 │                                NotificationIds (FNV-1a), Backoff
 └── ui/                          MainActivity (navigation, deep links), pair/, inbox/, detail/, settings/, components/

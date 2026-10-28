@@ -1,6 +1,6 @@
-# @herald/server
+# @oyee/server
 
-The Herald backend: a Cloudflare Worker (Hono) with a per-user Durable Object (`InboxDO`, SQLite storage) and D1.
+The Oyee backend: a Cloudflare Worker (Hono) with a per-user Durable Object (`InboxDO`, SQLite storage) and D1.
 It implements [`docs/protocol.md`](../../docs/protocol.md): REST API, WebSocket, webhooks, MCP, FCM and Web Push. It also
 serves the web app (`apps/web/dist`) as static assets.
 
@@ -33,7 +33,7 @@ test/                 Vitest (runs inside workerd via @cloudflare/vitest-plugin)
 ```sh
 pnpm install
 cp apps/server/.dev.vars.example apps/server/.dev.vars    # DEV_LOGIN=true, PUBLIC_URL=http://localhost:8787
-pnpm --filter @herald/server dev                          # applies local D1 migrations, then wrangler dev on :8787
+pnpm --filter @oyee/server dev                          # applies local D1 migrations, then wrangler dev on :8787
 ```
 
 Open <http://localhost:8787/auth/dev-login?email=you@example.com&redirect=/> to sign in without Google.
@@ -41,15 +41,15 @@ The web app's Vite dev server proxies `/api`, `/auth`, `/hook`, `/mcp` and `/hea
 If `apps/web/dist` doesn't exist yet, `scripts/ensure-assets.mjs` creates a placeholder `index.html`. It never overwrites a real build.
 
 ```sh
-pnpm --filter @herald/server typecheck
-pnpm --filter @herald/server test
+pnpm --filter @oyee/server typecheck
+pnpm --filter @oyee/server test
 ```
 
 The tests use `@cloudflare/vitest-plugin`, the renamed successor of `@cloudflare/vitest-pool-workers`. The old pool
 only supports vitest 4, and this repo uses vitest 5. The tests run in workerd with D1 migrations applied. They cover
 the end-to-end REST flow, webhooks and adapters, MCP over HTTP, WebSockets, sync, retention, and push fan-out against
 mocked FCM and push-service endpoints. Push uses throwaway keys generated in `vitest.config.ts`. The suite also
-includes the RFC 8291 test vector and unit tests for `@herald/schema` helpers.
+includes the RFC 8291 test vector and unit tests for `@oyee/schema` helpers.
 
 ## Database migrations (Drizzle)
 
@@ -58,10 +58,10 @@ wrangler, which tracks applied migrations in the `d1_migrations` table:
 
 ```sh
 # 1. edit src/db/schema.ts
-pnpm --filter @herald/server db:generate      # writes migrations/NNNN_<name>.sql (+ meta/ snapshot); commit both
-pnpm --filter @herald/server db:migrate:local # or just `pnpm dev`, which applies them first
-pnpm --filter @herald/server db:migrate:remote
-pnpm --filter @herald/server db:check         # validates migration history consistency
+pnpm --filter @oyee/server db:generate      # writes migrations/NNNN_<name>.sql (+ meta/ snapshot); commit both
+pnpm --filter @oyee/server db:migrate:local # or just `pnpm dev`, which applies them first
+pnpm --filter @oyee/server db:migrate:remote
+pnpm --filter @oyee/server db:check         # validates migration history consistency
 ```
 
 Never edit an applied migration; generate a new one. The tests apply the same `migrations/` folder.
@@ -73,8 +73,8 @@ The per-user Durable Object storage (`inbox/do.ts`) manages its own SQLite schem
 
 ```sh
 cd apps/server
-npx wrangler d1 create herald           # copy the database_id into wrangler.jsonc (d1_databases[0].database_id)
-npx wrangler d1 migrations apply herald --remote
+npx wrangler d1 create oyee           # copy the database_id into wrangler.jsonc (d1_databases[0].database_id)
+npx wrangler d1 migrations apply oyee --remote
 ```
 
 ### 2. Google OAuth client
@@ -88,12 +88,12 @@ npx wrangler d1 migrations apply herald --remote
 
 | Name | Where | Notes |
 |---|---|---|
-| `PUBLIC_URL` | `vars` | e.g. `https://herald.example.workers.dev`. Used for the OAuth redirect, token URLs and deep links. |
+| `PUBLIC_URL` | `vars` | e.g. `https://oyee.example.workers.dev`. Used for the OAuth redirect, token URLs and deep links. |
 | `GOOGLE_CLIENT_ID` | `vars` | |
 | `GOOGLE_CLIENT_SECRET` | secret | |
 | `SESSION_SECRET` | secret | `openssl rand -base64 32`. Signs callbacks for notifications created from the web app. |
 | `ALLOWED_EMAILS` | `vars` | optional, comma-separated. `@example.com` allows a whole domain. |
-| `VAPID_PUBLIC_KEY` | `vars` | from `pnpm --filter @herald/server vapid` |
+| `VAPID_PUBLIC_KEY` | `vars` | from `pnpm --filter @oyee/server vapid` |
 | `VAPID_PRIVATE_KEY` | secret | same script |
 | `VAPID_SUBJECT` | `vars` | `mailto:you@example.com` |
 | `FCM_SERVICE_ACCOUNT_JSON` | secret | see below. FCM is disabled when it's unset. |
@@ -108,7 +108,7 @@ npx wrangler secret put FCM_SERVICE_ACCOUNT_JSON < service-account.json
 ### 4. Web Push (VAPID)
 
 ```sh
-pnpm --filter @herald/server vapid    # prints VAPID_PUBLIC_KEY=… and VAPID_PRIVATE_KEY=…
+pnpm --filter @oyee/server vapid    # prints VAPID_PUBLIC_KEY=… and VAPID_PRIVATE_KEY=…
 ```
 
 ### 5. Firebase (Android push)
@@ -133,7 +133,7 @@ curl -c jar -s "$H/auth/dev-login?email=me@example.com" -o /dev/null
 
 # Create a webhook token (the secret is shown once)
 curl -b jar -s -H 'Content-Type: application/json' -d '{"kind":"webhook","label":"Home Assistant"}' $H/api/tokens
-HOOK=$H/hook/hrd_wh_...
+HOOK=$H/hook/oyee_wh_...
 
 # Send: plain text + ntfy-style headers
 curl -H 'Title: Backup done' -H 'Priority: 3' -H 'Tags: nas,backup' -d 'All 3 volumes OK' $HOOK
@@ -159,20 +159,20 @@ curl -H 'Content-Type: application/json' -d '{"template":"aws-alarm","vars":{"se
 # Pair a device
 curl -b jar -s -X POST $H/api/devices/pairing-codes                     # → {"code":"K7Q2-9XMA",...}
 curl -s -H 'Content-Type: application/json' -d '{"code":"k7q29xma","name":"Pixel 9","platform":"android"}' $H/api/devices/pair
-curl -s -H 'Authorization: Bearer hrd_dev_...' $H/api/notifications
+curl -s -H 'Authorization: Bearer oyee_dev_...' $H/api/notifications
 
 # MCP (Streamable HTTP, stateless; JSON responses)
 curl -b jar -s -H 'Content-Type: application/json' -d '{"kind":"mcp","label":"Claude Code"}' $H/api/tokens
 curl -s -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' $H/mcp/hrd_mcp_...
-claude mcp add --transport http herald $H/mcp/hrd_mcp_...              # Claude Code
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' $H/mcp/oyee_mcp_...
+claude mcp add --transport http oyee $H/mcp/oyee_mcp_...              # Claude Code
 ```
 
 ## Behavior notes
 
-- **Auth:** the `herald_session` cookie holds a random id, and D1 stores only its SHA-256 hash. Sessions last 30 days, with sliding renewal. Device, webhook and MCP tokens are also stored as SHA-256 hashes. Webhook and MCP tokens are rejected on `/api/*` (403).
+- **Auth:** the `oyee_session` cookie holds a random id, and D1 stores only its SHA-256 hash. Sessions last 30 days, with sliding renewal. Device, webhook and MCP tokens are also stored as SHA-256 hashes. Webhook and MCP tokens are rejected on `/api/*` (403).
 - **Rate limit:** 60 sends per minute per webhook/MCP token, counted in the InboxDO, returns `429 rate_limited`. Bodies are capped at 64 KiB (`413`).
 - **Sync cursors** are opaque and based on a per-inbox change sequence. Clients must not parse them. `sync` and `?updatedSince=` also accept an ISO timestamp.
 - **Retention:** a daily DO alarm deletes notifications older than 30 days and keeps at most 5,000 per user. It writes tombstones so `sync` reports the deletions.
-- **Action callbacks:** the server POSTs `{ notification, response }` with `X-Herald-Signature: sha256=<hex HMAC-SHA256(body)>`. The key is the `callbackSecret` returned once by `POST /api/tokens` for the token that created the notification.
+- **Action callbacks:** the server POSTs `{ notification, response }` with `X-Oyee-Signature: sha256=<hex HMAC-SHA256(body)>`. The key is the `callbackSecret` returned once by `POST /api/tokens` for the token that created the notification.
 - **Webhook extras:** `?var.<name>=<value>` passes template vars on text/GET hooks. Alertmanager `resolved` with no matching active card records a silent, already-resolved card. SNS `SubscribeURL` is fetched only for `https://sns.<region>.amazonaws.com`.

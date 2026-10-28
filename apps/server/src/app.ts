@@ -32,7 +32,7 @@ app.route("/auth", authRoutes);
 app.route("/api", api);
 app.route("/hook", hook);
 
-// MCP: token in the path, or `Authorization: Bearer hrd_mcp_…` on /mcp.
+// MCP: token in the path, or `Authorization: Bearer oyee_mcp_…` on /mcp.
 async function mcp(c: import("hono").Context<AppEnv>, secret: string | null) {
   if (!secret) throw unauthorized("MCP token required: use /mcp/<token> or Authorization: Bearer <token>");
   const token = await findTokenBySecret(c.env.DB, secret, "mcp");

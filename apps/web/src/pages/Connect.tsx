@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { CreateTokenResult, TokenKind } from "@herald/schema";
+import type { CreateTokenResult, TokenKind } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { relativeTime, formatDateTime } from "../lib/format";
 import { useCreateToken, useRevokeToken, useTokens } from "../lib/queries";
@@ -29,7 +29,7 @@ const KIND_COPY: Record<TokenKind, { title: string; button: string; description:
   mcp: {
     title: "Create MCP server URL",
     button: "Create MCP server URL",
-    description: "Lets Claude Code, Codex and any MCP client send, update and ask via Herald tools.",
+    description: "Lets Claude Code, Codex and any MCP client send, update and ask via Oyee tools.",
     labelPlaceholder: "Claude Code",
     sourcePlaceholder: "claude-code",
   },
@@ -155,7 +155,7 @@ function CreateTokenDialog({ kind, onClose }: { kind: TokenKind | null; onClose:
             <AlertTriangleIcon size={15} className="mt-px shrink-0" />
             <span>
               Copy this URL now. It contains the secret token and <strong>won't be shown again</strong>. Anyone with it
-              can {kind === "mcp" ? "use your Herald MCP tools" : "send you notifications"}. Revoke it below if it leaks.
+              can {kind === "mcp" ? "use your Oyee MCP tools" : "send you notifications"}. Revoke it below if it leaks.
             </span>
           </div>
           <CopyField value={result.url} />
@@ -164,7 +164,7 @@ function CreateTokenDialog({ kind, onClose }: { kind: TokenKind | null; onClose:
               <div className="mb-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">Callback signing secret</div>
               <CopyField value={result.callbackSecret} />
               <p className="mt-1.5 text-xs text-zinc-500">
-                Used to verify <code>X-Herald-Signature: sha256=&lt;hmac-sha256(body)&gt;</code> on action callback requests.
+                Used to verify <code>X-Oyee-Signature: sha256=&lt;hmac-sha256(body)&gt;</code> on action callback requests.
                 Also shown only once.
               </p>
             </div>

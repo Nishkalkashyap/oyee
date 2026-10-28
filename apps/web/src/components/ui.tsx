@@ -372,7 +372,7 @@ export function CountBadge({ count, size = "md", className }: { count: number; s
   );
 }
 
-/** The orange "h" mark that stands for Herald. */
+/** The orange "o" mark that stands for Oyee. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
@@ -382,7 +382,7 @@ export function BrandMark({ className }: { className?: string }) {
         className,
       )}
     >
-      h
+      o
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import type { Action, Notification, NotificationStatus, Severity } from "@herald/schema";
+import type { Action, Notification, NotificationStatus, Severity } from "@oyee/schema";
 import { ApiError, errorMessage } from "../lib/api";
 import { flattenPages, groupByThread, type InboxFilters } from "../lib/cache";
 import { relativeTime } from "../lib/format";
@@ -38,7 +38,7 @@ import { Avatar, Button, EmptyState, ErrorBanner, FilterChip, Segmented, Select,
 import { formatDateTime } from "../lib/format";
 import { useDevices } from "../lib/queries";
 
-const GROUP_KEY = "herald:inbox:group";
+const GROUP_KEY = "oyee:inbox:group";
 
 function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severity" | "status" | "thread" | "q", string | null>>) => void, URLSearchParams] {
   const [params, setParams] = useSearchParams();

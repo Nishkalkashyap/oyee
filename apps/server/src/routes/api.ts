@@ -13,7 +13,7 @@ import {
   UpsertTemplateInput,
   type PairingCode,
   type ServerConfig,
-} from "@herald/schema";
+} from "@oyee/schema";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app";
@@ -71,9 +71,9 @@ api.get("/ws", requireAuth({ allowQueryToken: true }), async (c) => {
   if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") throw badRequest("Expected a WebSocket upgrade");
   const p = c.get("principal");
   const headers = new Headers(c.req.raw.headers);
-  headers.set("X-Herald-User-Id", p.user.id);
-  if (p.kind === "device") headers.set("X-Herald-Device-Id", p.device.id);
-  else headers.delete("X-Herald-Device-Id");
+  headers.set("X-Oyee-User-Id", p.user.id);
+  if (p.kind === "device") headers.set("X-Oyee-Device-Id", p.device.id);
+  else headers.delete("X-Oyee-Device-Id");
   return inbox(c.env, p.user.id).fetch(new Request(c.req.raw.url, { headers }));
 });
 
@@ -91,7 +91,7 @@ api.post("/tokens", sessionOnly, async (c) => {
   const { token, secret, callbackSecret } = await createToken(c.env.DB, principal(c).user.id, input);
   const base = publicUrl(c.env, c.req.raw);
   const url = input.kind === "webhook" ? `${base}/hook/${secret}` : `${base}/mcp/${secret}`;
-  // `callbackSecret` is an extension: the HMAC key for X-Herald-Signature on action callbacks sent via this token.
+  // `callbackSecret` is an extension: the HMAC key for X-Oyee-Signature on action callbacks sent via this token.
   return c.json({ token, secret, url, callbackSecret }, 201);
 });
 
@@ -118,7 +118,7 @@ api.post("/devices/pairing-codes", sessionOnly, async (c) => {
   const body: PairingCode = {
     code: pretty,
     expiresAt,
-    deepLink: `herald://pair?server=${encodeURIComponent(publicUrl(c.env, c.req.raw))}&code=${pretty}`,
+    deepLink: `oyee://pair?server=${encodeURIComponent(publicUrl(c.env, c.req.raw))}&code=${pretty}`,
   };
   return c.json(body, 201);
 });

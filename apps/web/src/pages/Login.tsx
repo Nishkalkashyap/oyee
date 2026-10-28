@@ -6,7 +6,7 @@ import { qk, useConfig, useMe } from "../lib/queries";
 import { Button, Input, buttonClasses, BrandMark } from "../components/ui";
 
 const LOGIN_ERRORS: Record<string, string> = {
-  not_allowed: "This email isn't allowed on this Herald instance. Ask the admin to add it to ALLOWED_EMAILS.",
+  not_allowed: "This email isn't allowed on this Oyee instance. Ask the admin to add it to ALLOWED_EMAILS.",
   access_denied: "Google sign-in was cancelled.",
   invalid_state: "The sign-in session expired or was tampered with. Please try again.",
   oauth_failed: "Google sign-in failed. Please try again.",
@@ -47,7 +47,7 @@ export function LoginPage() {
   if (me.data && !me.isError) return <Navigate to={redirect} replace />;
 
   const mockSignIn = () => {
-    localStorage.removeItem("herald:mock-logged-out");
+    localStorage.removeItem("oyee:mock-logged-out");
     void qc.invalidateQueries({ queryKey: qk.me });
     navigate(redirect, { replace: true });
   };
@@ -57,7 +57,7 @@ export function LoginPage() {
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark className="size-14 rounded-2xl text-3xl" />
-          <h1 className="mt-6 text-[30px] leading-tight font-extrabold tracking-[-0.035em]">Sign in to Herald</h1>
+          <h1 className="mt-6 text-[30px] leading-tight font-extrabold tracking-[-0.035em]">Sign in to Oyee</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             One inbox for AI agents, scripts and webhooks: live, actionable notifications on every device.
           </p>

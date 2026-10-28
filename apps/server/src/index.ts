@@ -1,4 +1,4 @@
-/** Herald Worker entry: Hono router + the per-user InboxDO Durable Object. */
+/** Oyee Worker entry: Hono router + the per-user InboxDO Durable Object. */
 import { app } from "./app";
 import type { Env } from "./env";
 

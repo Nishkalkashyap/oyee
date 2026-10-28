@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Herald" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Oyee" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
     </style>
-    <style name="Theme.Herald.Transparent" parent="android:Theme.Translucent.NoTitleBar">
+    <style name="Theme.Oyee.Transparent" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 </resources>

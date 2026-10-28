@@ -58,11 +58,11 @@ function AuthGate() {
       <div className="flex min-h-dvh items-center justify-center p-6">
         <div className="max-w-md text-center">
           <Logo className="mb-6 justify-center" />
-          <h1 className="text-lg font-semibold">Can't reach the Herald server</h1>
+          <h1 className="text-lg font-semibold">Can't reach the Oyee server</h1>
           <p className="mt-2 text-sm text-zinc-500">{me.error.message}</p>
           {!isMockMode() && (
             <p className="mt-2 text-sm text-zinc-500">
-              Running locally? Start the API with <code className="font-mono">pnpm --filter @herald/server dev</code>, or
+              Running locally? Start the API with <code className="font-mono">pnpm --filter @oyee/server dev</code>, or
               explore with demo data in <a className="text-blue-600 underline dark:text-blue-400" href="/?mock=1">mock mode</a>.
             </p>
           )}

@@ -2,7 +2,7 @@
  * Pure helpers that patch the TanStack Query caches from live events (WebSocket messages, mutation results).
  * Everything here is immutable: it returns the same reference when nothing changed so React Query can skip renders.
  */
-import type { Notification, NotificationStatus, Page, ServerMessage, Severity } from "@herald/schema";
+import type { Notification, NotificationStatus, Page, ServerMessage, Severity } from "@oyee/schema";
 
 export interface InboxFilters {
   source?: string;

@@ -1,4 +1,4 @@
-/* Herald service worker: Web Push (docs/protocol.md §8). Plain JS, no build step.
+/* Oyee service worker: Web Push (docs/protocol.md §8). Plain JS, no build step.
  * Presentation logic mirrors src/lib/webpush.ts + src/lib/format.ts (systemNotificationBody); keep them in sync. */
 
 const DEFAULT_ICON = "/icon-192.png";

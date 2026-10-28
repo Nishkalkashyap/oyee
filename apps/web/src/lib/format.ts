@@ -1,4 +1,4 @@
-import { progressText, type Field, type Notification, type Progress } from "@herald/schema";
+import { progressText, type Field, type Notification, type Progress } from "@oyee/schema";
 import { markdownToPlainText } from "./markdown";
 
 type ProgressLike = Pick<Progress, "value"> & Partial<Pick<Progress, "max" | "label" | "indeterminate">>;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Action, Notification } from "@herald/schema";
+import type { Action, Notification } from "@oyee/schema";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon } from "./Icons";
 import { Markdown } from "./Markdown";

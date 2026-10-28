@@ -3,10 +3,10 @@ import {
   WebPushSubscription,
   type Notification,
   type PushEventType,
-  type Response as HeraldResponse,
+  type Response as OyeeResponse,
   type UpdateReason,
   type WebPushPayload,
-} from "@herald/schema";
+} from "@oyee/schema";
 import type { Env } from "../env";
 import { clearFcmToken, getTokenCallbackSecret, listDevices, removeWebPush, type DeviceRow } from "../db";
 import { byteLength, hmacSha256, toHex } from "../lib/encoding";
@@ -121,7 +121,7 @@ export async function callbackSecretFor(env: Env, userId: string, tokenId: strin
     const s = await getTokenCallbackSecret(env.DB, tokenId);
     if (s) return s;
   }
-  return toHex(await hmacSha256(env.SESSION_SECRET || "herald-dev-secret", `callback:${userId}`));
+  return toHex(await hmacSha256(env.SESSION_SECRET || "oyee-dev-secret", `callback:${userId}`));
 }
 
 export async function sendActionCallback(
@@ -130,16 +130,16 @@ export async function sendActionCallback(
   tokenId: string | null,
   callback: { url: string; headers?: Record<string, string> },
   notification: Notification,
-  response: HeraldResponse,
+  response: OyeeResponse,
 ): Promise<void> {
   const body = JSON.stringify({ notification, response });
   const signature = await signCallback(await callbackSecretFor(env, userId, tokenId), body);
   const headers: Record<string, string> = {
     ...(callback.headers ?? {}),
     "Content-Type": "application/json",
-    "User-Agent": "Herald/0.1 (+https://github.com/herald)",
-    "X-Herald-Signature": signature,
-    "X-Herald-Notification-Id": notification.id,
+    "User-Agent": "Oyee/0.1 (+https://github.com/oyee)",
+    "X-Oyee-Signature": signature,
+    "X-Oyee-Notification-Id": notification.id,
   };
   try {
     const res = await fetch(callback.url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });

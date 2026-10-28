@@ -1,5 +1,5 @@
 /** Webhook payload adapters (docs/protocol.md §4): Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers. */
-import { LIMITS, type SendNotificationInput, type Severity, type UpdateNotificationInput } from "@herald/schema";
+import { LIMITS, type SendNotificationInput, type Severity, type UpdateNotificationInput } from "@oyee/schema";
 import { z } from "zod";
 
 export type HookAction =

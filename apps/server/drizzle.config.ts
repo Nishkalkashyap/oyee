@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 
 /**
  * `pnpm db:generate` writes SQL migrations to ./migrations, which wrangler applies
- * (`wrangler d1 migrations apply herald --local|--remote`, see wrangler.jsonc `migrations_dir`).
+ * (`wrangler d1 migrations apply oyee --local|--remote`, see wrangler.jsonc `migrations_dir`).
  * Optional: set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_DATABASE_ID and CLOUDFLARE_D1_TOKEN to use `pnpm db:studio` against the remote DB.
  */
 export default defineConfig({

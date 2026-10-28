@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SendNotificationInput, TemplateCard } from "@herald/schema";
+import { SendNotificationInput, TemplateCard } from "@oyee/schema";
 import { composeCard, parseVars, templateVariables, toPreviewNotification } from "../lib/card";
 import { buildSendInput, COMPOSER_PRESETS, emptyComposer } from "../lib/composer";
 

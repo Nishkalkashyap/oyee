@@ -1,14 +1,14 @@
 import BackgroundTasks
-import HeraldKit
+import OyeeKit
 import UIKit
 
 /// Best-effort background catch-up: a `BGAppRefreshTask` that pulls `updatedSince` changes over REST and posts local
 /// notifications for new items. iOS decides when (and whether) it runs, typically not more than every 15+ minutes.
 enum BackgroundRefresh {
-    static let identifier = "dev.herald.ios.refresh"
+    static let identifier = "app.oyee.ios.refresh"
 
     @MainActor
-    static func register(model: HeraldModel) {
+    static func register(model: OyeeModel) {
         // `using: .main` → the launch handler runs on the main queue.
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
             MainActor.assumeIsolated {
@@ -28,12 +28,12 @@ enum BackgroundRefresh {
             try BGTaskScheduler.shared.submit(request)
         } catch {
             // Fails in the simulator and when Background App Refresh is disabled; nothing else to do.
-            NSLog("Herald: couldn't schedule background refresh: \(error)")
+            NSLog("Oyee: couldn't schedule background refresh: \(error)")
         }
     }
 
     @MainActor
-    private static func handle(_ task: BGAppRefreshTask, model: HeraldModel) {
+    private static func handle(_ task: BGAppRefreshTask, model: OyeeModel) {
         schedule()  // Keep the chain going.
         guard model.isPaired else {
             task.setTaskCompleted(success: true)

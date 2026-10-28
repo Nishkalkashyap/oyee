@@ -3,7 +3,7 @@ import { b64urlDecode, b64urlDecodeString, b64urlEncode, utf8 } from "../src/lib
 import { decryptPayload, encryptPayload, vapidAuthorization, vapidPrivateJwk } from "../src/push/webpush";
 import { buildFcmData } from "../src/push/fcm";
 import { shouldWebPush } from "../src/push/fanout";
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 
 /** RFC 8291 Appendix A test vector. */
 const RFC = {

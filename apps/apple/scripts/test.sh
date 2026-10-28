@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the HeraldKit tests (Swift Testing).
+# Runs the OyeeKit tests (Swift Testing).
 #
 # With only the Command Line Tools installed, SwiftPM's Swift Build backend sometimes fails to find the Swift Testing
 # macro plugin ("plugin for module 'TestingMacros' not found") when it compiles test files in parallel. Loading the

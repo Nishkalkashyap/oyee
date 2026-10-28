@@ -3,7 +3,7 @@
  * - VAPID (RFC 8292): ES256 JWT, `Authorization: vapid t=<jwt>, k=<public key>`.
  * - Message encryption (RFC 8291) with the `aes128gcm` content coding (RFC 8188), single record.
  */
-import type { WebPushSubscription } from "@herald/schema";
+import type { WebPushSubscription } from "@oyee/schema";
 import { b64urlDecode, b64urlEncode, concatBytes, hmacSha256, randomBytes, utf8 } from "../lib/encoding";
 
 const RECORD_SIZE = 4096;

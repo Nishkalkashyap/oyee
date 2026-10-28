@@ -3,7 +3,7 @@
  * JS (service workers can't import the app bundle); this TS copy powers the in-app preview and the unit tests.
  * Keep the two in sync.
  */
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 import { systemNotificationBody } from "./format";
 
 export const REPLY_ACTION = "__reply";

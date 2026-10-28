@@ -1,4 +1,4 @@
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 
 export function makeNotification(p: Partial<Notification> & { id: string }): Notification {
   const at = p.createdAt ?? "2026-10-28T10:00:00.000Z";

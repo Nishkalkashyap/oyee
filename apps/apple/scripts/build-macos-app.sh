@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Builds Herald.app (macOS menu-bar app) without Xcode:
+# Builds Oyee.app (macOS menu-bar app) without Xcode:
 #   swift build -c release → assemble the bundle → ad-hoc codesign.
-# Output: apps/apple/build/Herald.app
+# Output: apps/apple/build/Oyee.app
 #
 #   UNIVERSAL=1        build for Apple Silicon and Intel (used for GitHub Releases)
-#   HERALD_VERSION=x   sets CFBundleShortVersionString (default: the Info.plist value)
+#   OYEE_VERSION=x   sets CFBundleShortVersionString (default: the Info.plist value)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="Herald"
+APP_NAME="Oyee"
 BUILD_DIR="$ROOT/build"
 APP="$BUILD_DIR/$APP_NAME.app"
 CONFIG="${CONFIG:-release}"
@@ -23,21 +23,21 @@ fi
 ARCH_FLAGS=()
 if [[ "${UNIVERSAL:-0}" == "1" ]]; then ARCH_FLAGS=(--arch arm64 --arch x86_64); fi
 
-echo "==> swift build -c $CONFIG --product HeraldMac ${ARCH_FLAGS[*]:-}"
-swift build -c "$CONFIG" --product HeraldMac "${ARCH_FLAGS[@]}"
-BIN_DIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
-EXECUTABLE="$BIN_DIR/HeraldMac"
+echo "==> swift build -c $CONFIG --product OyeeMac ${ARCH_FLAGS[*]:-}"
+swift build -c "$CONFIG" --product OyeeMac ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}
+BIN_DIR="$(swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-bin-path)"
+EXECUTABLE="$BIN_DIR/OyeeMac"
 [[ -x "$EXECUTABLE" ]] || { echo "error: $EXECUTABLE not found" >&2; exit 1; }
 
 echo "==> Assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$EXECUTABLE" "$APP/Contents/MacOS/$APP_NAME"
-cp "$ROOT/Resources/HeraldMac-Info.plist" "$APP/Contents/Info.plist"
+cp "$ROOT/Resources/OyeeMac-Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-if [[ -n "${HERALD_VERSION:-}" ]]; then
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $HERALD_VERSION" "$APP/Contents/Info.plist"
+if [[ -n "${OYEE_VERSION:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $OYEE_VERSION" "$APP/Contents/Info.plist"
 fi
 
 # Version from git (optional): CFBundleVersion = commit count.
@@ -45,7 +45,7 @@ if BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)"; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 fi
 
-# Fonts (Figtree, OFL): registered at launch by HeraldFonts.register().
+# Fonts (Figtree, OFL): registered at launch by OyeeFonts.register().
 mkdir -p "$APP/Contents/Resources/Fonts"
 cp "$ROOT/Resources/Fonts/"*.ttf "$APP/Contents/Resources/Fonts/"
 

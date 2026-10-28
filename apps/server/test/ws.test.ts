@@ -1,4 +1,4 @@
-import type { ServerMessage } from "@herald/schema";
+import type { ServerMessage } from "@oyee/schema";
 import { env, runDurableObjectAlarm, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { InboxDO } from "../src/inbox/do";

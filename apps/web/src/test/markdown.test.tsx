@@ -115,8 +115,8 @@ describe("<Markdown> rendering (XSS)", () => {
   });
 
   it("renders safe links with target=_blank and rel=noopener", () => {
-    const out = html("[docs](https://herald.dev/docs)");
-    expect(out).toMatch(/<a href="https:\/\/herald.dev\/docs" target="_blank" rel="noopener noreferrer nofollow"/);
+    const out = html("[docs](https://oyee.dev/docs)");
+    expect(out).toMatch(/<a href="https:\/\/oyee.dev\/docs" target="_blank" rel="noopener noreferrer nofollow"/);
   });
 
   it("renders line breaks as <br/>", () => {

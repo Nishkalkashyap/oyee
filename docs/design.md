@@ -1,14 +1,14 @@
-# Herald design language
+# Oyee design language
 
-Herald uses **Gluon's design language** (`~/Desktop/github-repos/gluon`, `packages/kit/styles/tokens.css`): a warm
+Oyee uses **Gluon's design language** (`~/Desktop/github-repos/gluon`, `packages/kit/styles/tokens.css`): a warm
 paper palette, white panels on a soft ground, near-black ink, pill buttons, peach selection, and **orange reserved for
 the brand mark, unread times and counts, and send buttons**. The three clients implement the same tokens and
 components:
 
 | | Web | macOS | Android |
 |---|---|---|---|
-| Tokens | `apps/web/src/index.css` (CSS variables + Tailwind theme; zinc is remapped to the warm neutrals) | `HeraldKit/Views/Theme.swift` (`Theme.*`, dynamic light/dark) | `ui/theme/Theme.kt` (`Herald.colors`) |
-| Components | `components/ui.tsx`, `NotificationCard.tsx` | `Theme.swift`, `NotificationCardView.swift` | `ui/components/HeraldComponents.kt` |
+| Tokens | `apps/web/src/index.css` (CSS variables + Tailwind theme; zinc is remapped to the warm neutrals) | `OyeeKit/Views/Theme.swift` (`Theme.*`, dynamic light/dark) | `ui/theme/Theme.kt` (`Oyee.colors`) |
+| Components | `components/ui.tsx`, `NotificationCard.tsx` | `Theme.swift`, `NotificationCardView.swift` | `ui/components/OyeeComponents.kt` |
 | Font | `@fontsource-variable/figtree` | `Resources/Fonts/Figtree.ttf` (registered at launch) | `res/font/figtree.ttf` |
 
 ## Tokens
@@ -56,8 +56,8 @@ so a source has the same color everywhere.
 - **macOS:** the inbox window is the ground with two 22pt panels (list, conversation); the menu-bar popover has the
   brand header, compact rows and a pill footer.
 - **Android:** Gluon's mobile header (large title, live state, round Settings button), pills, rows and the same
-  conversation view. The system notification shade is drawn by Android; Herald sets the orange accent.
+  conversation view. The system notification shade is drawn by Android; Oyee sets the orange accent.
 - **Settings (macOS, Android):** Gluon's settings layout. Large bold title with a muted description, an account card
   (avatar, email, server, this device, connection, reconnect / unpair), bold section headings, and rows with a semibold
   title, a muted description and the control on the right, separated by hairlines. Switches use Gluon's style: grey
-  track, green when on, white thumb. On macOS, `herald://settings` opens the window.
+  track, green when on, white thumb. On macOS, `oyee://settings` opens the window.

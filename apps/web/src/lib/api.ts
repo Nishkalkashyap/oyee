@@ -1,5 +1,5 @@
 /**
- * Typed REST client for the Herald API (docs/protocol.md §3). Same-origin, cookie session.
+ * Typed REST client for the Oyee API (docs/protocol.md §3). Same-origin, cookie session.
  * The transport is swappable so mock mode can serve fixtures without a backend.
  */
 import type {
@@ -21,7 +21,7 @@ import type {
   UpdateNotificationInput,
   UpsertTemplateInput,
   User,
-} from "@herald/schema";
+} from "@oyee/schema";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

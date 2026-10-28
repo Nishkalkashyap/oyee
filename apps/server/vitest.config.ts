@@ -21,11 +21,11 @@ async function testPushKeys() {
   return {
     VAPID_PUBLIC_KEY: b64url(await webcrypto.subtle.exportKey("raw", vapid.publicKey)),
     VAPID_PRIVATE_KEY: (await webcrypto.subtle.exportKey("jwk", vapid.privateKey)).d!,
-    VAPID_SUBJECT: "mailto:test@herald.test",
+    VAPID_SUBJECT: "mailto:test@oyee.test",
     FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({
       type: "service_account",
-      project_id: "herald-test",
-      client_email: "fcm@herald-test.iam.gserviceaccount.com",
+      project_id: "oyee-test",
+      client_email: "fcm@oyee-test.iam.gserviceaccount.com",
       private_key: privateKey,
       token_uri: "https://oauth2.googleapis.com/token",
     }),
@@ -45,7 +45,7 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             DEV_LOGIN: "true",
-            PUBLIC_URL: "https://herald.test",
+            PUBLIC_URL: "https://oyee.test",
             SESSION_SECRET: "test-secret",
             ...pushKeys,
           },

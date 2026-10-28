@@ -1,10 +1,10 @@
-import HeraldKit
+import OyeeKit
 import SwiftUI
 import UIKit
 import UserNotifications
 
 struct SettingsScreen: View {
-    let model: HeraldModel
+    let model: OyeeModel
     @Environment(\.dismiss) private var dismiss
     @ViewState private var confirmUnpair = false
     @ViewState private var showPairing = false
@@ -37,7 +37,7 @@ struct SettingsScreen: View {
             } header: {
                 Text("Delivery")
             } footer: {
-                Text("Keep Background App Refresh enabled for Herald in iOS Settings for the best catch-up.")
+                Text("Keep Background App Refresh enabled for Oyee in iOS Settings for the best catch-up.")
             }
 
             Section("Notifications") {
@@ -57,7 +57,7 @@ struct SettingsScreen: View {
             Section("About") {
                 LabeledContent(
                     "Version",
-                    value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? HeraldKitInfo.version)
+                    value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? OyeeKitInfo.version)
             }
         }
         .navigationTitle("Settings")

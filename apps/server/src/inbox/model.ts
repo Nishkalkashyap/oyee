@@ -5,10 +5,10 @@ import {
   renderTemplateValue,
   type Notification,
   type Platform,
-  type Response as HeraldResponse,
+  type Response as OyeeResponse,
   type Template,
   type UpdateNotificationInput,
-} from "@herald/schema";
+} from "@oyee/schema";
 import { badRequest, parseOrThrow } from "../lib/errors";
 
 /** Who is acting. Passed with every InboxDO call. */
@@ -194,7 +194,7 @@ export function assertUniqueActionIds(actions: Notification["actions"]): void {
   }
 }
 
-export function appendResponse(n: Notification, r: HeraldResponse): HeraldResponse[] {
+export function appendResponse(n: Notification, r: OyeeResponse): OyeeResponse[] {
   return [...n.responses, r].slice(-LIMITS.maxResponses);
 }
 

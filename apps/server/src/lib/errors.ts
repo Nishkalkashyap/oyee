@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@herald/schema";
+import type { ErrorCode } from "@oyee/schema";
 import { z } from "zod";
 
 const STATUS: Record<ErrorCode, number> = {

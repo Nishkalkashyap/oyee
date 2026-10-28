@@ -20,21 +20,21 @@ export function withQuery(url: string, params: Record<string, string>): string {
 }
 
 export function mcpSnippets(url: string): Snippet[] {
-  const json = JSON.stringify({ mcpServers: { herald: { type: "http", url } } }, null, 2);
+  const json = JSON.stringify({ mcpServers: { oyee: { type: "http", url } } }, null, 2);
   return [
     {
       id: "claude-code",
       title: "Claude Code",
       language: "bash",
       description: "Run once in your terminal. Add --scope user to make it available in every project.",
-      code: `claude mcp add --transport http herald ${shellQuote(url)}`,
+      code: `claude mcp add --transport http oyee ${shellQuote(url)}`,
     },
     {
       id: "codex",
       title: "Codex",
       language: "toml",
       description: "Add to ~/.codex/config.toml.",
-      code: `[mcp_servers.herald]\nurl = ${JSON.stringify(url)}`,
+      code: `[mcp_servers.oyee]\nurl = ${JSON.stringify(url)}`,
     },
     {
       id: "json",
@@ -112,10 +112,10 @@ export function webhookSnippets(url: string): Snippet[] {
       id: "home-assistant",
       title: "Home Assistant",
       language: "yaml",
-      description: "configuration.yaml: a REST notify platform. Restart Home Assistant, then call notify.herald.",
+      description: "configuration.yaml: a REST notify platform. Restart Home Assistant, then call notify.oyee.",
       code: [
         "notify:",
-        "  - name: herald",
+        "  - name: oyee",
         "    platform: rest",
         `    resource: ${url}`,
         "    method: POST_JSON",
@@ -137,7 +137,7 @@ export function webhookSnippets(url: string): Snippet[] {
         "      entity_id: sensor.washer_status",
         '      to: "complete"',
         "  actions:",
-        "    - action: notify.herald",
+        "    - action: notify.oyee",
         "      data:",
         '        title: "Laundry"',
         '        message: "The washer is done 🧺"',
@@ -151,7 +151,7 @@ export function webhookSnippets(url: string): Snippet[] {
         "Alertmanager payloads are detected automatically: one notification per group, severity from labels.severity, resolved alerts resolve it.",
       code: [
         "receivers:",
-        "  - name: herald",
+        "  - name: oyee",
         "    webhook_configs:",
         `      - url: ${url}`,
         "        send_resolved: true",
@@ -174,14 +174,14 @@ export function webhookSnippets(url: string): Snippet[] {
       id: "github-actions",
       title: "GitHub Actions",
       language: "yaml",
-      description: "Store the URL as a repository secret named HERALD_WEBHOOK_URL, then add this step at the end of a job.",
+      description: "Store the URL as a repository secret named OYEE_WEBHOOK_URL, then add this step at the end of a job.",
       code: [
-        "- name: Notify Herald",
+        "- name: Notify Oyee",
         "  if: always()",
         "  env:",
-        "    HERALD_URL: ${{ secrets.HERALD_WEBHOOK_URL }}",
+        "    OYEE_URL: ${{ secrets.OYEE_WEBHOOK_URL }}",
         "  run: |",
-        '    curl -fsS -X POST "$HERALD_URL" -H "Content-Type: application/json" -d @- <<EOF',
+        '    curl -fsS -X POST "$OYEE_URL" -H "Content-Type: application/json" -d @- <<EOF',
         "    {",
         '      "title": "${{ github.workflow }}: ${{ job.status }}",',
         '      "body": "${{ github.repository }}@${{ github.ref_name }}",',

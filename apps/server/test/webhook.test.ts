@@ -1,4 +1,4 @@
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 import { SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromTextRequest, severityFromPriority } from "../src/webhook/adapters";
@@ -63,7 +63,7 @@ describe("webhook: text and GET", () => {
     const big = await call("POST", `/hook/${secret}`, null, "x".repeat(70 * 1024), { "Content-Type": "text/plain" });
     expect(big.status).toBe(413);
     expect(big.body.error.code).toBe("payload_too_large");
-    expect((await call("POST", "/hook/hrd_wh_invalid", null, { title: "x" })).status).toBe(401);
+    expect((await call("POST", "/hook/oyee_wh_invalid", null, { title: "x" })).status).toBe(401);
   });
 
   it("rate limits per token", async () => {
@@ -95,7 +95,7 @@ describe("webhook: Alertmanager / Grafana / SNS", () => {
     version: "4",
     groupKey: '{}:{alertname="HighCPU"}',
     status,
-    receiver: "herald",
+    receiver: "oyee",
     groupLabels: { alertname: "HighCPU" },
     commonLabels: { alertname: "HighCPU", severity: "critical", cluster: "prod" },
     commonAnnotations: {},
@@ -140,7 +140,7 @@ describe("webhook: Alertmanager / Grafana / SNS", () => {
   it("maps Grafana unified alerting payloads", async () => {
     const { secret, get } = await setup("grafana");
     const r = await call("POST", `/hook/${secret}`, null, {
-      receiver: "herald",
+      receiver: "oyee",
       status: "firing",
       orgId: 1,
       state: "alerting",

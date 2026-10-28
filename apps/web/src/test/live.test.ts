@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import type { Notification, ServerMessage } from "@herald/schema";
+import type { Notification, ServerMessage } from "@oyee/schema";
 import type { NotificationPages } from "../lib/cache";
 import { backoffDelay, BACKOFF_MAX_MS, LiveConnection, PING_INTERVAL_MS, setSocketFactory, wsUrl, type LiveSocket } from "../lib/live";
 import { qk } from "../lib/queries";

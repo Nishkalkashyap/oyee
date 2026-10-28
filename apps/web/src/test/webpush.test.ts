@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WebPushPayload } from "@herald/schema";
+import type { WebPushPayload } from "@oyee/schema";
 import swSource from "../../public/sw.js?raw";
 import { REPLY_ACTION, shouldClose, webPushActions, webPushPresentation } from "../lib/webpush";
 import { makeNotification } from "./fixtures";
@@ -75,7 +75,7 @@ function loadServiceWorker() {
   const fetches: { url: string; init?: RequestInit }[] = [];
   const opened: string[] = [];
   const self = {
-    location: { origin: "https://herald.test" },
+    location: { origin: "https://oyee.test" },
     addEventListener: (type: string, fn: (e: unknown) => void) => (listeners[type] = fn),
     skipWaiting: () => undefined,
     registration: {
@@ -139,7 +139,7 @@ describe("public/sw.js", () => {
     expect(JSON.parse(String(sw.fetches[0]!.init?.body))).toEqual({ actionId: "ack" });
 
     await sw.dispatch("notificationclick", { action: REPLY_ACTION, notification });
-    expect(sw.opened).toEqual(["https://herald.test/inbox/ntf_1?reply=1"]);
+    expect(sw.opened).toEqual(["https://oyee.test/inbox/ntf_1?reply=1"]);
 
     await sw.dispatch("notificationclick", { action: "", notification: { ...notification, data: { id: "ntf_1", url: "https://ci.example.com/x" } } });
     expect(sw.fetches.at(-1)!.url).toBe("/api/notifications/ntf_1/read");

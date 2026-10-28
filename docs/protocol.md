@@ -1,4 +1,4 @@
-# Herald Protocol v1
+# Oyee Protocol v1
 
 This is the contract between the server (`apps/server`), web (`apps/web`), Android (`apps/android`) and Apple
 (`apps/apple`) clients. The TypeScript source of truth is `packages/schema/src/index.ts`. Kotlin and Swift models
@@ -65,7 +65,7 @@ General rules:
 - `style` — `"default" | "primary" | "destructive"` (default `"default"`).
 - `url` — if present, the client **opens this URL** and does **not** call respond.
 - `callback` — `{ "url": "https://…", "headers"?: {…} }`. On response, the server POSTs
-  `{ notification, response }` with header `X-Herald-Signature: sha256=<hex hmac of body>`.
+  `{ notification, response }` with header `X-Oyee-Signature: sha256=<hex hmac of body>`.
 - `resolves` — boolean; responding with this action also resolves the notification.
 
 ### 1.2 `SendNotificationInput` (create)
@@ -109,10 +109,10 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 
 | Credential | How it's sent | Scope |
 |---|---|---|
-| Session cookie `herald_session` (HttpOnly, Secure, SameSite=Lax) | browser | everything under `/api/*` |
-| Device token `hrd_dev_…` | `Authorization: Bearer` (WebSocket: also `?token=` query, because some WS clients can't set headers) | notifications read/respond/read/resolve/delete, `/api/devices/self`, `/api/ws`, templates read, `/api/me` |
-| MCP token `hrd_mcp_…` | URL path `/mcp/<token>` or `Authorization: Bearer` | MCP tools |
-| Webhook token `hrd_wh_…` | URL path `/hook/<token>` | send only |
+| Session cookie `oyee_session` (HttpOnly, Secure, SameSite=Lax) | browser | everything under `/api/*` |
+| Device token `oyee_dev_…` | `Authorization: Bearer` (WebSocket: also `?token=` query, because some WS clients can't set headers) | notifications read/respond/read/resolve/delete, `/api/devices/self`, `/api/ws`, templates read, `/api/me` |
+| MCP token `oyee_mcp_…` | URL path `/mcp/<token>` or `Authorization: Bearer` | MCP tools |
+| Webhook token `oyee_wh_…` | URL path `/hook/<token>` | send only |
 
 ### 2.1 Web sign-in
 - `GET /auth/google/login?redirect=/inbox` → 302 to Google.
@@ -121,10 +121,10 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /auth/dev-login?email=a@b.c&redirect=/` → only when `DEV_LOGIN=true`. Same effect as the Google login.
 
 ### 2.2 Device pairing
-1. Web (session): `POST /api/devices/pairing-codes` → `{ "code": "K7Q2-9XMA", "expiresAt": "…", "deepLink": "herald://pair?server=https%3A%2F%2Fhost&code=K7Q2-9XMA" }`
+1. Web (session): `POST /api/devices/pairing-codes` → `{ "code": "K7Q2-9XMA", "expiresAt": "…", "deepLink": "oyee://pair?server=https%3A%2F%2Fhost&code=K7Q2-9XMA" }`
    (10 min TTL, single use, 8 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, shown as `XXXX-XXXX`; the dash is optional on input, case-insensitive).
 2. Client (no auth): `POST /api/devices/pair` `{ "code": "K7Q29XMA", "name": "Pixel 9", "platform": "android" }`
-   → `201 { "device": Device, "token": "hrd_dev_…", "user": User }`.
+   → `201 { "device": Device, "token": "oyee_dev_…", "user": User }`.
 3. Client stores the server URL + token. `DELETE /api/devices/self` unpairs.
 
 `platform`: `"android" | "ios" | "macos" | "web"`.
@@ -139,10 +139,10 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /api/me` → `User` = `{ "id", "email", "name", "avatarUrl" }`
 
 ### Tokens (session only)
-- `GET /api/tokens` → `{ "items": TokenInfo[] }`. `TokenInfo` = `{ id, kind: "webhook"|"mcp", label, prefix: "hrd_wh_ab12", defaultSource, createdAt, lastUsedAt }`
+- `GET /api/tokens` → `{ "items": TokenInfo[] }`. `TokenInfo` = `{ id, kind: "webhook"|"mcp", label, prefix: "oyee_wh_ab12", defaultSource, createdAt, lastUsedAt }`
 - `POST /api/tokens` `{ "kind": "webhook"|"mcp", "label": "Home Assistant", "defaultSource"?: "home-assistant" }`
-  → `201 { "token": TokenInfo, "secret": "hrd_wh_…", "url": "https://host/hook/hrd_wh_…", "callbackSecret": "…" }` (for MCP: `https://host/mcp/hrd_mcp_…`).
-  The secret and callbackSecret are never shown again. `callbackSecret` is the HMAC key for `X-Herald-Signature` on action callbacks of notifications sent with this token.
+  → `201 { "token": TokenInfo, "secret": "oyee_wh_…", "url": "https://host/hook/oyee_wh_…", "callbackSecret": "…" }` (for MCP: `https://host/mcp/oyee_mcp_…`).
+  The secret and callbackSecret are never shown again. `callbackSecret` is the HMAC key for `X-Oyee-Signature` on action callbacks of notifications sent with this token.
 - `DELETE /api/tokens/:id` → `204`
 
 ### Devices
@@ -201,7 +201,7 @@ or `"Notification"`.
 
 ## 5. MCP — `/mcp/:token` or `/mcp` (Bearer)
 
-Streamable HTTP, stateless. Server name `herald`. Tools (the input schemas are the zod schemas from `@herald/schema`):
+Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the zod schemas from `@oyee/schema`):
 
 | Tool | Input | Output (JSON text content) |
 |---|---|---|
@@ -275,9 +275,9 @@ The service worker shows / replaces (`tag` = id) / closes notifications. Web Pus
 
 ## 9. Platform rendering rules (all clients)
 
-- One system notification per Herald notification. The system id/tag is derived from the Herald `id`.
+- One system notification per Oyee notification. The system id/tag is derived from the Oyee `id`.
 - Severity → importance: `critical` = max/heads-up + sound, `warning` = high + sound, `info`/`success` = default, `debug` = low/silent.
-  Android: one channel per severity (`herald.critical`, `herald.warning`, `herald.info`, `herald.success`, `herald.debug`).
+  Android: one channel per severity (`oyee.critical`, `oyee.warning`, `oyee.info`, `oyee.success`, `oyee.debug`).
 - `silent: true` → no sound or vibration.
 - Updates that aren't alerts must not re-alert (Android `setOnlyAlertOnce(true)`; Apple: re-add with the same identifier and no sound).
 - `fields` are appended to the expanded text as `Label: value` lines.

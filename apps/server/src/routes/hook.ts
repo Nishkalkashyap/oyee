@@ -1,5 +1,5 @@
 /** POST|GET /hook/:token — webhook ingestion (docs/protocol.md §4). */
-import { SendNotificationInput } from "@herald/schema";
+import { SendNotificationInput } from "@oyee/schema";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../app";
 import { findTokenBySecret } from "../db";

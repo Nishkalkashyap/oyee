@@ -1,4 +1,4 @@
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 import { env, SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hmacSha256, toHex } from "../src/lib/encoding";
@@ -46,9 +46,9 @@ describe("end-to-end webhook flow", () => {
   it("dev login → webhook token → text + JSON → list → patch → respond → resolve", async () => {
     const cookie = await devLogin();
     const tok = await createToken(cookie, "webhook", "Home Assistant", "home-assistant");
-    expect(tok.secret).toMatch(/^hrd_wh_[A-Za-z0-9_-]{43}$/);
-    expect(tok.url).toBe(`https://herald.test/hook/${tok.secret}`);
-    expect(tok.token.prefix).toBe(tok.secret.slice(0, 11));
+    expect(tok.secret).toMatch(/^oyee_wh_[A-Za-z0-9_-]{43}$/);
+    expect(tok.url).toBe(`https://oyee.test/hook/${tok.secret}`);
+    expect(tok.token.prefix).toBe(tok.secret.slice(0, "oyee_wh_".length + 4));
 
     // text/plain
     const t = await SELF.fetch(`${BASE}/hook/${tok.secret}`, {
@@ -276,7 +276,7 @@ describe("notifications", () => {
     expect(r.status).toBe(200);
     const cb = await eventually(() => seen[0]);
     const expected = `sha256=${toHex(await hmacSha256(tok.callbackSecret, cb.body))}`;
-    expect(cb.headers.get("X-Herald-Signature")).toBe(expected);
+    expect(cb.headers.get("X-Oyee-Signature")).toBe(expected);
     expect(cb.headers.get("X-Custom")).toBe("1");
     const payload = JSON.parse(cb.body);
     expect(payload.notification.id).toBe(sent.body.id);
@@ -290,13 +290,13 @@ describe("devices", () => {
     const pc = await call("POST", "/api/devices/pairing-codes", { cookie });
     expect(pc.status).toBe(201);
     expect(pc.body.code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/);
-    expect(pc.body.deepLink).toBe(`herald://pair?server=https%3A%2F%2Fherald.test&code=${pc.body.code}`);
+    expect(pc.body.deepLink).toBe(`oyee://pair?server=https%3A%2F%2Foyee.test&code=${pc.body.code}`);
 
     // dash optional, case-insensitive
     const code = (pc.body.code as string).replace("-", "").toLowerCase();
     const paired = await call("POST", "/api/devices/pair", null, { code, name: "Pixel 9", platform: "android" });
     expect(paired.status).toBe(201);
-    expect(paired.body.token).toMatch(/^hrd_dev_/);
+    expect(paired.body.token).toMatch(/^oyee_dev_/);
     expect(paired.body.device).toMatchObject({ name: "Pixel 9", platform: "android", transports: ["websocket"] });
     const bearer = paired.body.token as string;
 
@@ -341,6 +341,6 @@ describe("devices", () => {
     const cookie = await devLogin();
     const tok = await createToken(cookie, "webhook");
     expect((await call("GET", "/api/notifications", { bearer: tok.secret })).status).toBe(403);
-    expect((await pairDevice(cookie)).token).toMatch(/^hrd_dev_/);
+    expect((await pairDevice(cookie)).token).toMatch(/^oyee_dev_/);
   });
 });

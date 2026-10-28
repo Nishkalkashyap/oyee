@@ -1,6 +1,6 @@
 {
-  "name": "Herald",
-  "short_name": "Herald",
+  "name": "Oyee",
+  "short_name": "Oyee",
   "description": "One inbox for AI agents, scripts and webhooks.",
   "start_url": "/inbox",
   "scope": "/",

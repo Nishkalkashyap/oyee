@@ -57,7 +57,7 @@ describe("Web Push fan-out", () => {
     // VAPID: ES256 JWT for the push service origin, verifiable with VAPID_PUBLIC_KEY
     const m = /^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/.exec(first.headers.get("Authorization") ?? "")!;
     expect(m[4]).toBe(env.VAPID_PUBLIC_KEY);
-    expect(JSON.parse(b64urlDecodeString(m[2]!))).toMatchObject({ aud: "https://push.example.net", sub: "mailto:test@herald.test" });
+    expect(JSON.parse(b64urlDecodeString(m[2]!))).toMatchObject({ aud: "https://push.example.net", sub: "mailto:test@oyee.test" });
     const vapidKey = await crypto.subtle.importKey("raw", b64urlDecode(env.VAPID_PUBLIC_KEY!), { name: "ECDSA", namedCurve: "P-256" }, false, [
       "verify",
     ]);
@@ -106,7 +106,7 @@ describe("FCM fan-out", () => {
           { status: 404 },
         );
       }
-      return Response.json({ name: "projects/herald-test/messages/1" });
+      return Response.json({ name: "projects/oyee-test/messages/1" });
     });
     const fcmCalls = () => seen.filter((s) => s.url.startsWith("https://fcm.googleapis.com/"));
 
@@ -122,7 +122,7 @@ describe("FCM fan-out", () => {
       const [h, c, sig] = form.get("assertion")!.split(".");
       expect(JSON.parse(b64urlDecodeString(h!))).toEqual({ alg: "RS256", typ: "JWT" });
       expect(JSON.parse(b64urlDecodeString(c!))).toMatchObject({
-        iss: "fcm@herald-test.iam.gserviceaccount.com",
+        iss: "fcm@oyee-test.iam.gserviceaccount.com",
         scope: "https://www.googleapis.com/auth/firebase.messaging",
         aud: "https://oauth2.googleapis.com/token",
       });
@@ -133,7 +133,7 @@ describe("FCM fan-out", () => {
     }
 
     const call1 = fcmCalls()[0]!;
-    expect(call1.url).toBe("https://fcm.googleapis.com/v1/projects/herald-test/messages:send");
+    expect(call1.url).toBe("https://fcm.googleapis.com/v1/projects/oyee-test/messages:send");
     expect(call1.headers.get("Authorization")).toBe("Bearer ya29.test-token");
     const msg = JSON.parse(new TextDecoder().decode(call1.body)).message;
     expect(msg.token).toBe("fcm-token-1");

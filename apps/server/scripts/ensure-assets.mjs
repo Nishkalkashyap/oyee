@@ -11,8 +11,8 @@ export function ensureAssets() {
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     resolve(dir, "index.html"),
-    `<!doctype html><meta charset="utf-8"><title>Herald</title>
-<p>Herald API is running. The web app hasn't been built yet: run <code>pnpm --filter @herald/web build</code>.</p>\n`,
+    `<!doctype html><meta charset="utf-8"><title>Oyee</title>
+<p>Oyee API is running. The web app hasn't been built yet: run <code>pnpm --filter @oyee/web build</code>.</p>\n`,
   );
   console.log(`[ensure-assets] created placeholder ${dir}/index.html`);
   return true;

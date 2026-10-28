@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { TemplateCard, TemplateName, renderTemplateValue, type Template } from "@herald/schema";
+import { TemplateCard, TemplateName, renderTemplateValue, type Template } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { parseVars, templateVariables, toPreviewNotification } from "../lib/card";
 import { relativeTime } from "../lib/format";

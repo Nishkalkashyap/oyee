@@ -1,4 +1,4 @@
-import type { Notification, Progress, Severity } from "@herald/schema";
+import type { Notification, Progress, Severity } from "@oyee/schema";
 import { progressLabel, progressPercent, isHttpUrl } from "../lib/format";
 import { SEVERITY_STYLES } from "../lib/severity";
 import { AlertOctagonIcon, AlertTriangleIcon, BugIcon, CheckCircleIcon, InfoIcon } from "./Icons";

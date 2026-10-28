@@ -1,15 +1,15 @@
 {
-  "name": "herald",
+  "name": "oyee",
   "private": true,
   "description": "One inbox for AI agents, scripts and webhooks — live, actionable notifications on every device.",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @herald/server --filter @herald/web dev",
+    "dev": "pnpm -r --parallel --filter @oyee/server --filter @oyee/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "deploy": "pnpm --filter @herald/web build && pnpm --filter @herald/server run deploy",
+    "deploy": "pnpm --filter @oyee/web build && pnpm --filter @oyee/server run deploy",
     "android:build": "cd apps/android && ./gradlew assembleDebug",
     "macos:build": "apps/apple/scripts/build-macos-app.sh"
   },

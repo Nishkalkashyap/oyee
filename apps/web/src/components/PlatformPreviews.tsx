@@ -3,7 +3,7 @@
  * They're illustrations, not pixel-perfect replicas.
  */
 import { useState, type ReactNode } from "react";
-import type { Notification } from "@herald/schema";
+import type { Notification } from "@oyee/schema";
 import { fieldLines, systemNotificationBody } from "../lib/format";
 import { markdownToPlainText } from "../lib/markdown";
 import { SEVERITY_STYLES } from "../lib/severity";
@@ -21,7 +21,7 @@ function AppGlyph({ className }: { className?: string }) {
         className,
       )}
     >
-      h
+      o
     </span>
   );
 }
@@ -35,13 +35,13 @@ export function AndroidPreview({ n }: { n: Notification }) {
   const text = [markdownToPlainText(n.body).trim(), ...fieldLines(n.fields)].filter(Boolean).join("\n");
   const buttons = [...(n.reply ? [n.reply.buttonLabel || "Reply"] : []), ...n.actions.map((a) => a.label)];
   const shown = buttons.slice(0, 3);
-  const channel = `herald.${n.severity}`;
+  const channel = `oyee.${n.severity}`;
   return (
     <div>
       <div className="rounded-[22px] bg-[#f2f0f7] p-3.5 text-[#1c1b1f] shadow-sm dark:bg-[#2b2930] dark:text-[#e6e1e5]">
         <div className="flex items-center gap-2 text-[11px] text-[#49454f] dark:text-[#cac4d0]">
           <AppGlyph className="size-5 rounded-full" />
-          <span className="font-medium">Herald</span>
+          <span className="font-medium">Oyee</span>
           <span>•</span>
           <span className="truncate">{n.source}</span>
           <span>•</span>
@@ -152,7 +152,7 @@ export function ApplePreview({ n, platform }: { n: Notification; platform: "ios"
 export function WebPushPreview({ n }: { n: Notification }) {
   const p = webPushPresentation(n, true);
   const actions = webPushActions(n);
-  const origin = typeof window !== "undefined" ? window.location.host : "herald";
+  const origin = typeof window !== "undefined" ? window.location.host : "oyee";
   return (
     <div>
       <div className="overflow-hidden rounded-xl border border-black/10 bg-white text-[#202124] shadow-lg dark:border-white/10 dark:bg-[#2d2e30] dark:text-[#e8eaed]">

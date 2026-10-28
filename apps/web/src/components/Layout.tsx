@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { User } from "@herald/schema";
+import type { User } from "@oyee/schema";
 import { api } from "../lib/api";
 import { isMockMode } from "../lib/env";
 import { useUnreadCount } from "../lib/queries";
@@ -41,7 +41,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span className={cx("inline-flex items-center gap-2 text-[17px] font-bold tracking-[-0.02em]", className)}>
       <BrandMark />
-      Herald
+      Oyee
     </span>
   );
 }
@@ -157,7 +157,7 @@ function LiveSideEffects() {
   });
 
   useEffect(() => {
-    document.title = unread > 0 ? `(${unread}) Herald` : "Herald";
+    document.title = unread > 0 ? `(${unread}) Oyee` : "Oyee";
   }, [unread]);
 
   useEffect(() => {

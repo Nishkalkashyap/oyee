@@ -3,7 +3,7 @@
  * exponential backoff (1 s → 60 s, jitter), and TanStack Query cache patching on created/updated/deleted.
  */
 import type { QueryClient } from "@tanstack/react-query";
-import type { ClientMessage, ServerMessage } from "@herald/schema";
+import type { ClientMessage, ServerMessage } from "@oyee/schema";
 import { eventsFromServerMessage } from "./cache";
 import { applyLiveEvents, qk } from "./queries";
 

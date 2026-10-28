@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../app";
-import { isDevLogin, publicUrl } from "../env";
+import { isDevLogin } from "../env";
 import { consumeOAuthState, createSession, deleteSession, saveOAuthState, upsertUser } from "../db";
 import { b64urlDecodeString, b64urlEncode, randomBytes, timingSafeEqual, utf8 } from "../lib/encoding";
 import { badRequest, forbidden, notFound } from "../lib/errors";
@@ -16,7 +16,7 @@ import {
   setSessionCookie,
 } from "../auth/principal";
 
-const STATE_COOKIE = "herald_oauth_state";
+const STATE_COOKIE = "oyee_oauth_state";
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
 
@@ -46,7 +46,7 @@ authRoutes.get("/google/login", async (c) => {
   const url = new URL(GOOGLE_AUTH);
   url.search = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: `${publicUrl(c.env, c.req.raw)}/auth/google/callback`,
+    redirect_uri: `${new URL(c.req.url).origin}/auth/google/callback`,
     response_type: "code",
     scope: "openid email profile",
     state,
@@ -87,7 +87,7 @@ authRoutes.get("/google/callback", async (c) => {
       code: q.code,
       client_id: env.GOOGLE_CLIENT_ID ?? "",
       client_secret: env.GOOGLE_CLIENT_SECRET ?? "",
-      redirect_uri: `${publicUrl(env, c.req.raw)}/auth/google/callback`,
+      redirect_uri: `${new URL(c.req.url).origin}/auth/google/callback`,
       grant_type: "authorization_code",
       code_verifier: saved.codeVerifier,
     }),

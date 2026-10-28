@@ -2,26 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "Herald",
+    name: "Oyee",
     platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
-        .library(name: "HeraldKit", targets: ["HeraldKit"]),
-        .executable(name: "HeraldMac", targets: ["HeraldMac"]),
+        .library(name: "OyeeKit", targets: ["OyeeKit"]),
+        .executable(name: "OyeeMac", targets: ["OyeeMac"]),
     ],
     targets: [
         .target(
-            name: "HeraldKit",
-            path: "Sources/HeraldKit"
+            name: "OyeeKit",
+            path: "Sources/OyeeKit"
         ),
         .executableTarget(
-            name: "HeraldMac",
-            dependencies: ["HeraldKit"],
-            path: "Sources/HeraldMac"
+            name: "OyeeMac",
+            dependencies: ["OyeeKit"],
+            path: "Sources/OyeeMac"
         ),
         .testTarget(
-            name: "HeraldKitTests",
-            dependencies: ["HeraldKit"],
-            path: "Tests/HeraldKitTests",
+            name: "OyeeKitTests",
+            dependencies: ["OyeeKit"],
+            path: "Tests/OyeeKitTests",
             resources: [.copy("Fixtures")]
         ),
     ]

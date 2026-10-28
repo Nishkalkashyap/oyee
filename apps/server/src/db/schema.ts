@@ -1,12 +1,12 @@
 /**
- * Herald D1 schema (global data) — source of truth for migrations.
+ * Oyee D1 schema (global data) — source of truth for migrations.
  * Per-user notifications/templates live in the InboxDO SQLite storage, not here.
  *
- * Change this file, then `pnpm --filter @herald/server db:generate` to create a migration in `migrations/`.
+ * Change this file, then `pnpm --filter @oyee/server db:generate` to create a migration in `migrations/`.
  */
 import { sql } from "drizzle-orm";
 import { check, index, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { Platform, TokenKind } from "@herald/schema";
+import type { Platform, TokenKind } from "@oyee/schema";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // usr_<ulid>
@@ -34,7 +34,7 @@ export const sessions = sqliteTable(
   (t) => [index("sessions_user").on(t.userId)],
 );
 
-/** Webhook / MCP tokens. `hash` = SHA-256(secret). `callbackSecret` signs action callbacks (X-Herald-Signature). */
+/** Webhook / MCP tokens. `hash` = SHA-256(secret). `callbackSecret` signs action callbacks (X-Oyee-Signature). */
 export const tokens = sqliteTable(
   "tokens",
   {

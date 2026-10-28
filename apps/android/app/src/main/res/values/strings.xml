@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Herald</string>
+    <string name="app_name">Oyee</string>
     <string name="channel_critical">Critical</string>
     <string name="channel_critical_desc">Outages and urgent requests. Heads-up, sound and vibration.</string>
     <string name="channel_warning">Warnings</string>
@@ -12,10 +12,10 @@
     <string name="channel_debug">Debug</string>
     <string name="channel_debug_desc">Low-priority diagnostics. No sound.</string>
     <string name="channel_service">Connection status</string>
-    <string name="channel_service_desc">The persistent \"Herald connected\" notification shown while instant delivery is on.</string>
-    <string name="service_connected">Herald connected</string>
-    <string name="service_connecting">Herald connecting…</string>
-    <string name="service_offline">Herald offline, waiting for network</string>
+    <string name="channel_service_desc">The persistent \"Oyee connected\" notification shown while instant delivery is on.</string>
+    <string name="service_connected">Oyee connected</string>
+    <string name="service_connecting">Oyee connecting…</string>
+    <string name="service_offline">Oyee offline, waiting for network</string>
     <string name="service_text">Instant delivery is on</string>
     <string name="reply_default_label">Reply</string>
     <string name="reply_sent">Reply sent</string>

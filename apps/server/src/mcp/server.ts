@@ -12,7 +12,7 @@ import {
   TemplateName,
   UpdateNotificationInput,
   type SendNotificationInput as SendInput,
-} from "@herald/schema";
+} from "@oyee/schema";
 import { z } from "zod";
 import { listDevices, toDevice, type TokenRecord } from "../db";
 import { SERVER_VERSION, type Env } from "../env";
@@ -43,11 +43,11 @@ async function run(fn: () => Promise<unknown>): Promise<CallToolResult> {
 
 export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
   const server = new McpServer(
-    { name: "herald", version: SERVER_VERSION },
+    { name: "oyee", version: SERVER_VERSION },
     {
       jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
       instructions:
-        "Herald delivers notifications to the user's phone, laptop and browser. Use send_notification for one-way " +
+        "Oyee delivers notifications to the user's phone, laptop and browser. Use send_notification for one-way " +
         "messages (update_notification to change them in place, e.g. progress), and ask + wait_for_response when you " +
         "need a decision from the human.",
     },

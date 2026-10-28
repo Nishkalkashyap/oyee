@@ -1,5 +1,5 @@
 /**
- * Mock mode (`?mock=1` or `VITE_MOCK=1`): an in-memory fake of the Herald API + WebSocket so the UI can be explored
+ * Mock mode (`?mock=1` or `VITE_MOCK=1`): an in-memory fake of the Oyee API + WebSocket so the UI can be explored
  * without the backend. Loaded lazily; never part of the main bundle.
  */
 import {
@@ -12,19 +12,19 @@ import {
   type Template,
   type TokenInfo,
   type User,
-} from "@herald/schema";
+} from "@oyee/schema";
 import type { HttpMethod, Transport, TransportResponse } from "./api";
 import { matchesFilters, type InboxFilters } from "./cache";
 import type { LiveSocket } from "./live";
 
-const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://herald.example.com";
+const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://oyee.example.com";
 let seq = 0;
 const ulid = () => (Date.now().toString(36) + (seq++).toString(36).padStart(4, "0") + Math.random().toString(36).slice(2, 8)).toUpperCase();
 const iso = (msAgo = 0) => new Date(Date.now() - msAgo).toISOString();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 
-const user: User = { id: "usr_mock", email: "demo@herald.dev", name: "Demo User", avatarUrl: null };
+const user: User = { id: "usr_mock", email: "demo@oyee.dev", name: "Demo User", avatarUrl: null };
 
 function base(partial: Partial<Notification> & Pick<Notification, "title">, msAgo: number): Notification {
   const at = iso(msAgo);
@@ -143,7 +143,7 @@ function fixtures(): Notification[] {
         body: "Motion detected at the front door.",
         source: "home-assistant",
         severity: "info",
-        image: "https://picsum.photos/seed/herald/640/360",
+        image: "https://picsum.photos/seed/oyee/640/360",
       },
       5 * HOUR,
     ),
@@ -176,7 +176,7 @@ const db = {
       id: "tok_mock1",
       kind: "mcp",
       label: "Claude Code",
-      prefix: "hrd_mcp_k3x9",
+      prefix: "oyee_mcp_k3x9",
       defaultSource: "claude-code",
       createdAt: iso(5 * 24 * HOUR),
       lastUsedAt: iso(2 * MIN),
@@ -185,7 +185,7 @@ const db = {
       id: "tok_mock2",
       kind: "webhook",
       label: "Home Assistant",
-      prefix: "hrd_wh_9qa2",
+      prefix: "oyee_wh_9qa2",
       defaultSource: "home-assistant",
       createdAt: iso(9 * 24 * HOUR),
       lastUsedAt: iso(55 * MIN),
@@ -371,11 +371,11 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
   const url = new URL(path, ORIGIN);
   const p = url.pathname;
   const parts = p.split("/").filter(Boolean); // ["api", ...]
-  const loggedOut = localStorage.getItem("herald:mock-logged-out") === "1";
+  const loggedOut = localStorage.getItem("oyee:mock-logged-out") === "1";
 
   if (p === "/api/config") return ok({ version: "0.1.0-mock", vapidPublicKey: null, fcmEnabled: false, devLogin: true });
   if (p === "/auth/logout") {
-    localStorage.setItem("herald:mock-logged-out", "1");
+    localStorage.setItem("oyee:mock-logged-out", "1");
     return ok({ ok: true });
   }
   if (loggedOut) return err(401, "unauthorized", "Not signed in (mock)");
@@ -388,7 +388,7 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
   if (p === "/api/tokens" && method === "GET") return ok({ items: db.tokens });
   if (p === "/api/tokens" && method === "POST") {
     const b = body as { kind: "webhook" | "mcp"; label: string; defaultSource?: string };
-    const prefix = b.kind === "mcp" ? "hrd_mcp_" : "hrd_wh_";
+    const prefix = b.kind === "mcp" ? "oyee_mcp_" : "oyee_wh_";
     const secret = prefix + Array.from({ length: 43 }, () => "abcdefghijkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 32)]).join("");
     const token: TokenInfo = {
       id: `tok_${ulid()}`,
@@ -417,7 +417,7 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
     const pc: PairingCode = {
       code,
       expiresAt: new Date(Date.now() + 10 * MIN).toISOString(),
-      deepLink: `herald://pair?server=${encodeURIComponent(ORIGIN)}&code=${code}`,
+      deepLink: `oyee://pair?server=${encodeURIComponent(ORIGIN)}&code=${code}`,
     };
     return ok(pc, 201);
   }

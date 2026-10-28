@@ -1,5 +1,5 @@
 /** Firebase Cloud Messaging HTTP v1 with a service-account JWT (RS256 via WebCrypto). */
-import { LIMITS, type FcmData, type Notification, type PushEventType } from "@herald/schema";
+import { LIMITS, type FcmData, type Notification, type PushEventType } from "@oyee/schema";
 import { b64urlEncode, byteLength, utf8 } from "../lib/encoding";
 
 interface ServiceAccount {

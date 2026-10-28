@@ -1,4 +1,4 @@
-// Renders a placeholder Herald app icon (bell on a gradient squircle) into an .iconset directory.
+// Renders the Oyee app icon (white "o" ring on the orange squircle) into an .iconset directory.
 // Usage: swift scripts/make-icon.swift <output.iconset>
 import AppKit
 
@@ -16,19 +16,15 @@ func render(pixels: Int) -> Data? {
     let inset = size * 0.09
     let rect = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let path = NSBezierPath(roundedRect: rect, xRadius: rect.width * 0.225, yRadius: rect.width * 0.225)
-    let gradient = NSGradient(
-        starting: NSColor(calibratedRed: 0.36, green: 0.30, blue: 0.95, alpha: 1),
-        ending: NSColor(calibratedRed: 0.95, green: 0.35, blue: 0.45, alpha: 1))
-    gradient?.draw(in: path, angle: -60)
+    NSColor(srgbRed: 0xD9 / 255, green: 0x48 / 255, blue: 0x0F / 255, alpha: 1).setFill()  // brand orange
+    path.fill()
 
-    let config = NSImage.SymbolConfiguration(pointSize: rect.width * 0.5, weight: .semibold)
-        .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
-    if let symbol = NSImage(systemSymbolName: "bell.fill", accessibilityDescription: nil)?
-        .withSymbolConfiguration(config) {
-        let s = symbol.size
-        let origin = NSPoint(x: rect.midX - s.width / 2, y: rect.midY - s.height / 2)
-        symbol.draw(in: NSRect(origin: origin, size: s))
-    }
+    // The "o" mark: a white ring.
+    let radius = rect.width * 0.235
+    let ring = NSBezierPath(ovalIn: NSRect(x: rect.midX - radius, y: rect.midY - radius, width: radius * 2, height: radius * 2))
+    ring.lineWidth = rect.width * 0.105
+    NSColor.white.setStroke()
+    ring.stroke()
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])
 }

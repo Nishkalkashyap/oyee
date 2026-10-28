@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Herald" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Oyee" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">#FF1E1C1A</item>
     </style>
 </resources>
