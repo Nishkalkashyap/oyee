@@ -154,7 +154,7 @@ api.delete("/devices/:id", sessionOnly, async (c) => {
   const p = principal(c);
   const id = c.req.param("id");
   const dev = await getDevice(c.env.DB, id);
-  if (!dev || dev.user_id !== p.user.id || !(await deleteDevice(c.env.DB, p.user.id, id))) throw notFound("Device not found");
+  if (!dev || dev.userId !== p.user.id || !(await deleteDevice(c.env.DB, p.user.id, id))) throw notFound("Device not found");
   c.executionCtx.waitUntil(inbox(c.env, p.user.id).disconnectDevice(id));
   return c.body(null, 204);
 });

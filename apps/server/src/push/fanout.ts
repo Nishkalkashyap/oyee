@@ -51,8 +51,8 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
   const vapid = vapidKeys(env);
   if (!sa && !vapid) return;
   const all = devices ?? (await listDevices(env.DB, userId));
-  const fcmDevices = sa ? all.filter((d) => d.fcm_token) : [];
-  const webDevices = vapid ? all.filter((d) => d.web_push) : [];
+  const fcmDevices = sa ? all.filter((d) => d.fcmToken) : [];
+  const webDevices = vapid ? all.filter((d) => d.webPush) : [];
   if (!fcmDevices.length && !webDevices.length) return;
 
   const tasks: Promise<unknown>[] = [];
@@ -66,7 +66,7 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
         ev.type === "notification.created" ||
         (notification !== null && (notification.severity === "critical" || notification.severity === "warning"));
       for (const d of fcmDevices) {
-        const token = d.fcm_token!;
+        const token = d.fcmToken!;
         tasks.push(
           sendFcm(sa, token, data, { highPriority, collapseKey: id })
             .then(async (r) => {
@@ -87,7 +87,7 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
       }
       const urgency = notification?.severity === "critical" ? "high" : ev.type === "notification.created" ? "normal" : "low";
       for (const d of webDevices) {
-        const parsed = WebPushSubscription.safeParse(JSON.parse(d.web_push!));
+        const parsed = WebPushSubscription.safeParse(JSON.parse(d.webPush!));
         if (!parsed.success) continue;
         tasks.push(
           sendWebPush(parsed.data, text, vapid, { urgency, topic: id })

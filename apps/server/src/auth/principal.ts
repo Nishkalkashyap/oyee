@@ -45,7 +45,7 @@ export async function resolvePrincipal(c: Context<AppEnv>, allowQueryToken = fal
     if (token.startsWith("hrd_dev_")) {
       const device = await findDeviceByToken(db, token);
       if (!device) throw unauthorized("Invalid or revoked device token");
-      const user = await getUser(db, device.user_id);
+      const user = await getUser(db, device.userId);
       if (!user) throw unauthorized("Invalid or revoked device token");
       return { kind: "device", user, device };
     }

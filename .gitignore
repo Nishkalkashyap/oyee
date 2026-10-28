@@ -21,3 +21,7 @@ apps/apple/*.xcodeproj
 apps/apple/DerivedData/
 apps/apple/.swiftpm/
 xcuserdata/
+
+# Local credentials (never commit)
+secrets/
+.prod.vars
