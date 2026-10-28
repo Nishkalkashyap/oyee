@@ -67,7 +67,12 @@ class PairViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update { it.copy(busy = false, code = "", fromLink = false) }
             } catch (e: HeraldApiException) {
                 val msg = when (e.status) {
-                    400, 404, 410 -> "That code is invalid or expired. Create a new one in the web app."
+                    404, 410 -> "That code is invalid or expired. Create a new one in the web app."
+                    400 -> if (e.message.contains("pairing code", ignoreCase = true)) {
+                        "That code is invalid or expired. Create a new one in the web app."
+                    } else {
+                        "The server rejected the request: ${e.message}"
+                    }
                     429 -> "Too many attempts. Wait a minute and try again."
                     else -> e.message
                 }

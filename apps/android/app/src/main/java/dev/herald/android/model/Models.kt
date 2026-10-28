@@ -139,7 +139,8 @@ data class Device(
 data class PairInput(
     val code: String,
     val name: String,
-    val platform: String = "android",
+    // No default: HeraldJson has encodeDefaults = false, so a defaulted value would be omitted from the request.
+    val platform: String,
 )
 
 @Serializable
