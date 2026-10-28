@@ -1,6 +1,5 @@
 package dev.herald.android.ui.pair
 
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.herald.android.AppContainer
@@ -60,7 +59,7 @@ class PairViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(busy = true, error = null, serverUrl = url) }
         viewModelScope.launch {
             try {
-                val name = (Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android").take(64)
+                val name = container.deviceName().take(64)
                 val result = container.api.pair(url, code, name)
                 container.settings.savePairing(url, result.token, result.device.id, result.device.name, result.user.email)
                 container.scope.launch { container.onPaired() }

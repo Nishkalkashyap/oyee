@@ -13,7 +13,7 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from "../lib/push";
-import { useConfig, useCreatePairingCode, useDevices, useRegisterWebDevice, useRemoveDevice, useSendNotification } from "../lib/queries";
+import { useConfig, useCreatePairingCode, useDevices, useRegisterWebDevice, useRemoveDevice, useRenameDevice, useSendNotification } from "../lib/queries";
 import { CopyButton } from "../components/Code";
 import { BellIcon, DevicesIcon, GlobeIcon, LaptopIcon, PlusIcon, RefreshIcon, SmartphoneIcon, TrashIcon } from "../components/Icons";
 import { PageContainer } from "../components/Layout";
@@ -321,6 +321,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
 
 function DeviceRow({ d }: { d: Device }) {
   const remove = useRemoveDevice();
+  const rename = useRenameDevice();
   const toast = useToast();
   const isThisBrowser = d.id === getWebDeviceId();
   return (
@@ -350,6 +351,25 @@ function DeviceRow({ d }: { d: Device }) {
           <span title={formatDateTime(d.createdAt)}>added {relativeTime(d.createdAt)}</span>
         </div>
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        loading={rename.isPending}
+        title="Agents can target this device by name (send_notification → devices)"
+        onClick={() => {
+          const name = prompt("Device name (agents target devices by this name)", d.name)?.trim();
+          if (!name || name === d.name) return;
+          rename.mutate(
+            { id: d.id, name },
+            {
+              onSuccess: () => toast.success("Device renamed", name),
+              onError: (e) => toast.error("Couldn't rename device", errorMessage(e)),
+            },
+          );
+        }}
+      >
+        Rename
+      </Button>
       <Button
         size="sm"
         variant="ghost"

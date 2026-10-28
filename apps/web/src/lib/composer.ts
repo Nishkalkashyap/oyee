@@ -22,6 +22,8 @@ export interface ComposerState {
   tags: string;
   silent: boolean;
   replaceKey: string;
+  /** Target device ids; empty = every device. */
+  devices: string[];
   fields: { label: string; value: string }[];
   progressOn: boolean;
   progress: { value: number; max: number; label: string; indeterminate: boolean };
@@ -43,6 +45,7 @@ export const emptyComposer: ComposerState = {
   tags: "",
   silent: false,
   replaceKey: "",
+  devices: [],
   fields: [],
   progressOn: false,
   progress: { value: 30, max: 100, label: "", indeterminate: false },
@@ -75,6 +78,7 @@ export function buildSendInput(s: ComposerState, vars: Vars = {}): SendNotificat
   if (tags.length) out.tags = tags;
   if (s.silent) out.silent = true;
   if (t(s.replaceKey)) out.replaceKey = t(s.replaceKey);
+  if (s.devices?.length) out.devices = s.devices;
   const fields = s.fields.filter((f) => t(f.label)).map((f) => ({ label: t(f.label), value: f.value }));
   if (fields.length) out.fields = fields;
   if (s.progressOn) {

@@ -17,6 +17,12 @@ General rules:
 
 ## 1. Card / Notification schema
 
+> **Targeted delivery.** `devices` / `platforms` on send (REST, MCP `send_notification` / `ask`, webhook `?devices=` /
+> `?platforms=`) are resolved server-side to `targetDeviceIds` on the stored notification. Unknown or ambiguous targets
+> → `400` listing the paired devices. Push (FCM / Web Push) goes only to target devices; WebSocket events still reach every
+> client so inboxes stay in sync, and **clients must not post a system notification unless `targetDeviceIds` is null or
+> contains their own device id**.
+
 ### 1.1 `Notification` (what the server stores and returns)
 
 ```jsonc
@@ -46,6 +52,7 @@ General rules:
   "createdAt": "…", "updatedAt": "…",
   "readAt": "…" | null,
   "resolvedAt": "…" | null,
+  "targetDeviceIds": ["dev_…"] | null,  // null/absent = every device alerts
   "responses": [                         // newest last, ≤ 20 kept
     { "actionId": "ack", "text": null, "deviceId": "dev_…" | null, "deviceName": "Pixel 9", "at": "…" }
   ]
@@ -71,6 +78,8 @@ Every `Notification` content field is optional except `title` (it's required unl
   "icon": "…", "image": "…", "url": "…", "fields": [], "progress": {}, "actions": [], "reply": {}, "tags": [], "silent": false,
   "template": "aws-alarm",               // optional
   "vars": { "service": "prod-api" },     // optional, used with template
+  "devices": ["macbook"],                // optional: only these devices alert — ids or names (case-insensitive, unique partial match ok)
+  "platforms": ["android"],              // optional: only devices on these platforms alert (union with `devices`)
   "replaceKey": "aws-cpu-prod-api"       // optional: if an ACTIVE notification with this key exists, REPLACE its card instead of creating
                                          // (dedupe): readAt is reset, version increments, broadcast as notification.updated with alert=true
 }
@@ -141,6 +150,7 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `POST /api/devices/pair` (no auth) — see §2.2
 - `GET /api/devices` (session) → `{ "items": Device[] }`
   `Device` = `{ id, name, platform, transports: ("fcm"|"websocket"|"webpush")[], createdAt, lastSeenAt }`
+- `PATCH /api/devices/:id` (session) `{ "name": "Galaxy S23 Ultra" }` → `Device` (names are what agents target)
 - `DELETE /api/devices/:id` (session) → `204`
 - `PUT /api/devices/self` (device token) `{ "name"?, "fcmToken"?: string|null }` → `Device`
 - `DELETE /api/devices/self` (device token) → `204`

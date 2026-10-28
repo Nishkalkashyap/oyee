@@ -74,6 +74,7 @@ public final class HeraldModel {
         store.sink = presenter
         // The API must be usable before `start()`: a notification action can launch the app in the background.
         store.api = credentials.map { HeraldAPI(baseURL: $0.serverURL, token: $0.token) }
+        store.deviceId = credentials?.deviceId
         store.openURL = { [weak self] url in self?.openURL(url) }
         store.onUnauthorized = { [weak self] in self?.needsRepair = true }
         presenter?.onResponse = { [weak self] info in await self?.handleNotificationResponse(info) }
@@ -124,6 +125,7 @@ public final class HeraldModel {
             return
         }
         store.api = HeraldAPI(baseURL: credentials.serverURL, token: credentials.token)
+        store.deviceId = credentials.deviceId
         let socket = HeraldSocket(baseURL: credentials.serverURL, token: credentials.token)
         socket.cursorProvider = { [weak self] in self?.store.syncState.cursor }
         socket.onMessage = { [weak self, weak socket] message in
@@ -184,6 +186,7 @@ public final class HeraldModel {
         presenter?.remove(ids: ids)
         store.reset()
         store.api = nil
+        store.deviceId = nil
         credentialStore.clear()
         credentials = nil
         connectionState = .disconnected

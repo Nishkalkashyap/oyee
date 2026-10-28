@@ -6,6 +6,18 @@ import { CheckCheckIcon, CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon, Tra
 import { Markdown } from "./Markdown";
 import { NotificationIcon, ProgressBar, SeverityBadge } from "./NotificationParts";
 import { Badge, Button, cx } from "./ui";
+import { useDevices } from "../lib/queries";
+
+/** "→ MacBook Pro" — the devices a targeted notification alerted (others only list it in their inbox). */
+function TargetBadge({ ids, preview }: { ids: string[]; preview?: boolean }) {
+  const devices = useDevices({ enabled: !preview });
+  const names = ids.map((id) => devices.data?.find((d) => d.id === id)?.name ?? (preview ? id : "removed device"));
+  return (
+    <span title="Only these devices were alerted">
+      <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-300">→ {names.join(", ")}</Badge>
+    </span>
+  );
+}
 
 export interface NotificationCardProps {
   notification: Notification;
@@ -130,6 +142,7 @@ export function NotificationCard({
               )}
               {!preview && !n.readAt && <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">Unread</Badge>}
               {n.silent && <Badge>Silent</Badge>}
+              {n.targetDeviceIds && <TargetBadge ids={n.targetDeviceIds} preview={preview} />}
               {n.tags.map((t) => (
                 <Badge key={t}>#{t}</Badge>
               ))}

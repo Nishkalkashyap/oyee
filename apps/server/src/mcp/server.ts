@@ -66,7 +66,9 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     {
       title: "Send notification",
       description:
-        "Send a notification card to the user's devices. Returns the stored Notification (keep its id to update it). " +
+        "Send a notification card. By default it alerts every paired device; to reach specific ones, set `devices` " +
+        "(device names or ids from list_devices — a unique partial name such as \"macbook\" works) and/or `platforms` " +
+        "(android, macos, web, ios). Returns the stored Notification (keep its id to update it). " +
         "Use `replaceKey` to update an existing active notification instead of creating a duplicate, and " +
         "`template` + `vars` to render a saved template.",
       inputSchema: SendNotificationInput,
@@ -101,7 +103,8 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
       title: "Ask the user",
       description:
         "Send a question with up to 3 option buttons and/or a text reply box. Returns { id }; then call " +
-        "wait_for_response with that id (repeat while it returns pending).",
+        "wait_for_response with that id (repeat while it returns pending). `devices` / `platforms` target specific " +
+        "devices, as in send_notification.",
       inputSchema: McpAskInput,
     },
     (input) =>
@@ -119,6 +122,8 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
             resolves: true,
           })),
           reply: input.allowText ? { placeholder: "Reply…", buttonLabel: "Send" } : undefined,
+          devices: input.devices,
+          platforms: input.platforms,
         };
         if (!send.actions?.length && !send.reply) send.reply = { placeholder: "Reply…", buttonLabel: "Send" };
         const n = await rpc(stub().send(actor, send, { rateLimit: true }));
@@ -185,7 +190,13 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
 
   server.registerTool(
     "list_devices",
-    { title: "List devices", description: "List the user's paired devices and their transports.", inputSchema: z.object({}) },
+    {
+      title: "List devices",
+      description:
+        "List the user's paired devices (id, name, platform, transports). Use a name or id in the `devices` field of " +
+        "send_notification / ask to notify only that device.",
+      inputSchema: z.object({}),
+    },
     () => run(async () => ({ items: (await listDevices(env.DB, token.userId)).map(toDevice) })),
   );
 

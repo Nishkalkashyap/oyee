@@ -35,6 +35,15 @@ async function parseHook(c: Context<AppEnv>): Promise<HookAction> {
   return { kind: "send", input: fromTextRequest(query, c.req.raw.headers, text) };
 }
 
+/** `?devices=macbook,pixel` / `?platforms=android` target devices for any payload type (JSON bodies may also set them). */
+function withQueryTargets(input: SendNotificationInput, query: Record<string, string>): SendNotificationInput {
+  const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined);
+  const devices = input.devices ?? list(query.devices);
+  const platforms = input.platforms ?? list(query.platforms);
+  if (!devices && !platforms) return input;
+  return parseOrThrow(SendNotificationInput, { ...input, devices, platforms });
+}
+
 hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
   const token = await findTokenBySecret(c.env.DB, c.req.param("token"), "webhook");
   if (!token) throw unauthorized("Invalid or revoked webhook token");
@@ -50,7 +59,8 @@ hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
 
   switch (action.kind) {
     case "send": {
-      const n = await rpc(stub.send(actor, action.input, { titleFallback: true, rateLimit: true }));
+      const input = withQueryTargets(action.input, c.req.query());
+      const n = await rpc(stub.send(actor, input, { titleFallback: true, rateLimit: true }));
       return c.json({ id: n.id, version: n.version });
     }
     case "resolve": {

@@ -37,6 +37,9 @@ class EventProcessor(
         }
     }
 
+    /** Targeted at other devices → keep it in the inbox but never touch the system tray here. */
+    private suspend fun forThisDevice(n: Notification): Boolean = n.isTargetedAt(settings.current().deviceId)
+
     private suspend fun record(n: Notification, alert: Boolean, isNew: Boolean) {
         settings.advanceLastUpdatedAt(n.updatedAt)
         _events.emit(HeraldEvent.Upsert(n, alert, isNew))
@@ -45,8 +48,9 @@ class EventProcessor(
     /** `notification.created` → post a system notification (alerts unless silent). */
     suspend fun onCreated(n: Notification) {
         if (!accept(n)) return
-        record(n, alert = true, isNew = true)
-        renderer.apply(n, alert = true, postIfAbsent = true)
+        val mine = forThisDevice(n)
+        record(n, alert = mine, isNew = true)
+        if (mine) renderer.apply(n, alert = true, postIfAbsent = true)
     }
 
     /**
@@ -55,7 +59,9 @@ class EventProcessor(
      */
     suspend fun onUpdated(n: Notification, alert: Boolean) {
         if (!accept(n)) return
-        record(n, alert = alert, isNew = false)
+        val mine = forThisDevice(n)
+        record(n, alert = alert && mine, isNew = false)
+        if (!mine) return
         // Not showing and not alerting → leave it alone, unless this device never showed it (collapsed FCM push).
         renderer.apply(n, alert = alert, postIfAbsent = alert, postIfNeverPosted = true)
     }
@@ -74,6 +80,7 @@ class EventProcessor(
     suspend fun onSynced(n: Notification, postNewSince: String?) {
         if (!accept(n)) return
         record(n, alert = false, isNew = false)
+        if (!forThisDevice(n)) return
         val createdWhileAway = postNewSince != null && n.createdAt > postNewSince
         renderer.apply(n, alert = createdWhileAway, postIfAbsent = createdWhileAway)
     }

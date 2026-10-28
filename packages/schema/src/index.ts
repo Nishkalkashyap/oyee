@@ -108,6 +108,11 @@ export const Notification = CardContent.extend({
   readAt: isoDate.nullable(),
   resolvedAt: isoDate.nullable(),
   responses: z.array(Response).max(20),
+  /**
+   * Devices that get a system notification / push for this item. `null` (or absent, for older items) = every device.
+   * Every inbox still lists the notification; only alerting is targeted.
+   */
+  targetDeviceIds: z.array(z.string()).nullable().optional(),
 });
 export type Notification = z.infer<typeof Notification>;
 
@@ -132,6 +137,10 @@ export const SendNotificationInput = z.object({
   template: z.string().regex(/^[a-z0-9_-]{1,64}$/).optional(),
   vars: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   replaceKey: z.string().min(1).max(128).optional(),
+  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
+  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
+  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
+  platforms: z.array(Platform).max(4).optional(),
 });
 export type SendNotificationInput = z.infer<typeof SendNotificationInput>;
 
@@ -285,6 +294,9 @@ export const UpdateSelfDeviceInput = z.object({
 });
 export type UpdateSelfDeviceInput = z.infer<typeof UpdateSelfDeviceInput>;
 
+export const RenameDeviceInput = z.object({ name: z.string().trim().min(1).max(64) });
+export type RenameDeviceInput = z.infer<typeof RenameDeviceInput>;
+
 export const WebPushSubscription = z.object({
   endpoint: z.string().url(),
   expirationTime: z.number().nullable().optional(),
@@ -390,6 +402,10 @@ export const McpAskInput = z.object({
   severity: Severity.optional(),
   source: z.string().min(1).max(64).optional(),
   threadId: z.string().min(1).max(128).optional(),
+  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
+  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
+  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
+  platforms: z.array(Platform).max(4).optional(),
 });
 export type McpAskInput = z.infer<typeof McpAskInput>;
 

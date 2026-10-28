@@ -80,6 +80,8 @@ public final class InboxStore {
     public private(set) var hasLoaded = false
 
     @ObservationIgnored public var api: HeraldAPI?
+    /// This device's id; notifications targeted at other devices stay in the inbox but never post here.
+    @ObservationIgnored public var deviceId: String?
     @ObservationIgnored public weak var sink: NotificationSink?
     /// Opens URLs for URL actions (injected by the app).
     @ObservationIgnored public var openURL: (URL) -> Void = { _ in }
@@ -177,6 +179,8 @@ public final class InboxStore {
         return true
     }
 
+    private func targetedHere(_ n: HeraldNotification) -> Bool { n.isTargeted(at: deviceId) }
+
     private func removeLocal(_ id: String) {
         guard byId.removeValue(forKey: id) != nil else { return }
         notifications.removeAll { $0.id == id }
@@ -192,7 +196,7 @@ public final class InboxStore {
             let isNew = byId[n.id] == nil
             guard upsert(n) else { return nil }
             syncState.observe([n])
-            if n.wantsSystemNotification {
+            if n.wantsSystemNotification && targetedHere(n) {
                 sink?.present(n, alert: isNew && !n.silent)
             }
             hasLoaded = true
@@ -202,6 +206,8 @@ public final class InboxStore {
             syncState.observe([n])
             if !n.wantsSystemNotification {
                 sink?.remove(ids: [n.id])
+            } else if !targetedHere(n) {
+                break
             } else if alert {
                 sink?.present(n, alert: !n.silent)
             } else {
@@ -241,6 +247,8 @@ public final class InboxStore {
             guard upsert(n, rebuildNow: false) else { continue }
             if !n.wantsSystemNotification {
                 toRemove.append(n.id)
+            } else if !targetedHere(n) {
+                continue
             } else if existing == nil {
                 newOnes.append(n)
             } else if existing?.version != n.version {

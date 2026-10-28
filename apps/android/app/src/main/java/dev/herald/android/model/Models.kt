@@ -108,7 +108,12 @@ data class Notification(
     val readAt: String? = null,
     val resolvedAt: String? = null,
     val responses: List<Response> = emptyList(),
+    /** Devices that should alert for this item; `null` = every device (protocol: targeted delivery). */
+    val targetDeviceIds: List<String>? = null,
 ) {
+    /** Whether this device should show a system notification. Every device still lists it in the inbox. */
+    fun isTargetedAt(deviceId: String?): Boolean = targetDeviceIds == null || deviceId == null || deviceId in targetDeviceIds
+
     val isRead: Boolean get() = readAt != null
     val isResolved: Boolean get() = status == NotificationStatus.RESOLVED
 

@@ -132,6 +132,21 @@ struct InboxStoreTests {
             updatedAt: created.addingTimeInterval(TimeInterval(version)), readAt: read ? created : nil)
     }
 
+    @Test func targetedAtOtherDevicesStaysInInboxWithoutPosting() {
+        store.deviceId = "dev_mac"
+        var forPhone = make("p")
+        forPhone.targetDeviceIds = ["dev_phone"]
+        var forMac = make("m", minute: 1)
+        forMac.targetDeviceIds = ["dev_mac"]
+        store.apply(.notificationCreated(forPhone))
+        store.apply(.notificationCreated(forMac))
+        var updated = forPhone
+        updated.version = 2
+        store.apply(.notificationUpdated(updated, alert: true, reason: .update))
+        #expect(sink.events == [.present("m", alert: true)])
+        #expect(store.notifications.map(\.id) == ["m", "p"])
+    }
+
     @Test func createdPostsAndAlertsUnlessSilent() {
         store.apply(.notificationCreated(make("a")))
         store.apply(.notificationCreated(make("b", minute: 1, silent: true)))

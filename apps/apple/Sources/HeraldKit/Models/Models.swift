@@ -276,6 +276,8 @@ public struct HeraldNotification: Codable, Sendable, Hashable, Identifiable {
     public var readAt: Date?
     public var resolvedAt: Date?
     public var responses: [Response]
+    /// Devices that should alert for this item; `nil` = every device. Every inbox still lists it.
+    public var targetDeviceIds: [String]?
 
     public init(
         id: String, source: String = "herald", threadId: String? = nil, title: String, body: String? = nil,
@@ -283,7 +285,7 @@ public struct HeraldNotification: Codable, Sendable, Hashable, Identifiable {
         image: String? = nil, url: String? = nil, fields: [Field] = [], progress: Progress? = nil,
         actions: [Action] = [], reply: Reply? = nil, tags: [String] = [], silent: Bool = false,
         template: String? = nil, version: Int = 1, createdAt: Date = Date(), updatedAt: Date? = nil,
-        readAt: Date? = nil, resolvedAt: Date? = nil, responses: [Response] = []
+        readAt: Date? = nil, resolvedAt: Date? = nil, responses: [Response] = [], targetDeviceIds: [String]? = nil
     ) {
         self.id = id
         self.source = source
@@ -308,11 +310,13 @@ public struct HeraldNotification: Codable, Sendable, Hashable, Identifiable {
         self.readAt = readAt
         self.resolvedAt = resolvedAt
         self.responses = responses
+        self.targetDeviceIds = targetDeviceIds
     }
 
     enum CodingKeys: String, CodingKey {
         case id, source, threadId, title, body, severity, status, icon, image, url, fields, progress, actions
         case reply, tags, silent, template, version, createdAt, updatedAt, readAt, resolvedAt, responses
+        case targetDeviceIds
     }
 
     public init(from decoder: Decoder) throws {
@@ -341,6 +345,7 @@ public struct HeraldNotification: Codable, Sendable, Hashable, Identifiable {
         readAt = c.optional(.readAt)
         resolvedAt = c.optional(.resolvedAt)
         responses = c.lossyArray(.responses)
+        targetDeviceIds = c.optional(.targetDeviceIds)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -368,12 +373,19 @@ public struct HeraldNotification: Codable, Sendable, Hashable, Identifiable {
         try c.encode(readAt, forKey: .readAt)
         try c.encode(resolvedAt, forKey: .resolvedAt)
         try c.encode(responses, forKey: .responses)
+        try c.encodeIfPresent(targetDeviceIds, forKey: .targetDeviceIds)
     }
 
     public var isRead: Bool { readAt != nil }
     public var isResolved: Bool { status == .resolved }
     /// Whether a system notification for this card should still be visible.
     public var wantsSystemNotification: Bool { !isRead && !isResolved }
+
+    /// Whether the device `deviceId` should show a system notification for this item.
+    public func isTargeted(at deviceId: String?) -> Bool {
+        guard let targetDeviceIds, let deviceId else { return true }
+        return targetDeviceIds.contains(deviceId)
+    }
     public var openURL: URL? { url.flatMap(URL.init(string:)) }
     public var imageURL: URL? { image.flatMap(URL.init(string:)) }
     /// Apple `threadIdentifier` = `threadId ?? source`.

@@ -59,13 +59,16 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
   for (const ev of events) {
     const { id, notification, alert } = eventInfo(ev);
     const type: PushEventType = ev.type;
+    // Targeted notifications only push to their devices (deletes carry no notification and go everywhere).
+    const targets = notification?.targetDeviceIds ? new Set(notification.targetDeviceIds) : null;
+    const targeted = (d: DeviceRow) => !targets || targets.has(d.id);
 
     if (sa) {
       const data = buildFcmData(type, id, notification, alert);
       const highPriority =
         ev.type === "notification.created" ||
         (notification !== null && (notification.severity === "critical" || notification.severity === "warning"));
-      for (const d of fcmDevices) {
+      for (const d of fcmDevices.filter(targeted)) {
         const token = d.fcmToken!;
         tasks.push(
           sendFcm(sa, token, data, { highPriority, collapseKey: id })
@@ -86,7 +89,7 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
         text = JSON.stringify(payload);
       }
       const urgency = notification?.severity === "critical" ? "high" : ev.type === "notification.created" ? "normal" : "low";
-      for (const d of webDevices) {
+      for (const d of webDevices.filter(targeted)) {
         const parsed = WebPushSubscription.safeParse(JSON.parse(d.webPush!));
         if (!parsed.success) continue;
         tasks.push(

@@ -26,6 +26,7 @@ import type { Env } from "../env";
 import { ApiError, badRequest, notFound, type RpcResult } from "../lib/errors";
 import { b64urlDecodeString, b64urlEncode } from "../lib/encoding";
 import { newId } from "../lib/ids";
+import { listDevices } from "../db";
 import { fanoutPush, sendActionCallback, type InboxEvent } from "../push/fanout";
 import {
   appendResponse,
@@ -34,6 +35,7 @@ import {
   buildNotification,
   replaceContent,
   resolveSendInput,
+  resolveTargets,
   searchText,
   type Actor,
   type SendOptions,
@@ -254,8 +256,12 @@ export class InboxDO extends DurableObject<Env> {
         if (!template) throw badRequest(`template: unknown template "${input.template}"`);
       }
       const resolved = resolveSendInput(input, template, opts);
+      const targets =
+        resolved.devices?.length || resolved.platforms?.length
+          ? resolveTargets(await listDevices(this.env.DB, actor.userId), resolved)
+          : null;
       const now = new Date().toISOString();
-      const fresh = buildNotification(newId("ntf"), resolved, actor, now);
+      const fresh = buildNotification(newId("ntf"), resolved, actor, now, targets);
       assertUniqueActionIds(fresh.actions);
       const replaceKey = resolved.replaceKey ?? null;
 

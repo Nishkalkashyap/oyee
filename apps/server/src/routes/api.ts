@@ -4,6 +4,7 @@ import {
   ListNotificationsQuery,
   PairInput,
   RegisterWebDeviceInput,
+  RenameDeviceInput,
   RespondInput,
   SendNotificationInput,
   TemplateName,
@@ -148,6 +149,15 @@ api.delete("/devices/self", async (c) => {
   await deleteDevice(c.env.DB, p.user.id, p.device.id);
   c.executionCtx.waitUntil(inbox(c.env, p.user.id).disconnectDevice(p.device.id));
   return c.body(null, 204);
+});
+
+api.patch("/devices/:id", sessionOnly, async (c) => {
+  const p = principal(c);
+  const id = c.req.param("id");
+  const { name } = await readJson(c, RenameDeviceInput);
+  const dev = await getDevice(c.env.DB, id);
+  if (!dev || dev.userId !== p.user.id) throw notFound("Device not found");
+  return c.json(toDevice((await updateDevice(c.env.DB, id, { name }))!));
 });
 
 api.delete("/devices/:id", sessionOnly, async (c) => {

@@ -4,7 +4,7 @@ import { ActionStyle, SendNotificationInput, type Severity, type TemplateCard } 
 import { errorMessage } from "../lib/api";
 import { composeCard, parseVars, templateVariables, toPreviewNotification } from "../lib/card";
 import { buildSendInput, COMPOSER_PRESETS, emptyComposer, type ComposerAction, type ComposerState } from "../lib/composer";
-import { useSendNotification, useTemplates } from "../lib/queries";
+import { useDevices, useSendNotification, useTemplates } from "../lib/queries";
 import { SEVERITIES, SEVERITY_STYLES } from "../lib/severity";
 import { CodeBlock } from "../components/Code";
 import { PlusIcon, SendIcon, XIcon } from "../components/Icons";
@@ -157,6 +157,7 @@ export function SendPage() {
                 <Input id="c-rk" value={s.replaceKey} onChange={(e) => set("replaceKey", e.target.value)} placeholder="nightly-backup" />
               </FormField>
             </div>
+            <DevicePicker value={s.devices} onChange={(devices) => set("devices", devices)} />
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField label="Click URL" htmlFor="c-url">
                 <Input id="c-url" type="url" value={s.url} onChange={(e) => set("url", e.target.value)} placeholder="https://…" />
@@ -329,5 +330,37 @@ export function SendPage() {
         </div>
       </div>
     </PageContainer>
+  );
+}
+
+/** Optional targeting: no selection = every device; otherwise only the chosen devices alert. */
+function DevicePicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const devices = useDevices();
+  if (!devices.data?.length) return null;
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  return (
+    <FormField label="Deliver to" hint={value.length ? "Only the selected devices alert" : "All devices"}>
+      <div className="flex flex-wrap gap-1.5">
+        {devices.data.map((d) => {
+          const on = value.includes(d.id);
+          return (
+            <button
+              key={d.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(d.id)}
+              className={cx(
+                "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                on
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
+                  : "border-zinc-200 text-zinc-600 hover:border-zinc-400 dark:border-zinc-800 dark:text-zinc-300",
+              )}
+            >
+              {d.name}
+            </button>
+          );
+        })}
+      </div>
+    </FormField>
   );
 }

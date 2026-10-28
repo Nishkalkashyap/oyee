@@ -119,11 +119,12 @@ export function useRevokeToken() {
 
 // ─── Devices ────────────────────────────────────────────────────────────────
 
-export function useDevices(opts: { poll?: boolean } = {}) {
+export function useDevices(opts: { poll?: boolean; enabled?: boolean } = {}) {
   return useQuery({
     queryKey: qk.devices,
     queryFn: async () => (await api.devices.list()).items,
     refetchInterval: opts.poll ? 3000 : false,
+    enabled: opts.enabled ?? true,
   });
 }
 
@@ -135,6 +136,14 @@ export function useRemoveDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.devices.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.devices }),
+  });
+}
+
+export function useRenameDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.devices.rename(id, name),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.devices }),
   });
 }

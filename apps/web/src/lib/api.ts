@@ -142,6 +142,7 @@ export const api = {
     list: () => request<{ items: Device[] }>("GET", "/api/devices"),
     createPairingCode: () => request<PairingCode>("POST", "/api/devices/pairing-codes"),
     remove: (id: string) => request<null>("DELETE", `/api/devices/${enc(id)}`),
+    rename: (id: string, name: string) => request<Device>("PATCH", `/api/devices/${enc(id)}`, { name }),
     registerWeb: (input: RegisterWebDeviceInput) => request<Device>("POST", "/api/devices/web", input),
   },
 
