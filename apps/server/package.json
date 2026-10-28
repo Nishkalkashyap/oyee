@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "node scripts/ensure-assets.mjs && wrangler d1 migrations apply herald --local && wrangler dev",
+    "deploy": "wrangler d1 migrations apply herald --remote && wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "build": "tsc --noEmit"
+    "test": "node scripts/ensure-assets.mjs && vitest run",
+    "build": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply herald --local",
+    "db:migrate:remote": "wrangler d1 migrations apply herald --remote",
+    "vapid": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@herald/schema": "workspace:*",
@@ -18,7 +21,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/vitest-plugin": "^1.4.9",
     "@cloudflare/workers-types": "^5.20261027.1",
     "wrangler": "^4.153.0"
   }

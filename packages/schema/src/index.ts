@@ -179,8 +179,24 @@ export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuery>;
 
 export const TemplateName = z.string().regex(/^[a-z0-9_-]{1,64}$/);
 
-/** A template card is a partial send input whose strings may contain {{var}} / {{var|fallback}}. */
-export const TemplateCard = SendNotificationInput.omit({ template: true, vars: true });
+/**
+ * A template card is a partial send input whose strings may contain {{var}} / {{var|fallback}}.
+ * URL fields are plain strings here (e.g. "image": "{{img}}"); the rendered result is validated as SendNotificationInput.
+ */
+const templateUrl = z.string().max(2048);
+export const TemplateCard = SendNotificationInput.omit({ template: true, vars: true }).extend({
+  image: templateUrl.optional(),
+  url: templateUrl.optional(),
+  actions: z
+    .array(
+      Action.extend({
+        url: templateUrl.optional(),
+        callback: ActionCallback.extend({ url: templateUrl }).optional(),
+      }),
+    )
+    .max(3)
+    .optional(),
+});
 export type TemplateCard = z.infer<typeof TemplateCard>;
 
 export const Template = z.object({
@@ -231,6 +247,8 @@ export const CreateTokenResult = z.object({
   token: TokenInfo,
   secret: z.string(),
   url: z.string(),
+  /** HMAC key for X-Herald-Signature on action callbacks. Shown once. */
+  callbackSecret: z.string().optional(),
 });
 export type CreateTokenResult = z.infer<typeof CreateTokenResult>;
 

@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "herald",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The SPA (apps/web build) is served from Workers static assets. API/auth/webhook/MCP routes hit the Worker first.
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/auth/*", "/hook/*", "/mcp", "/mcp/*", "/healthz"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "herald",
+      // Set this to the id printed by `wrangler d1 create herald` (or omit it and let `wrangler deploy` provision one).
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "INBOX", "class_name": "InboxDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InboxDO"] }],
+
+  // Non-secret configuration. Secrets (GOOGLE_CLIENT_SECRET, SESSION_SECRET, VAPID_PRIVATE_KEY,
+  // FCM_SERVICE_ACCOUNT_JSON) are set with `wrangler secret put` (or .dev.vars locally).
+  "vars": {
+    "PUBLIC_URL": "",
+    "GOOGLE_CLIENT_ID": "",
+    "ALLOWED_EMAILS": "",
+    "VAPID_PUBLIC_KEY": "",
+    "VAPID_SUBJECT": "mailto:admin@example.com",
+    "DEV_LOGIN": "false"
+  },
+
+  "dev": { "port": 8787 }
+}

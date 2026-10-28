@@ -1,0 +1,21 @@
+# Copy to .dev.vars for `wrangler dev` (it's git-ignored). Never enable DEV_LOGIN in production.
+DEV_LOGIN=true
+PUBLIC_URL=http://localhost:8787
+
+# Any long random string: `openssl rand -base64 32`
+SESSION_SECRET=change-me-to-a-long-random-string
+
+# Optional: restrict sign-in (comma-separated emails, or @domain.com)
+# ALLOWED_EMAILS=you@example.com
+
+# Google OAuth (only needed to test real Google sign-in locally; redirect URI http://localhost:8787/auth/google/callback)
+# GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
+
+# Web Push: generate with `node scripts/generate-vapid-keys.mjs` and paste both lines here
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:you@example.com
+
+# FCM (Android): the Firebase service-account JSON on ONE line (same project as google-services.json)
+# FCM_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...","client_email":"..."}

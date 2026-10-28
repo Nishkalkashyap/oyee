@@ -71,7 +71,8 @@ Every `Notification` content field is optional except `title` (it's required unl
   "icon": "…", "image": "…", "url": "…", "fields": [], "progress": {}, "actions": [], "reply": {}, "tags": [], "silent": false,
   "template": "aws-alarm",               // optional
   "vars": { "service": "prod-api" },     // optional, used with template
-  "replaceKey": "aws-cpu-prod-api"       // optional: if an ACTIVE notification with this key exists, UPDATE it instead of creating (dedupe)
+  "replaceKey": "aws-cpu-prod-api"       // optional: if an ACTIVE notification with this key exists, REPLACE its card instead of creating
+                                         // (dedupe): readAt is reset, version increments, broadcast as notification.updated with alert=true
 }
 ```
 Defaults: `severity` = `"info"`; `source` = the token label (or `"web"` / device name).
@@ -106,8 +107,8 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 
 ### 2.1 Web sign-in
 - `GET /auth/google/login?redirect=/inbox` → 302 to Google.
-- `GET /auth/google/callback` → creates/updates the user, sets the session cookie, 302 to `redirect`.
-- `POST /auth/logout` → clears the session.
+- `GET /auth/google/callback` → creates/updates the user, sets the session cookie, 302 to `redirect`. On failure → 302 to `/login?error=<code>` (e.g. `not_allowed`, `oauth_failed`, `not_configured`).
+- `POST /auth/logout` → `204`, clears the session.
 - `GET /auth/dev-login?email=a@b.c&redirect=/` → only when `DEV_LOGIN=true`. Same effect as the Google login.
 
 ### 2.2 Device pairing
@@ -131,7 +132,8 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 ### Tokens (session only)
 - `GET /api/tokens` → `{ "items": TokenInfo[] }`. `TokenInfo` = `{ id, kind: "webhook"|"mcp", label, prefix: "hrd_wh_ab12", defaultSource, createdAt, lastUsedAt }`
 - `POST /api/tokens` `{ "kind": "webhook"|"mcp", "label": "Home Assistant", "defaultSource"?: "home-assistant" }`
-  → `201 { "token": TokenInfo, "secret": "hrd_wh_…", "url": "https://host/hook/hrd_wh_…" }` (for MCP: `https://host/mcp/hrd_mcp_…`). The secret is never shown again.
+  → `201 { "token": TokenInfo, "secret": "hrd_wh_…", "url": "https://host/hook/hrd_wh_…", "callbackSecret": "…" }` (for MCP: `https://host/mcp/hrd_mcp_…`).
+  The secret and callbackSecret are never shown again. `callbackSecret` is the HMAC key for `X-Herald-Signature` on action callbacks of notifications sent with this token.
 - `DELETE /api/tokens/:id` → `204`
 
 ### Devices
@@ -205,6 +207,9 @@ Streamable HTTP, stateless. Server name `herald`. Tools (the input schemas are t
 | `delete_template` | `{ name }` | `{ ok: true }` |
 | `list_devices` | `{}` | `{ items: Device[] }` |
 
+`wait_for_response` returns the latest existing response immediately if one exists. `ask` with neither options nor `allowText` adds a reply box.
+Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
+
 `ask` options become actions with ids `option_1..3` and labels set to the option text. Each `resolves: true`. `allowText` adds `reply`.
 
 ---
@@ -225,7 +230,7 @@ Server → client:
 Client → server:
 ```jsonc
 { "type": "ping" }                                  // every 30 s; the server answers with pong
-{ "type": "sync", "since": "<cursor or ISO time or null>" }   // after (re)connect; null = last 50 active
+{ "type": "sync", "since": "<cursor or ISO time or null>" }   // after (re)connect; null = last 50 active. ISO times compare with >= (duplicates possible; dedupe by id+version)
 ```
 Client behavior on events:
 - `created` → post a system notification (id = notification id).
@@ -239,8 +244,8 @@ Reconnect with exponential backoff (1 s → 60 s max, with jitter). Send `sync` 
 
 ## 7. FCM payload (Android)
 
-The server sends **data-only, high-priority** messages (`android.priority = "high"` for `created` and `critical`/`warning`,
-`"normal"` otherwise). `android.collapse_key` = notification id. Data map (all string values):
+The server sends **data-only** messages (FCM v1 `android.priority = "HIGH"` for `created` and `critical`/`warning`,
+`"NORMAL"` otherwise). `android.collapse_key` = notification id. Data map (all string values):
 
 ```jsonc
 {

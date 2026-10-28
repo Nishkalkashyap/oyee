@@ -1,0 +1,160 @@
+# @herald/server
+
+The Herald backend: a Cloudflare Worker (Hono) with a per-user Durable Object (`InboxDO`, SQLite storage) and D1.
+It implements [`docs/protocol.md`](../../docs/protocol.md): REST API, WebSocket, webhooks, MCP, FCM and Web Push. It also
+serves the web app (`apps/web/dist`) as static assets.
+
+```
+src/
+  index.ts            Worker entry (exports default fetch + InboxDO)
+  app.ts              Hono router: /healthz, /auth, /api, /hook, /mcp, SPA fallback
+  env.ts              bindings / vars / secrets
+  db.ts               D1 access: users, sessions, tokens, devices, pairing codes, OAuth states
+  auth/principal.ts   session cookie + device bearer auth, scopes, allowlist
+  routes/auth.ts      Google OAuth (code + state + PKCE), dev login, logout
+  routes/api.ts       REST endpoints + WebSocket upgrade
+  routes/hook.ts      webhook ingestion
+  webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers
+  mcp/server.ts       MCP tools (stateless Streamable HTTP, official SDK)
+  inbox/do.ts         InboxDO: notifications, tombstones, templates, rate limits, WebSockets, waiters, retention
+  inbox/model.ts      pure card logic (template merge, patching)
+  push/fanout.ts      FCM + Web Push fan-out, signed action callbacks
+  push/fcm.ts         FCM HTTP v1 (service-account JWT, RS256 via WebCrypto)
+  push/webpush.ts     VAPID (ES256) + RFC 8291 aes128gcm encryption via WebCrypto
+migrations/           D1 migrations
+scripts/              ensure-assets.mjs, generate-vapid-keys.mjs
+test/                 Vitest (runs inside workerd via @cloudflare/vitest-plugin)
+```
+
+## Local development
+
+```sh
+pnpm install
+cp apps/server/.dev.vars.example apps/server/.dev.vars    # DEV_LOGIN=true, PUBLIC_URL=http://localhost:8787
+pnpm --filter @herald/server dev                          # applies local D1 migrations, then wrangler dev on :8787
+```
+
+Open <http://localhost:8787/auth/dev-login?email=you@example.com&redirect=/> to sign in without Google.
+The web app's Vite dev server proxies `/api`, `/auth`, `/hook`, `/mcp` and `/healthz` (WebSocket included) to `:8787`.
+If `apps/web/dist` doesn't exist yet, `scripts/ensure-assets.mjs` creates a placeholder `index.html`. It never overwrites a real build.
+
+```sh
+pnpm --filter @herald/server typecheck
+pnpm --filter @herald/server test
+```
+
+The tests use `@cloudflare/vitest-plugin`, the renamed successor of `@cloudflare/vitest-pool-workers`. The old pool
+only supports vitest 4, and this repo uses vitest 5. The tests run in workerd with D1 migrations applied. They cover
+the end-to-end REST flow, webhooks and adapters, MCP over HTTP, WebSockets, sync, retention, and push fan-out against
+mocked FCM and push-service endpoints. Push uses throwaway keys generated in `vitest.config.ts`. The suite also
+includes the RFC 8291 test vector and unit tests for `@herald/schema` helpers.
+
+## Deploying your own instance
+
+### 1. D1
+
+```sh
+cd apps/server
+npx wrangler d1 create herald           # copy the database_id into wrangler.jsonc (d1_databases[0].database_id)
+npx wrangler d1 migrations apply herald --remote
+```
+
+### 2. Google OAuth client
+
+1. In Google Cloud Console, go to **APIs & Services → OAuth consent screen**. Configure it as External, with scopes `openid`, `email` and `profile`.
+2. Go to **Credentials → Create credentials → OAuth client ID → Web application**.
+   - Authorized redirect URI: `https://<your-host>/auth/google/callback` (and `http://localhost:8787/auth/google/callback` for local testing).
+3. Put `GOOGLE_CLIENT_ID` in `wrangler.jsonc` `vars`, and store the secret with `npx wrangler secret put GOOGLE_CLIENT_SECRET`.
+
+### 3. Vars and secrets
+
+| Name | Where | Notes |
+|---|---|---|
+| `PUBLIC_URL` | `vars` | e.g. `https://herald.example.workers.dev`. Used for the OAuth redirect, token URLs and deep links. |
+| `GOOGLE_CLIENT_ID` | `vars` | |
+| `GOOGLE_CLIENT_SECRET` | secret | |
+| `SESSION_SECRET` | secret | `openssl rand -base64 32`. Signs callbacks for notifications created from the web app. |
+| `ALLOWED_EMAILS` | `vars` | optional, comma-separated. `@example.com` allows a whole domain. |
+| `VAPID_PUBLIC_KEY` | `vars` | from `pnpm --filter @herald/server vapid` |
+| `VAPID_PRIVATE_KEY` | secret | same script |
+| `VAPID_SUBJECT` | `vars` | `mailto:you@example.com` |
+| `FCM_SERVICE_ACCOUNT_JSON` | secret | see below. FCM is disabled when it's unset. |
+| `DEV_LOGIN` | `vars` | **must stay `"false"` in production** |
+
+```sh
+npx wrangler secret put SESSION_SECRET
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler secret put FCM_SERVICE_ACCOUNT_JSON < service-account.json
+```
+
+### 4. Web Push (VAPID)
+
+```sh
+pnpm --filter @herald/server vapid    # prints VAPID_PUBLIC_KEY=… and VAPID_PRIVATE_KEY=…
+```
+
+### 5. Firebase (Android push)
+
+1. Create a Firebase project (or reuse the one behind `apps/android/app/google-services.json`).
+2. Go to **Project settings → Service accounts → Generate new private key**. This downloads the JSON.
+3. `npx wrangler secret put FCM_SERVICE_ACCOUNT_JSON < that-file.json`
+
+### 6. Deploy
+
+```sh
+pnpm deploy        # from the repo root: builds apps/web, applies remote D1 migrations, then wrangler deploy
+```
+
+## curl cheat-sheet
+
+```sh
+H=http://localhost:8787
+
+# Sign in (dev only) and keep the cookie
+curl -c jar -s "$H/auth/dev-login?email=me@example.com" -o /dev/null
+
+# Create a webhook token (the secret is shown once)
+curl -b jar -s -H 'Content-Type: application/json' -d '{"kind":"webhook","label":"Home Assistant"}' $H/api/tokens
+HOOK=$H/hook/hrd_wh_...
+
+# Send: plain text + ntfy-style headers
+curl -H 'Title: Backup done' -H 'Priority: 3' -H 'Tags: nas,backup' -d 'All 3 volumes OK' $HOOK
+# Send: JSON card with actions
+curl -H 'Content-Type: application/json' -d '{"title":"Deploy prod?","severity":"warning",
+  "actions":[{"id":"yes","label":"Ship it","style":"primary","resolves":true},{"id":"no","label":"Abort"}]}' $HOOK
+# Send: GET only
+curl "$HOOK?title=Hello&body=World&severity=success"
+# Dedupe/update in place with replaceKey
+curl -H 'Content-Type: application/json' -d '{"title":"CI 3/7","replaceKey":"ci-run-42","progress":{"value":3,"max":7}}' $HOOK
+
+# Inbox
+curl -b jar -s "$H/api/notifications?limit=20&status=active"
+curl -b jar -s -X PATCH -H 'Content-Type: application/json' -d '{"body":"updated","alert":false}' $H/api/notifications/ntf_...
+curl -b jar -s -X POST -H 'Content-Type: application/json' -d '{"actionId":"yes"}' $H/api/notifications/ntf_.../respond
+curl -b jar -s -X POST $H/api/notifications/ntf_.../resolve
+
+# Templates
+curl -b jar -s -X PUT -H 'Content-Type: application/json' \
+  -d '{"card":{"title":"{{service}} {{metric}} high","severity":"warning"}}' $H/api/templates/aws-alarm
+curl -H 'Content-Type: application/json' -d '{"template":"aws-alarm","vars":{"service":"api","metric":"CPU"}}' $HOOK
+
+# Pair a device
+curl -b jar -s -X POST $H/api/devices/pairing-codes                     # → {"code":"K7Q2-9XMA",...}
+curl -s -H 'Content-Type: application/json' -d '{"code":"k7q29xma","name":"Pixel 9","platform":"android"}' $H/api/devices/pair
+curl -s -H 'Authorization: Bearer hrd_dev_...' $H/api/notifications
+
+# MCP (Streamable HTTP, stateless; JSON responses)
+curl -b jar -s -H 'Content-Type: application/json' -d '{"kind":"mcp","label":"Claude Code"}' $H/api/tokens
+curl -s -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' $H/mcp/hrd_mcp_...
+claude mcp add --transport http herald $H/mcp/hrd_mcp_...              # Claude Code
+```
+
+## Behavior notes
+
+- **Auth:** the `herald_session` cookie holds a random id, and D1 stores only its SHA-256 hash. Sessions last 30 days, with sliding renewal. Device, webhook and MCP tokens are also stored as SHA-256 hashes. Webhook and MCP tokens are rejected on `/api/*` (403).
+- **Rate limit:** 60 sends per minute per webhook/MCP token, counted in the InboxDO, returns `429 rate_limited`. Bodies are capped at 64 KiB (`413`).
+- **Sync cursors** are opaque and based on a per-inbox change sequence. Clients must not parse them. `sync` and `?updatedSince=` also accept an ISO timestamp.
+- **Retention:** a daily DO alarm deletes notifications older than 30 days and keeps at most 5,000 per user. It writes tombstones so `sync` reports the deletions.
+- **Action callbacks:** the server POSTs `{ notification, response }` with `X-Herald-Signature: sha256=<hex HMAC-SHA256(body)>`. The key is the `callbackSecret` returned once by `POST /api/tokens` for the token that created the notification.
+- **Webhook extras:** `?var.<name>=<value>` passes template vars on text/GET hooks. Alertmanager `resolved` with no matching active card records a silent, already-resolved card. SNS `SubscribeURL` is fetched only for `https://sns.<region>.amazonaws.com`.
