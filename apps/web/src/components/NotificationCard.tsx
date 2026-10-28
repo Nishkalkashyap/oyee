@@ -1,20 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Action, Notification } from "@herald/schema";
 import { formatDateTime, relativeTime } from "../lib/format";
-import { SEVERITY_STYLES } from "../lib/severity";
-import { CheckCheckIcon, CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon, TrashIcon } from "./Icons";
+import { CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon } from "./Icons";
 import { Markdown } from "./Markdown";
-import { NotificationIcon, ProgressBar, SeverityBadge } from "./NotificationParts";
+import { ProgressBar, SeverityBadge } from "./NotificationParts";
 import { Badge, Button, cx } from "./ui";
 import { useDevices } from "../lib/queries";
 
-/** "→ MacBook Pro" — the devices a targeted notification alerted (others only list it in their inbox). */
-function TargetBadge({ ids, preview }: { ids: string[]; preview?: boolean }) {
+/** "→ MacBook Pro": the devices a targeted notification alerted (others only list it in their inbox). */
+export function TargetBadge({ ids, preview }: { ids: string[]; preview?: boolean }) {
   const devices = useDevices({ enabled: !preview });
   const names = ids.map((id) => devices.data?.find((d) => d.id === id)?.name ?? (preview ? id : "removed device"));
   return (
     <span title="Only these devices were alerted">
-      <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-300">→ {names.join(", ")}</Badge>
+      <Badge className="bg-chip text-chip-foreground">→ {names.join(", ")}</Badge>
     </span>
   );
 }
@@ -23,15 +22,14 @@ export interface NotificationCardProps {
   notification: Notification;
   /** Non-interactive rendering (template/composer previews). */
   preview?: boolean;
+  /** Inside the conversation view: no meta line, replies and responses are rendered by the thread. */
+  inThread?: boolean;
   onAction?: (action: Action) => void;
   onReply?: (text: string) => Promise<unknown> | void;
-  onMarkRead?: () => void;
-  onResolve?: () => void;
-  onDelete?: () => void;
   onThreadClick?: (threadId: string) => void;
   onSourceClick?: (source: string) => void;
   pendingActionId?: string | null;
-  busy?: { read?: boolean; resolve?: boolean; delete?: boolean; reply?: boolean };
+  busy?: { reply?: boolean };
   focusReply?: boolean;
   className?: string;
 }
@@ -42,23 +40,13 @@ const ACTION_VARIANT = {
   default: "secondary",
 } as const;
 
-function Meta({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-medium tracking-wide text-zinc-400 uppercase dark:text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 truncate text-xs text-zinc-700 dark:text-zinc-300">{children}</dd>
-    </div>
-  );
-}
-
+/** The notification as a message bubble: severity pill, bold title, body, fields, progress and pill actions. */
 export function NotificationCard({
   notification: n,
   preview,
+  inThread,
   onAction,
   onReply,
-  onMarkRead,
-  onResolve,
-  onDelete,
   onThreadClick,
   onSourceClick,
   pendingActionId,
@@ -66,270 +54,203 @@ export function NotificationCard({
   focusReply,
   className,
 }: NotificationCardProps) {
-  const s = SEVERITY_STYLES[n.severity];
   const resolved = n.status === "resolved";
-  const [reply, setReply] = useState("");
-  const replyRef = useRef<HTMLTextAreaElement>(null);
   const chosen = new Set(n.responses.map((r) => r.actionId).filter(Boolean));
-
-  useEffect(() => {
-    if (focusReply && n.reply) replyRef.current?.focus();
-  }, [focusReply, n.reply, n.id]);
-
-  const submitReply = async () => {
-    const text = reply.trim();
-    if (!text || !onReply) return;
-    await onReply(text);
-    setReply("");
-  };
 
   return (
     <article
       className={cx(
-        "overflow-hidden rounded-xl border border-l-[3px] border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900/60",
-        s.border,
+        "rounded-[22px] bg-bubble p-4 text-foreground sm:p-5",
+        inThread ? "rounded-bl-md" : "ring-1 ring-zinc-200/70 dark:ring-zinc-800",
         className,
       )}
     >
-      <div className="p-4 sm:p-5">
-        {/* Header */}
-        <header className="flex items-start gap-3">
-          <NotificationIcon notification={n} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {onSourceClick && !preview ? (
-                <button type="button" className="font-medium hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => onSourceClick(n.source)}>
-                  {n.source}
+      {!inThread && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-zinc-500 dark:text-zinc-400">
+          {onSourceClick && !preview ? (
+            <button type="button" className="font-semibold text-secondary-label hover:text-foreground" onClick={() => onSourceClick(n.source)}>
+              {n.source}
+            </button>
+          ) : (
+            <span className="font-semibold text-secondary-label">{n.source}</span>
+          )}
+          {n.threadId && (
+            <>
+              <span aria-hidden>·</span>
+              {onThreadClick && !preview ? (
+                <button
+                  type="button"
+                  onClick={() => onThreadClick(n.threadId!)}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                  title="Show this thread"
+                >
+                  <LayersIcon size={12} />
+                  {n.threadId}
                 </button>
               ) : (
-                <span className="font-medium">{n.source}</span>
+                <span className="inline-flex items-center gap-1">
+                  <LayersIcon size={12} />
+                  {n.threadId}
+                </span>
               )}
-              {n.threadId && (
-                <>
-                  <span aria-hidden>·</span>
-                  {onThreadClick && !preview ? (
-                    <button
-                      type="button"
-                      onClick={() => onThreadClick(n.threadId!)}
-                      className="inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100"
-                      title="Show this thread"
-                    >
-                      <LayersIcon size={12} />
-                      {n.threadId}
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <LayersIcon size={12} />
-                      {n.threadId}
-                    </span>
-                  )}
-                </>
-              )}
-              <span aria-hidden>·</span>
-              <time dateTime={n.createdAt} title={formatDateTime(n.createdAt)}>
-                {relativeTime(n.createdAt)}
-              </time>
-            </div>
-            <h2 className="mt-1 text-[17px] leading-snug font-semibold break-words text-zinc-900 dark:text-zinc-50">
-              {n.title}
-            </h2>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <SeverityBadge severity={n.severity} />
-              {resolved && (
-                <Badge className="bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
-                  <CheckIcon size={11} /> Resolved
-                </Badge>
-              )}
-              {!preview && !n.readAt && <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">Unread</Badge>}
-              {n.silent && <Badge>Silent</Badge>}
-              {n.targetDeviceIds && <TargetBadge ids={n.targetDeviceIds} preview={preview} />}
-              {n.tags.map((t) => (
-                <Badge key={t}>#{t}</Badge>
-              ))}
-            </div>
-          </div>
-        </header>
+            </>
+          )}
+          <span aria-hidden>·</span>
+          <time dateTime={n.createdAt} title={formatDateTime(n.createdAt)}>
+            {relativeTime(n.createdAt)}
+          </time>
+        </div>
+      )}
 
-        {/* Body */}
-        {n.body && (
-          <Markdown
-            text={n.body}
-            className="mt-4 text-sm leading-relaxed break-words text-zinc-700 dark:text-zinc-300"
-          />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SeverityBadge severity={n.severity} />
+        {resolved && (
+          <Badge className="bg-foreground text-background">
+            <CheckIcon size={11} /> Resolved
+          </Badge>
         )}
-
-        {n.image && (
-          <a
-            href={preview ? undefined : n.image}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
-          >
-            <img src={n.image} alt="" loading="lazy" className="max-h-80 w-full bg-zinc-100 object-cover dark:bg-zinc-800" />
-          </a>
-        )}
-
-        {n.fields.length > 0 && (
-          <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-zinc-200 bg-zinc-200 sm:grid-cols-3 dark:border-zinc-800 dark:bg-zinc-800">
-            {n.fields.map((f, i) => (
-              <div key={`${f.label}-${i}`} className="bg-white px-3 py-2 dark:bg-zinc-900">
-                <dt className="truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{f.label}</dt>
-                <dd className="mt-0.5 text-sm break-words text-zinc-900 dark:text-zinc-100">{f.value || "—"}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-
-        {n.progress && <ProgressBar progress={n.progress} severity={n.severity} className="mt-4" />}
-
-        {n.url && (
-          <a
-            href={preview ? undefined : n.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 inline-flex max-w-full items-center gap-1.5 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            <ExternalLinkIcon size={13} />
-            <span className="truncate">{n.url}</span>
-          </a>
-        )}
-
-        {/* Actions */}
-        {n.actions.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {n.actions.map((a) => (
-              <Button
-                key={a.id}
-                size="md"
-                variant={ACTION_VARIANT[a.style ?? "default"]}
-                icon={a.url ? <ExternalLinkIcon size={14} /> : chosen.has(a.id) ? <CheckIcon size={14} /> : undefined}
-                loading={pendingActionId === a.id}
-                disabled={!preview && (resolved && !a.url ? true : !!pendingActionId)}
-                onClick={preview ? undefined : () => onAction?.(a)}
-                className={cx(preview && "pointer-events-none")}
-                title={a.url ? a.url : a.resolves ? "Responds and resolves" : "Responds"}
-              >
-                {a.label}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {/* Reply */}
-        {n.reply && (
-          <form
-            className="mt-4 flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submitReply();
-            }}
-          >
-            <textarea
-              ref={replyRef}
-              rows={1}
-              value={reply}
-              disabled={preview || busy.reply}
-              onChange={(e) => setReply(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void submitReply();
-                }
-              }}
-              placeholder={n.reply.placeholder || "Write a reply…"}
-              maxLength={2000}
-              className="min-h-9 flex-1 resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:placeholder:text-zinc-600"
-            />
-            <Button
-              type="submit"
-              variant="primary"
-              icon={<ReplyIcon size={14} />}
-              loading={busy.reply}
-              disabled={preview || !reply.trim()}
-            >
-              {n.reply.buttonLabel || "Reply"}
-            </Button>
-          </form>
-        )}
-
-        {/* Responses */}
-        {n.responses.length > 0 && (
-          <div className="mt-5">
-            <h3 className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
-              Responses
-            </h3>
-            <ol className="space-y-2">
-              {n.responses.map((r, i) => {
-                const action = n.actions.find((a) => a.id === r.actionId);
-                return (
-                  <li key={`${r.at}-${i}`} className="flex gap-2.5 text-sm">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-zinc-800 dark:text-zinc-200">
-                        {r.actionId && (
-                          <span className="font-medium">
-                            {action?.label ?? r.actionId}
-                            {r.text ? " · " : ""}
-                          </span>
-                        )}
-                        {r.text && <span className="break-words whitespace-pre-wrap">{r.text}</span>}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        {r.deviceName ?? "Unknown device"} · <time title={formatDateTime(r.at)}>{relativeTime(r.at)}</time>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        )}
+        {n.silent && <Badge>Silent</Badge>}
+        {n.targetDeviceIds && <TargetBadge ids={n.targetDeviceIds} preview={preview} />}
+        {n.tags.map((t) => (
+          <Badge key={t}>#{t}</Badge>
+        ))}
       </div>
 
-      {/* Footer: metadata + management */}
-      {!preview && (
-        <footer className="border-t border-zinc-100 bg-zinc-50/60 px-4 py-3 sm:px-5 dark:border-zinc-800 dark:bg-zinc-950/30">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-            <Meta label="Created">{formatDateTime(n.createdAt)}</Meta>
-            <Meta label="Updated">{formatDateTime(n.updatedAt)}</Meta>
-            <Meta label="Read">{formatDateTime(n.readAt)}</Meta>
-            <Meta label="Resolved">{formatDateTime(n.resolvedAt)}</Meta>
-            <Meta label="Version">v{n.version}</Meta>
-            <Meta label="Template">{n.template ?? "—"}</Meta>
-            <Meta label="ID">
-              <span className="font-mono" title={n.id}>
-                {n.id}
-              </span>
-            </Meta>
-          </dl>
-          {(onMarkRead || onResolve || onDelete) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {onMarkRead && !n.readAt && (
-                <Button size="sm" icon={<CheckCheckIcon size={13} />} loading={busy.read} onClick={onMarkRead}>
-                  Mark read
-                </Button>
-              )}
-              {onResolve && !resolved && (
-                <Button size="sm" icon={<CheckIcon size={13} />} loading={busy.resolve} onClick={onResolve}>
-                  Resolve
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  size="sm"
-                  variant="outline-danger"
-                  icon={<TrashIcon size={13} />}
-                  loading={busy.delete}
-                  onClick={onDelete}
-                  className="ml-auto"
-                >
-                  Delete
-                </Button>
-              )}
+      <h2 className="mt-2.5 text-[18px] leading-snug font-bold tracking-[-0.02em] break-words">{n.title}</h2>
+
+      {n.body && <Markdown text={n.body} className="mt-1.5 text-[14.5px] leading-relaxed break-words text-secondary-label" />}
+
+      {n.image && (
+        <a
+          href={preview ? undefined : n.image}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3.5 block overflow-hidden rounded-2xl"
+        >
+          <img src={n.image} alt="" loading="lazy" className="max-h-80 w-full bg-zinc-100 object-cover dark:bg-zinc-800" />
+        </a>
+      )}
+
+      {n.fields.length > 0 && (
+        <dl className="mt-3.5 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13.5px]">
+          {n.fields.map((f, i) => (
+            <div key={`${f.label}-${i}`} className="contents">
+              <dt className="text-zinc-500 dark:text-zinc-400">{f.label}</dt>
+              <dd className="min-w-0 font-medium break-words">{f.value || "—"}</dd>
             </div>
-          )}
-        </footer>
+          ))}
+        </dl>
+      )}
+
+      {n.progress && <ProgressBar progress={n.progress} severity={n.severity} className="mt-4" />}
+
+      {n.url && (
+        <a
+          href={preview ? undefined : n.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3.5 inline-flex max-w-full items-center gap-1.5 text-[13px] font-medium text-foreground underline decoration-zinc-300 underline-offset-[3px] hover:decoration-foreground dark:decoration-zinc-600"
+        >
+          <ExternalLinkIcon size={13} />
+          <span className="truncate">{n.url}</span>
+        </a>
+      )}
+
+      {n.actions.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {n.actions.map((a) => (
+            <Button
+              key={a.id}
+              variant={ACTION_VARIANT[a.style ?? "default"]}
+              icon={a.url ? <ExternalLinkIcon size={14} /> : chosen.has(a.id) ? <CheckIcon size={14} /> : undefined}
+              loading={pendingActionId === a.id}
+              disabled={!preview && (resolved && !a.url ? true : !!pendingActionId)}
+              onClick={preview ? undefined : () => onAction?.(a)}
+              className={cx(preview && "pointer-events-none")}
+              title={a.url ? a.url : a.resolves ? "Responds and resolves" : "Responds"}
+            >
+              {a.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {!inThread && n.reply && (
+        <ReplyComposer
+          className="mt-4"
+          placeholder={n.reply.placeholder || "Write a reply…"}
+          disabled={preview}
+          busy={busy.reply}
+          onSend={onReply}
+          focus={focusReply}
+        />
       )}
     </article>
+  );
+}
+
+/** Gluon's composer: a rounded bubble field with an orange send button. ⌘/Ctrl+Enter sends. */
+export function ReplyComposer({
+  placeholder,
+  disabled,
+  busy,
+  onSend,
+  focus,
+  className,
+}: {
+  placeholder: string;
+  disabled?: boolean;
+  busy?: boolean;
+  onSend?: (text: string) => Promise<unknown> | void;
+  focus?: boolean;
+  className?: string;
+}) {
+  const [text, setText] = useState("");
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.focus();
+  }, [focus]);
+  const submit = async () => {
+    const t = text.trim();
+    if (!t || !onSend) return;
+    await onSend(t);
+    setText("");
+  };
+  return (
+    <form
+      className={cx(
+        "flex items-end gap-2 rounded-3xl bg-bubble py-1.5 pr-1.5 pl-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-zinc-200/70 focus-within:ring-brand/40 dark:ring-zinc-800",
+        className,
+      )}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <textarea
+        ref={ref}
+        rows={1}
+        value={text}
+        disabled={disabled || busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder={placeholder}
+        maxLength={2000}
+        className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-2 text-[14.5px] placeholder:text-zinc-400 focus:outline-none"
+      />
+      <button
+        type="submit"
+        aria-label="Send reply"
+        disabled={disabled || busy || !text.trim()}
+        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground transition-[opacity,scale] active:scale-90 disabled:opacity-40"
+      >
+        <ReplyIcon size={16} className="-scale-x-100" />
+      </button>
+    </form>
   );
 }

@@ -3,8 +3,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { isMockMode } from "../lib/env";
 import { qk, useConfig, useMe } from "../lib/queries";
-import { Logo } from "../components/Layout";
-import { Button, Input, buttonClasses } from "../components/ui";
+import { Button, Input, buttonClasses, BrandMark } from "../components/ui";
 
 const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: "This email isn't allowed on this Herald instance. Ask the admin to add it to ALLOWED_EMAILS.",
@@ -55,19 +54,18 @@ export function LoginPage() {
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.15),transparent_60%)]" />
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Logo className="text-lg" />
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Sign in to Herald</h1>
+          <BrandMark className="size-14 rounded-2xl text-3xl" />
+          <h1 className="mt-6 text-[30px] leading-tight font-extrabold tracking-[-0.035em]">Sign in to Herald</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             One inbox for AI agents, scripts and webhooks: live, actionable notifications on every device.
           </p>
         </div>
 
-        <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+        <div className="space-y-4 rounded-[22px] bg-background p-6">
           {loginError && (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+            <div role="alert" className="rounded-2xl bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-300">
               {loginErrorMessage(loginError)}
             </div>
           )}

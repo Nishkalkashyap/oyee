@@ -68,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 "mt-0.5",
                 t.kind === "success" && "text-emerald-500",
                 t.kind === "error" && "text-red-500",
-                t.kind === "info" && "text-blue-500",
+                t.kind === "info" && "text-brand",
               )}
             >
               {t.kind === "success" ? (

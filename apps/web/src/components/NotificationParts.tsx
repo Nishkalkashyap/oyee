@@ -31,7 +31,7 @@ export function NotificationIcon({
   const glyph = size === "sm" ? 14 : size === "lg" ? 20 : 17;
   const icon = notification.icon?.trim();
   return (
-    <span className={cx("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg", box, s.soft)}>
+    <span className={cx("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full", box, s.soft)}>
       {icon && isHttpUrl(icon) ? (
         <img src={icon} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
       ) : icon ? (
@@ -46,7 +46,7 @@ export function NotificationIcon({
 export function SeverityBadge({ severity }: { severity: Severity }) {
   const s = SEVERITY_STYLES[severity];
   return (
-    <span className={cx("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", s.soft)}>
+    <span className={cx("inline-flex h-[22px] items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-semibold", s.soft)}>
       <span className={cx("size-1.5 rounded-full", s.dot)} />
       {s.label}
     </span>
@@ -66,7 +66,8 @@ export function ProgressBar({
 }) {
   const pct = progressPercent(progress);
   const label = progressLabel(progress);
-  const bar = SEVERITY_STYLES[severity].bar;
+  // Progress is ink, like Gluon's quiet controls; severity already shows in the pill and avatar dot.
+  const bar = severity === "critical" ? "bg-red-500" : "bg-foreground";
   return (
     <div className={className}>
       {!compact && (label || progress.indeterminate) && (
@@ -77,7 +78,7 @@ export function ProgressBar({
       )}
       <div
         className={cx(
-          "relative w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800",
+          "relative w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700",
           compact ? "h-1" : "h-1.5",
         )}
         role="progressbar"

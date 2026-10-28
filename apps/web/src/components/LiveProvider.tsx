@@ -79,7 +79,7 @@ export function ConnectionIndicator({ compact }: { compact?: boolean }) {
       onClick={state.status === "open" ? undefined : reconnect}
       title={state.status === "open" ? "Receiving live updates" : "Click to reconnect now"}
       className={cx(
-        "inline-flex items-center gap-2 rounded-md text-xs text-zinc-500 dark:text-zinc-400",
+        "inline-flex items-center gap-2 rounded-full text-xs text-zinc-500 dark:text-zinc-400",
         compact ? "p-1.5" : "px-2 py-1",
         state.status !== "open" && "hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
       )}

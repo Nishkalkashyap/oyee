@@ -47,7 +47,7 @@ function Steps({ children }: { children: ReactNode }) {
 function PairingInstructions({ code }: { code: string }) {
   const [platform, setPlatform] = useState<PairPlatform>("android");
   const link = (path: string) => `${REPO_URL}/tree/main/${path}`;
-  const a = "font-medium text-blue-600 hover:underline dark:text-blue-400";
+  const a = "font-semibold text-foreground underline decoration-zinc-300 underline-offset-[3px] hover:decoration-foreground";
   return (
     <div>
       <Segmented<PairPlatform>
@@ -302,7 +302,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
   return (
     <Panel className="p-5">
       <div className="flex items-start gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#fde7d7] text-[#9a3412]">
           <GlobeIcon size={17} />
         </span>
         <div className="min-w-0 flex-1">
@@ -333,7 +333,7 @@ function DeviceRow({ d }: { d: Device }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{d.name}</span>
           <Badge>{PLATFORM_LABEL[d.platform]}</Badge>
-          {isThisBrowser && <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">This browser</Badge>}
+          {isThisBrowser && <Badge className="bg-chip text-chip-foreground">This browser</Badge>}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
           <span className="flex gap-1">

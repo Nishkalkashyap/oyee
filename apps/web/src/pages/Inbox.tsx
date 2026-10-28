@@ -19,6 +19,7 @@ import { SEVERITIES, SEVERITY_STYLES } from "../lib/severity";
 import {
   CheckCheckIcon,
   CheckIcon,
+  TrashIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -30,10 +31,12 @@ import {
   SendIcon,
   XIcon,
 } from "../components/Icons";
-import { NotificationCard } from "../components/NotificationCard";
-import { NotificationIcon, ProgressBar } from "../components/NotificationParts";
+import { NotificationCard, ReplyComposer } from "../components/NotificationCard";
+import { ProgressBar } from "../components/NotificationParts";
 import { useToast } from "../components/Toast";
-import { Button, EmptyState, ErrorBanner, Segmented, Select, Spinner, buttonClasses, cx } from "../components/ui";
+import { Avatar, Button, EmptyState, ErrorBanner, FilterChip, Segmented, Select, Spinner, buttonClasses, cx } from "../components/ui";
+import { formatDateTime } from "../lib/format";
+import { useDevices } from "../lib/queries";
 
 const GROUP_KEY = "herald:inbox:group";
 
@@ -63,24 +66,7 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severit
   return [filters, update, params];
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cx(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
-          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
+/** Gluon's list row: the source's tinted avatar with a severity dot, title, time (orange while unread) and preview. */
 function InboxRow({ n, selected, search, indent }: { n: Notification; selected: boolean; search: string; indent?: boolean }) {
   const unread = !n.readAt;
   const preview = markdownToPlainText(n.body).replace(/\s+/g, " ").trim();
@@ -88,50 +74,54 @@ function InboxRow({ n, selected, search, indent }: { n: Notification; selected: 
     <Link
       to={`/inbox/${encodeURIComponent(n.id)}${search}`}
       className={cx(
-        "group relative flex gap-3 border-b border-zinc-100 px-4 py-3 transition-colors dark:border-zinc-800/70",
-        indent && "pl-8",
-        selected ? "bg-blue-50/80 dark:bg-blue-500/10" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/60",
+        "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-[background-color,scale] duration-150 active:scale-[0.985]",
+        indent && "ml-5",
+        selected ? "bg-row-selected" : "hover:bg-zinc-100 dark:hover:bg-zinc-800",
       )}
       aria-current={selected ? "true" : undefined}
     >
-      {unread && <span className="absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-blue-500" aria-label="Unread" />}
-      <NotificationIcon notification={n} size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+      <span className="relative shrink-0">
+        <Avatar name={n.source} size={44} />
+        {n.severity !== "debug" && (
+          <span
+            className={cx("absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full border-[2.5px] border-background", SEVERITY_STYLES[n.severity].dot)}
+            title={SEVERITY_STYLES[n.severity].label}
+          />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
           <span
             className={cx(
-              "min-w-0 flex-1 truncate text-sm",
-              unread ? "font-semibold text-zinc-900 dark:text-zinc-50" : "text-zinc-600 dark:text-zinc-400",
-              n.status === "resolved" && !unread && "line-through decoration-zinc-300 dark:decoration-zinc-700",
+              "min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.005em]",
+              n.status === "resolved" && !unread && "text-zinc-500 dark:text-zinc-400",
             )}
           >
             {n.title}
           </span>
-          <time className="shrink-0 text-[11px] text-zinc-400 tabular-nums" dateTime={n.createdAt}>
+          <time
+            className={cx("shrink-0 text-xs tabular-nums", unread ? "font-semibold text-brand" : "text-zinc-500 dark:text-zinc-400")}
+            dateTime={n.createdAt}
+          >
             {relativeTime(n.createdAt)}
           </time>
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
-          <span className={cx("size-1.5 shrink-0 rounded-full", SEVERITY_STYLES[n.severity].dot)} title={n.severity} />
-          <span className="shrink-0 font-medium">{n.source}</span>
-          {preview && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="truncate">{preview}</span>
-            </>
-          )}
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
-            {n.responses.length > 0 && (
-              <span className="inline-flex items-center gap-0.5" title={`${n.responses.length} response(s)`}>
-                <ReplyIcon size={11} />
-                {n.responses.length}
-              </span>
-            )}
-            {n.status === "resolved" && <CheckIcon size={12} className="text-emerald-500" aria-label="Resolved" />}
+        </span>
+        <span className="mt-0.5 flex items-center gap-2">
+          <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", unread ? "text-secondary-label" : "text-zinc-500 dark:text-zinc-400")}>
+            {n.source}
+            {preview && ` · ${preview}`}
           </span>
-        </div>
+          {n.responses.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-zinc-500" title={`${n.responses.length} response(s)`}>
+              <ReplyIcon size={12} />
+              {n.responses.length}
+            </span>
+          )}
+          {n.status === "resolved" && <CheckIcon size={13} className="shrink-0 text-emerald-600" aria-label="Resolved" />}
+          {unread && <span className="size-2.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />}
+        </span>
         {n.progress && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
-      </div>
+      </span>
     </Link>
   );
 }
@@ -153,17 +143,17 @@ function ThreadGroupRows({
   const unread = items.filter((n) => !n.readAt).length;
   return (
     <div>
-      <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50/80 px-4 py-1.5 text-xs dark:border-zinc-800/70 dark:bg-zinc-900/40">
-        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
+      <div className="flex items-center gap-2 px-3 pt-3 pb-1 text-[13px]">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-1.5 font-semibold text-secondary-label">
           {open ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
           <LayersIcon size={12} />
           <span className="truncate font-medium">{threadId}</span>
           <span className="text-zinc-400">
             {items.length}
-            {unread > 0 && <span className="text-blue-600 dark:text-blue-400"> · {unread} unread</span>}
+            {unread > 0 && <span className="font-semibold text-brand"> · {unread} unread</span>}
           </span>
         </button>
-        <button type="button" onClick={onFilter} className="text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200">
+        <button type="button" onClick={onFilter} className="text-zinc-500 hover:text-foreground">
           Only this
         </button>
       </div>
@@ -239,44 +229,143 @@ function NotificationDetail({
       },
     );
   };
+  const resolved = n.status === "resolved";
+  const onDelete = () => {
+    if (!confirm("Delete this notification on every device?")) return;
+    del.mutate(n.id, {
+      onSuccess: () => {
+        toast.success("Notification deleted");
+        navigate(`/inbox${search}`, { replace: true });
+      },
+      onError: (e) => toast.error("Couldn't delete", errorMessage(e)),
+    });
+  };
 
   return (
-    <NotificationCard
-      notification={n}
-      onAction={onAction}
-      onReply={(text) =>
-        respond.mutateAsync({ text }).then(
-          () => toast.success("Reply sent"),
-          (e: unknown) => {
-            toast.error("Couldn't send reply", errorMessage(e));
-            throw e;
-          },
-        )
-      }
-      onMarkRead={() => markRead.mutate(n.id, { onError: (e) => toast.error("Couldn't mark read", errorMessage(e)) })}
-      onResolve={() => resolve.mutate(n.id, { onError: (e) => toast.error("Couldn't resolve", errorMessage(e)) })}
-      onDelete={() => {
-        if (!confirm("Delete this notification on every device?")) return;
-        del.mutate(n.id, {
-          onSuccess: () => {
-            toast.success("Notification deleted");
-            navigate(`/inbox${search}`, { replace: true });
-          },
-          onError: (e) => toast.error("Couldn't delete", errorMessage(e)),
-        });
-      }}
-      onThreadClick={(thread) => onFilter({ thread })}
-      onSourceClick={(source) => onFilter({ source })}
-      pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
-      busy={{
-        read: markRead.isPending && markRead.variables === n.id,
-        resolve: resolve.isPending,
-        delete: del.isPending,
-        reply: respond.isPending && !!respond.variables?.text,
-      }}
-      focusReply={focusReply}
-    />
+    <div className="flex h-full min-h-0 flex-col bg-thread">
+      {/* Header: who sent it and where it went, plus resolve / delete. */}
+      <header className="flex h-[62px] shrink-0 items-center gap-3 border-b border-zinc-200 bg-background px-3 sm:px-4 dark:border-zinc-800">
+        <Link to={`/inbox${search}`} className="-ml-1 rounded-full p-1.5 text-secondary-label hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800" aria-label="Back to inbox">
+          <ChevronLeftIcon size={20} />
+        </Link>
+        <Avatar name={n.source} size={34} />
+        <div className="min-w-0 flex-1">
+          <button type="button" className="block max-w-full truncate text-[15px] font-bold hover:underline" onClick={() => onFilter({ source: n.source })}>
+            {n.source}
+          </button>
+          <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            <Recipients ids={n.targetDeviceIds ?? null} />
+            {n.threadId && (
+              <>
+                {" · "}
+                <button type="button" className="hover:text-foreground" onClick={() => onFilter({ thread: n.threadId! })}>
+                  {n.threadId}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        {!n.readAt && (
+          <Button size="sm" variant="ghost" icon={<CheckCheckIcon size={14} />} loading={markRead.isPending} onClick={() => markRead.mutate(n.id)}>
+            <span className="hidden sm:inline">Mark read</span>
+          </Button>
+        )}
+        {!resolved && (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<CheckIcon size={14} />}
+            loading={resolve.isPending}
+            onClick={() => resolve.mutate(n.id, { onError: (e) => toast.error("Couldn't resolve", errorMessage(e)) })}
+          >
+            Resolve
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" icon={<TrashIcon size={14} />} loading={del.isPending} onClick={onDelete} aria-label="Delete" title="Delete" />
+      </header>
+
+      {/* Conversation: the agent's card, quiet updates, your answers as peach bubbles. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2.5 px-3 py-5 sm:px-5">
+          <SystemLine>{formatDateTime(n.createdAt)}</SystemLine>
+          <NotificationCard
+            notification={n}
+            inThread
+            className="mr-6 sm:mr-12"
+            onAction={onAction}
+            pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
+          />
+          {n.version > 1 && n.updatedAt !== n.createdAt && (
+            <SystemLine>
+              Updated {relativeTime(n.updatedAt)} · v{n.version}
+            </SystemLine>
+          )}
+          {n.responses.map((r, i) => {
+            const action = n.actions.find((a) => a.id === r.actionId);
+            return (
+              <div key={`${r.at}-${i}`} className="flex flex-col items-end">
+                <div className="ml-12 max-w-[80%] rounded-[22px] rounded-br-md bg-chip px-4 py-2.5 text-[14.5px] break-words whitespace-pre-wrap text-foreground">
+                  {r.actionId && <span className="font-semibold">{action?.label ?? r.actionId}</span>}
+                  {r.actionId && r.text && " · "}
+                  {r.text}
+                </div>
+                <span className="mt-1 mr-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {r.deviceName ?? "Unknown device"} · <time title={formatDateTime(r.at)}>{relativeTime(r.at)}</time>
+                </span>
+              </div>
+            );
+          })}
+          {resolved && n.resolvedAt && (
+            <SystemLine>
+              <CheckIcon size={12} /> Resolved {relativeTime(n.resolvedAt)}
+            </SystemLine>
+          )}
+          <details className="mt-2 self-center text-xs text-zinc-500 dark:text-zinc-400">
+            <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-center hover:bg-zinc-200/60 dark:hover:bg-zinc-800">Details</summary>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-2xl bg-background px-4 py-3">
+              <dt>Read</dt>
+              <dd>{formatDateTime(n.readAt)}</dd>
+              <dt>Template</dt>
+              <dd>{n.template ?? "—"}</dd>
+              <dt>ID</dt>
+              <dd className="font-mono">{n.id}</dd>
+            </dl>
+          </details>
+        </div>
+      </div>
+
+      {n.reply && !resolved && (
+        <div className="mx-auto w-full max-w-2xl shrink-0 px-3 pb-4 sm:px-5">
+          <ReplyComposer
+            placeholder={n.reply.placeholder || `Reply to ${n.source}…`}
+            busy={respond.isPending && !!respond.variables?.text}
+            focus={focusReply}
+            onSend={(text) =>
+              respond.mutateAsync({ text }).then(
+                () => toast.success("Reply sent"),
+                (e: unknown) => {
+                  toast.error("Couldn't send reply", errorMessage(e));
+                  throw e;
+                },
+              )
+            }
+          />
+        </div>
+      )}
+    </div>
   );
+}
+
+function SystemLine({ children }: { children: ReactNode }) {
+  return <div className="flex items-center justify-center gap-1.5 py-1 text-xs text-zinc-500 dark:text-zinc-400">{children}</div>;
+}
+
+/** "To Galaxy S23 Ultra, MacBook Pro" or "All devices". */
+function Recipients({ ids }: { ids: string[] | null }) {
+  const devices = useDevices({ enabled: !!ids });
+  if (!ids) return <>All devices</>;
+  const names = ids.map((id) => devices.data?.find((d) => d.id === id)?.name ?? "removed device");
+  return <>To {names.join(", ")}</>;
 }
 
 export function InboxPage() {
@@ -336,18 +425,18 @@ export function InboxPage() {
     : sourceItems.reduce((a, s) => a + s.unread, 0);
 
   return (
-    <div className="flex lg:h-dvh lg:overflow-hidden">
+    <div className="flex h-full min-h-0">
       {/* List pane */}
       <section
         className={cx(
-          "w-full shrink-0 flex-col border-zinc-200 lg:flex lg:w-[400px] lg:overflow-y-auto lg:border-r xl:w-[440px] dark:border-zinc-800",
+          "min-h-0 w-full shrink-0 flex-col overflow-y-auto border-zinc-200 lg:flex lg:w-[380px] lg:border-r xl:w-[400px] dark:border-zinc-800",
           id ? "hidden" : "flex",
         )}
       >
-        <div className="z-20 space-y-2.5 border-b border-zinc-200 bg-white/90 px-4 pt-4 pb-3 backdrop-blur md:sticky md:top-0 dark:border-zinc-800 dark:bg-zinc-950/90">
+        <div className="sticky top-0 z-20 space-y-3 bg-background px-4 pt-5 pb-3">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold tracking-tight">Inbox</h1>
-            {unreadInScope > 0 && <span className="text-xs text-zinc-500">{unreadInScope} unread</span>}
+            <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em] md:text-2xl md:font-bold md:tracking-tight">Inbox</h1>
+            {unreadInScope > 0 && <span className="text-[13px] font-semibold text-brand">{unreadInScope} unread</span>}
             <div className="ml-auto flex items-center gap-1">
               <Button
                 size="sm"
@@ -379,26 +468,26 @@ export function InboxPage() {
           </div>
 
           <div className="relative">
-            <SearchIcon size={14} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-400" />
+            <SearchIcon size={16} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-zinc-500" />
             <input
               type="search"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Search notifications"
-              className="h-8 w-full rounded-lg border border-zinc-200 bg-zinc-50 pr-3 pl-8 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:focus:bg-zinc-950"
+              placeholder="Search"
+              className="h-10 w-full rounded-full bg-zinc-100 pr-4 pl-10 text-[14px] placeholder:text-zinc-500 focus:bg-background focus:ring-2 focus:ring-brand/30 focus:outline-none dark:bg-zinc-800"
             />
           </div>
 
           {sourceItems.length > 0 && (
             <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
-              <Chip active={!filters.source} onClick={() => setFilter({ source: null })}>
+              <FilterChip active={!filters.source} onClick={() => setFilter({ source: null })}>
                 All
-              </Chip>
+              </FilterChip>
               {sourceItems.map((s) => (
-                <Chip key={s.source} active={filters.source === s.source} onClick={() => setFilter({ source: filters.source === s.source ? null : s.source })}>
+                <FilterChip key={s.source} active={filters.source === s.source} onClick={() => setFilter({ source: filters.source === s.source ? null : s.source })}>
                   {s.source}
-                  {s.unread > 0 && <span className="rounded-full bg-blue-500/15 px-1.5 text-[10px] text-blue-600 dark:text-blue-400">{s.unread}</span>}
-                </Chip>
+                  {s.unread > 0 && <span className="text-[11px] opacity-75">{s.unread}</span>}
+                </FilterChip>
               ))}
             </div>
           )}
@@ -418,7 +507,7 @@ export function InboxPage() {
               aria-label="Severity"
               value={filters.severity ?? ""}
               onChange={(e) => setFilter({ severity: e.target.value || null })}
-              className="h-7 w-auto py-0 pl-2 text-xs"
+              className="h-7 w-auto! rounded-full border-0 bg-zinc-100 py-0 pl-3 text-xs dark:bg-zinc-800"
             >
               <option value="">Any severity</option>
               {SEVERITIES.map((s) => (
@@ -428,7 +517,7 @@ export function InboxPage() {
               ))}
             </Select>
             {filters.threadId && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pr-1 pl-2 text-xs dark:bg-zinc-800">
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-chip pr-1 pl-2.5 text-xs font-semibold text-chip-foreground">
                 <LayersIcon size={11} /> {filters.threadId}
                 <button type="button" aria-label="Clear thread filter" onClick={() => setFilter({ thread: null })} className="rounded-full p-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700">
                   <XIcon size={11} />
@@ -450,7 +539,7 @@ export function InboxPage() {
           </div>
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 px-2 pb-4">
           {list.isPending ? (
             <div className="flex justify-center py-16">
               <Spinner />
@@ -514,25 +603,11 @@ export function InboxPage() {
       </section>
 
       {/* Detail pane */}
-      <section className={cx("min-w-0 flex-1 lg:block lg:overflow-y-auto", id ? "block" : "hidden")}>
+      <section className={cx("min-h-0 min-w-0 flex-1 lg:block", id ? "block" : "hidden")}>
         {id ? (
-          <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6 lg:py-8">
-            <Link
-              to={`/inbox${search}`}
-              className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 lg:hidden dark:hover:text-zinc-100"
-            >
-              <ChevronLeftIcon size={16} /> Inbox
-            </Link>
-            <NotificationDetail
-              key={id}
-              id={id}
-              search={search}
-              focusReply={params.get("reply") === "1"}
-              onFilter={filterFromDetail}
-            />
-          </div>
+          <NotificationDetail key={id} id={id} search={search} focusReply={params.get("reply") === "1"} onFilter={filterFromDetail} />
         ) : (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full items-center justify-center bg-thread">
             <EmptyState icon={<InboxIcon size={20} />} title="Select a notification">
               Pick one from the list to see the full card, act on it, or reply.
             </EmptyState>

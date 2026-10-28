@@ -186,7 +186,7 @@ function Editor({ template, onSaved, onDeleted }: { template: Template | null; o
               </code>
             ))}
             {missingVars.length > 0 && (
-              <button type="button" className="text-blue-600 hover:underline dark:text-blue-400" onClick={fillVars}>
+              <button type="button" className="font-semibold text-brand hover:underline" onClick={fillVars}>
                 Fill missing
               </button>
             )}

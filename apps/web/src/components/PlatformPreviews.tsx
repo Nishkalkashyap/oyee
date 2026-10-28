@@ -17,11 +17,11 @@ function AppGlyph({ className }: { className?: string }) {
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-600 text-white",
+        "inline-flex shrink-0 items-center justify-center bg-brand font-extrabold text-brand-foreground",
         className,
       )}
     >
-      <BellIcon size={12} strokeWidth={2.5} />
+      h
     </span>
   );
 }

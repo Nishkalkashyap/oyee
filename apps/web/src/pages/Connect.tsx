@@ -22,6 +22,7 @@ import {
   Spinner,
   buttonClasses,
   cx,
+  Avatar,
 } from "../components/ui";
 
 const KIND_COPY: Record<TokenKind, { title: string; button: string; description: string; labelPlaceholder: string; sourcePlaceholder: string }> = {
@@ -186,28 +187,30 @@ function BigAction({
   description,
   onClick,
   accent,
+  cta,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
   onClick: () => void;
   accent: string;
+  cta: "brand" | "primary";
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-zinc-700"
+      className="group flex flex-col items-start gap-3.5 rounded-[22px] bg-zinc-50 p-5 text-left transition-[background-color,scale] duration-150 hover:bg-zinc-100 active:scale-[0.985] focus-visible:outline-2 focus-visible:outline-brand dark:bg-zinc-800/60 dark:hover:bg-zinc-800"
     >
-      <div className={cx("pointer-events-none absolute -top-16 -right-16 size-48 rounded-full opacity-20 blur-3xl transition-opacity group-hover:opacity-35", accent)} />
-      <span className={cx("inline-flex size-11 items-center justify-center rounded-xl text-white shadow-sm", accent)}>{icon}</span>
+      <span className={cx("inline-flex size-11 items-center justify-center rounded-[14px]", accent)}>{icon}</span>
       <div>
-        <div className="flex items-center gap-1.5 text-base font-semibold text-zinc-900 dark:text-zinc-50">
-          {title}
-          <ChevronRightIcon size={16} className="text-zinc-400 transition-transform group-hover:translate-x-0.5" />
-        </div>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+        <div className="text-[17px] font-bold tracking-[-0.015em]">{title}</div>
+        <p className="mt-1 text-[13.5px] text-zinc-500 dark:text-zinc-400">{description}</p>
       </div>
+      <span className={buttonClasses(cta, "sm", "mt-1 pointer-events-none")}>
+        {title}
+        <ChevronRightIcon size={14} />
+      </span>
     </button>
   );
 }
@@ -236,22 +239,15 @@ function TokenList() {
   }
 
   return (
-    <Panel className="divide-y divide-zinc-100 dark:divide-zinc-800">
+    <div className="-mx-2">
       {tokens.data.map((t) => (
-        <div key={t.id} className="flex items-center gap-3 px-4 py-3">
-          <span
-            className={cx(
-              "inline-flex size-8 shrink-0 items-center justify-center rounded-lg",
-              t.kind === "mcp" ? "bg-violet-500/10 text-violet-600 dark:text-violet-400" : "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-            )}
-          >
-            {t.kind === "mcp" ? <BotIcon size={16} /> : <WebhookIcon size={16} />}
-          </span>
+        <div key={t.id} className="flex items-center gap-3 rounded-2xl px-3 py-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+          <Avatar name={t.label} size={40} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate text-sm font-medium">{t.label}</span>
+              <span className="truncate text-[15px] font-semibold">{t.label}</span>
               <Badge>{t.kind === "mcp" ? "MCP" : "Webhook"}</Badge>
-              {t.defaultSource && <Badge className="bg-transparent text-zinc-500 ring-1 ring-zinc-200 dark:ring-zinc-700">source: {t.defaultSource}</Badge>}
+              {t.defaultSource && <Badge className="bg-transparent text-zinc-500">source: {t.defaultSource}</Badge>}
             </div>
             <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-500">
               <code className="font-mono">{t.prefix}…</code>
@@ -276,7 +272,7 @@ function TokenList() {
           </Button>
         </div>
       ))}
-    </Panel>
+    </div>
   );
 }
 
@@ -299,19 +295,21 @@ export function ConnectPage() {
           title={KIND_COPY.mcp.button}
           description={KIND_COPY.mcp.description}
           onClick={() => setKind("mcp")}
-          accent="bg-gradient-to-br from-violet-500 to-indigo-600"
+          accent="bg-[#fde7d7] text-[#9a3412]"
+          cta="brand"
         />
         <BigAction
           icon={<WebhookIcon size={22} />}
           title={KIND_COPY.webhook.button}
           description={KIND_COPY.webhook.description}
           onClick={() => setKind("webhook")}
-          accent="bg-gradient-to-br from-sky-500 to-cyan-600"
+          accent="bg-[#e2ecfb] text-[#1e4e9a]"
+          cta="primary"
         />
       </div>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Your tokens</h2>
+        <h2 className="mb-2 px-1 text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">Your connections</h2>
         <TokenList />
       </section>
 

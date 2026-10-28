@@ -1,12 +1,72 @@
 @import "tailwindcss";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/jetbrains-mono";
 
 /* Class-based dark mode (system preference is applied by the inline script in index.html / useTheme). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Herald uses Gluon's design language (docs/design.md): a warm paper ground, white panels with 22px corners,
+ * near-black ink, pill buttons, peach selection, and orange reserved for the brand mark, unread counts and send.
+ */
+:root {
+  --ground: #f3f2ef;
+  --background: #ffffff;
+  --foreground: #1c1b19;
+  --brand: #d9480f;
+  --brand-foreground: #ffffff;
+  --chip: #fde7d7;
+  --chip-foreground: #9a3412;
+  --thread: #f7f4ef;
+  --bubble: #ffffff;
+  --row-selected: #ece9e3;
+  --secondary-label: #44403c;
+}
+.dark {
+  --ground: #131211;
+  --background: #1e1c1a;
+  --foreground: #f1ede6;
+  --brand: #ff6b1a;
+  --brand-foreground: #1c1b19;
+  --chip: #4a2713;
+  --chip-foreground: #fdba8c;
+  --thread: #181614;
+  --bubble: #2b2825;
+  --row-selected: #35312d;
+  --secondary-label: #d6d0c6;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-chip: var(--chip);
+  --color-chip-foreground: var(--chip-foreground);
+  --color-thread: var(--thread);
+  --color-bubble: var(--bubble);
+  --color-row-selected: var(--row-selected);
+  --color-secondary-label: var(--secondary-label);
+}
+
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji";
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Figtree Variable", -apple-system, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Gluon's warm neutrals replace Tailwind's zinc, so every zinc-* class follows the paper palette. */
+  --color-zinc-50: #f7f6f3;
+  --color-zinc-100: #f3f2ef;
+  --color-zinc-200: #ece9e3;
+  --color-zinc-300: #e0dcd4;
+  --color-zinc-400: #a8a39a;
+  --color-zinc-500: #6b675f;
+  --color-zinc-600: #57534c;
+  --color-zinc-700: #3d3934;
+  --color-zinc-800: #2b2825;
+  --color-zinc-900: #1c1b19;
+  --color-zinc-950: #131211;
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
 @layer base {
@@ -18,15 +78,20 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-white font-sans text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
-    font-feature-settings: "cv11", "ss01";
+    @apply bg-ground font-sans text-foreground antialiased;
   }
   ::selection {
-    @apply bg-blue-500/20;
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  code,
+  kbd,
+  pre,
+  samp {
+    font-variant-ligatures: none;
   }
 }
 
@@ -50,6 +115,30 @@
   }
 }
 
+/* Lists rise into place; counts pop in (Gluon's motion). */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.3;
+  }
+}
+@utility rise-in {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: rise-in 420ms var(--ease-emphasized) backwards;
+  }
+}
+@utility pop-in {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: pop-in 380ms var(--ease-spring) both;
+  }
+}
+
 dialog[open] {
-  animation: toast-in 140ms ease-out;
+  animation: toast-in 160ms var(--ease-emphasized);
 }

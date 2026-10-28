@@ -33,7 +33,7 @@ function render(nodes: MdNode[], keyPrefix = ""): ReactNode[] {
             href={n.href}
             target="_blank"
             rel="noopener noreferrer nofollow"
-            className="font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:decoration-blue-600 dark:text-blue-400 dark:decoration-blue-400/30"
+            className="font-medium text-foreground underline decoration-zinc-300 underline-offset-[3px] hover:decoration-foreground dark:decoration-zinc-600"
             onClick={(e) => e.stopPropagation()}
           >
             {render(n.children, `${key}.`)}

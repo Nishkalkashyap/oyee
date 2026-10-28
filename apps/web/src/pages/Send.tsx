@@ -35,7 +35,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
         onClick={() => onChange(!checked)}
         className={cx(
           "relative inline-flex h-4.5 w-8 shrink-0 rounded-full transition-colors",
-          checked ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-700",
+          checked ? "bg-brand" : "bg-zinc-300 dark:bg-zinc-700",
         )}
       >
         <span className={cx("absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-transform", checked ? "translate-x-4" : "translate-x-0.5")} />
@@ -209,7 +209,7 @@ export function SendPage() {
                   max={s.progress.max || 100}
                   value={s.progress.value}
                   onChange={(e) => set("progress", { ...s.progress, value: Number(e.target.value) })}
-                  className="col-span-full accent-blue-600"
+                  className="col-span-full accent-[#d9480f]"
                 />
               </div>
             ) : (

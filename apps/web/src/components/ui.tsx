@@ -14,24 +14,23 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
 }
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "outline-danger";
+type ButtonVariant = "primary" | "brand" | "secondary" | "ghost" | "danger" | "outline-danger";
 type ButtonSize = "sm" | "md" | "lg";
 
+// Gluon's pill buttons: filled ink primary, orange brand (send / create), soft secondary and quiet ghost.
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 shadow-sm",
-  secondary:
-    "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800 shadow-sm",
-  ghost: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-100",
-  danger: "bg-red-600 text-white hover:bg-red-500 shadow-sm",
-  "outline-danger":
-    "border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10",
+  primary: "bg-foreground text-background hover:opacity-90",
+  brand: "bg-brand text-brand-foreground hover:opacity-90",
+  secondary: "bg-zinc-100 text-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
+  ghost: "text-secondary-label hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-800",
+  danger: "bg-red-600 text-white hover:bg-red-500",
+  "outline-danger": "text-red-600 hover:bg-red-500/10 dark:text-red-400",
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: "h-7 px-2.5 text-xs gap-1.5 rounded-md",
-  md: "h-9 px-3.5 text-sm gap-2 rounded-lg",
-  lg: "h-11 px-5 text-sm gap-2 rounded-lg",
+  sm: "h-8 px-3 text-[13px] gap-1.5",
+  md: "h-9 px-4 text-sm gap-2",
+  lg: "h-11 px-5 text-[15px] gap-2",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -44,8 +43,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 /** Button styling for links (<a>/<Link>) so we never nest a <button> inside an anchor. */
 export function buttonClasses(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string): string {
   return cx(
-    "inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors select-none",
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+    "inline-flex shrink-0 items-center justify-center rounded-full font-medium whitespace-nowrap select-none",
+    "transition-[color,background-color,opacity,scale] duration-150 active:scale-[0.96]",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
     "disabled:pointer-events-none disabled:opacity-50",
     VARIANTS[variant],
     SIZES[size],
@@ -72,16 +72,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 });
 
 const fieldBase =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-xs transition-colors " +
-  "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none " +
-  "dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600 " +
+  "w-full rounded-xl border border-zinc-300 bg-background px-3.5 text-sm text-foreground placeholder:text-zinc-400 transition-colors " +
+  "focus:border-brand focus:ring-3 focus:ring-brand/15 focus:outline-none " +
+  "dark:border-zinc-700 dark:placeholder:text-zinc-500 " +
   "disabled:opacity-60 aria-invalid:border-red-500 aria-invalid:ring-red-500/20";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...rest },
   ref,
 ) {
-  return <input ref={ref} className={cx(fieldBase, "h-9", className)} {...rest} />;
+  return <input ref={ref} className={cx(fieldBase, "h-10", className)} {...rest} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
@@ -92,7 +92,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cx(fieldBase, "h-9 pr-8", className)} {...rest}>
+    <select className={cx(fieldBase, "h-10 pr-8", className)} {...rest}>
       {children}
     </select>
   );
@@ -115,7 +115,7 @@ export function FormField({
 }) {
   return (
     <div className={cx("space-y-1.5", className)}>
-      <label htmlFor={htmlFor} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+      <label htmlFor={htmlFor} className="block text-[13px] font-semibold text-secondary-label">
         {label}
       </label>
       {children}
@@ -128,14 +128,10 @@ export function FormField({
   );
 }
 
+/** A soft card inside a page: Gluon's `card` fill with large rounded corners, no border. */
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div
-      className={cx(
-        "rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900/50",
-        className,
-      )}
-    >
+    <div className={cx("rounded-[22px] bg-zinc-50 dark:bg-zinc-800/60", className)}>
       {children}
     </div>
   );
@@ -145,8 +141,8 @@ export function Badge({ className, children }: { className?: string; children: R
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none",
-        className ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+        "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-semibold leading-none",
+        className ?? "bg-zinc-100 text-secondary-label dark:bg-zinc-800",
       )}
     >
       {children}
@@ -155,7 +151,7 @@ export function Badge({ className, children }: { className?: string; children: R
 }
 
 export function Spinner({ className, size = 16 }: { className?: string; size?: number }) {
-  return <SpinnerIcon size={size} className={cx("animate-spin text-zinc-400", className)} />;
+  return <SpinnerIcon size={size} className={cx("animate-spin text-brand", className)} />;
 }
 
 export function PageHeader({
@@ -170,8 +166,10 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{title}</h1>
-        {description && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>}
+        <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em] text-foreground md:text-2xl md:font-bold md:tracking-tight">
+          {title}
+        </h1>
+        {description && <p className="mt-1 text-[14.5px] text-zinc-500 dark:text-zinc-400">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -180,7 +178,7 @@ export function PageHeader({
 
 export function ErrorBanner({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-300">
       <span>{children}</span>
       {onRetry && (
         <Button size="sm" variant="ghost" onClick={onRetry}>
@@ -205,11 +203,11 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
       {icon && (
-        <div className="mb-4 flex size-12 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-chip text-chip-foreground">
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
+      <h3 className="text-base font-bold tracking-tight text-foreground">{title}</h3>
       {children && <div className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">{children}</div>}
       {actions && <div className="mt-5 flex flex-wrap justify-center gap-2">{actions}</div>}
     </div>
@@ -228,7 +226,7 @@ export function Segmented<T extends string>({
   size?: "sm" | "md";
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100/60 p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="inline-flex gap-1.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -236,11 +234,11 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={cx(
-            "rounded-md font-medium transition-colors",
-            size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs",
+            "rounded-full font-medium transition-colors",
+            size === "sm" ? "h-7 px-3 text-xs" : "h-8 px-3.5 text-[13px]",
             value === o.value
-              ? "bg-white text-zinc-900 shadow-xs dark:bg-zinc-700 dark:text-white"
-              : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
+              ? "bg-chip font-semibold text-chip-foreground"
+              : "bg-zinc-100 text-secondary-label hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
           )}
         >
           {o.label}
@@ -286,39 +284,38 @@ export function Dialog({
         if (e.target === ref.current) onClose();
       }}
       className={cx(
-        "m-auto w-[calc(100%-2rem)] rounded-2xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-[2px]",
-        "dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100",
+        "m-auto w-[calc(100%-2rem)] rounded-[26px] bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/60",
         size === "md" ? "max-w-md" : size === "lg" ? "max-w-2xl" : "max-w-4xl",
       )}
     >
       {open && (
         <div className="flex max-h-[85vh] flex-col">
-          <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80">
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
             <div>
-              <h2 className="text-base font-semibold">{title}</h2>
+              <h2 className="text-lg font-bold tracking-tight">{title}</h2>
               {description && <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              className="rounded-full p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-800"
               aria-label="Close"
             >
               <XIcon size={18} />
             </button>
           </div>
-          <div className="overflow-y-auto px-5 py-4">{children}</div>
+          <div className="overflow-y-auto px-6 pt-1 pb-6">{children}</div>
         </div>
       )}
     </dialog>
   );
 }
 
-export function Avatar({ name, src, size = 28 }: { name: string; src?: string | null; size?: number }) {
+export function Avatar({ name, src, size = 28, letters = 1 }: { name: string; src?: string | null; size?: number; letters?: number }) {
   const initials = name
     .split(/[\s@._-]+/)
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, letters)
     .map((s) => s[0]!.toUpperCase())
     .join("");
   if (src)
@@ -329,16 +326,90 @@ export function Avatar({ name, src, size = 28 }: { name: string; src?: string | 
         width={size}
         height={size}
         referrerPolicy="no-referrer"
-        className="rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-800"
+        className="rounded-full object-cover"
         style={{ width: size, height: size }}
       />
     );
   return (
     <span
-      className="inline-flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[11px] font-semibold text-white"
-      style={{ width: size, height: size }}
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-bold"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4), ...avatarTint(name) }}
     >
       {initials || "?"}
     </span>
+  );
+}
+
+// Gluon's warm pastel avatar fills with matching ink, picked by hashing the name.
+const TINTS = [
+  { background: "#FDE7D7", color: "#9A3412" },
+  { background: "#D5F0EC", color: "#0F5F57" },
+  { background: "#E2ECFB", color: "#1E4E9A" },
+  { background: "#E3F2E1", color: "#2F6B2A" },
+  { background: "#F9D3DE", color: "#9D174D" },
+  { background: "#EDE4F7", color: "#5B21B6" },
+];
+
+export function avatarTint(name: string): { background: string; color: string } {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return TINTS[Math.abs(hash) % TINTS.length]!;
+}
+
+/** Brand-coloured unread count (Gluon's CountBadge); pops in when it appears. */
+export function CountBadge({ count, size = "md", className }: { count: number; size?: "sm" | "md"; className?: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={cx(
+        "pop-in inline-flex shrink-0 items-center justify-center rounded-full bg-brand font-bold text-brand-foreground tabular-nums",
+        size === "sm" ? "h-[18px] min-w-[18px] px-[5px] text-[11px]" : "h-5 min-w-5 px-1.5 text-xs",
+        className,
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+/** The orange "h" mark that stands for Herald. */
+export function BrandMark({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        "flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand text-[15px] font-extrabold text-brand-foreground",
+        className,
+      )}
+    >
+      h
+    </span>
+  );
+}
+
+/** Single-select peach pill filters (Gluon's FilterChips). */
+export function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cx(
+        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition-colors",
+        active
+          ? "bg-chip font-semibold text-chip-foreground"
+          : "bg-zinc-100 font-medium text-secondary-label hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
+      )}
+    >
+      {children}
+    </button>
   );
 }

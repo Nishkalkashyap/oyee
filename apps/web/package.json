@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@herald/schema": "workspace:*",
     "@tanstack/react-query": "^5.105.0",
     "qrcode.react": "^4.2.0",
