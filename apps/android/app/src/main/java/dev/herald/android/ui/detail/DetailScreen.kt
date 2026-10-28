@@ -66,10 +66,24 @@ import coil3.compose.AsyncImage
 import dev.herald.android.model.Action
 import dev.herald.android.model.ActionStyle
 import dev.herald.android.model.Notification
+import dev.herald.android.ui.components.Composer
+import dev.herald.android.ui.components.InkProgress
 import dev.herald.android.ui.components.MarkdownText
-import dev.herald.android.ui.components.SeverityBadge
-import dev.herald.android.ui.components.severityColor
-import dev.herald.android.ui.components.severityLabel
+import dev.herald.android.ui.components.PillButton
+import dev.herald.android.ui.components.PillVariant
+import dev.herald.android.ui.components.SeverityPill
+import dev.herald.android.ui.components.SourceAvatar
+import dev.herald.android.ui.components.SystemLine
+import dev.herald.android.ui.theme.Herald
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import dev.herald.android.util.Formatting
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +92,7 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by remember { mutableStateOf(false) }
+    val c = Herald.colors
 
     LaunchedEffect(state.toast) {
         state.toast?.let { snackbar.showSnackbar(it); vm.consumeToast() }
@@ -86,30 +101,64 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
 
     val n = state.notification
     Scaffold(
+        containerColor = c.thread,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text(n?.source ?: "") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-                },
-                actions = {
+            // Header: back, who sent it and where it went, resolve / delete.
+            Column(Modifier.background(c.background).statusBarsPadding()) {
+                Row(Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.secondaryLabel) }
                     if (n != null) {
-                        if (!n.isRead) IconButton(onClick = vm::markRead, enabled = !state.busy) { Icon(Icons.Filled.Done, contentDescription = "Mark read") }
-                        if (!n.isResolved) IconButton(onClick = vm::resolve, enabled = !state.busy) { Icon(Icons.Filled.Check, contentDescription = "Resolve") }
-                        IconButton(onClick = { confirmDelete = true }, enabled = !state.busy) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
+                        SourceAvatar(n.source, size = 34.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(n.source, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1)
+                            Text(
+                                listOfNotNull(
+                                    n.targetDeviceIds?.let { if (it.size == 1) "Sent to 1 device" else "Sent to ${it.size} devices" } ?: "All devices",
+                                    n.threadId,
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.muted,
+                                maxLines = 1,
+                            )
+                        }
+                        if (!n.isResolved) {
+                            PillButton(onClick = vm::resolve, enabled = !state.busy, height = 32.dp) {
+                                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text("Resolve")
+                            }
+                        }
+                        IconButton(onClick = { confirmDelete = true }, enabled = !state.busy) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = c.secondaryLabel)
+                        }
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
-                },
-            )
+                }
+                HorizontalDivider(color = c.border)
+            }
+        },
+        bottomBar = {
+            n?.reply?.takeIf { !n.isResolved }?.let { reply ->
+                Composer(
+                    value = state.replyText,
+                    onValueChange = vm::onReplyText,
+                    placeholder = reply.placeholder ?: "Reply to ${n.source}…",
+                    onSend = vm::sendReply,
+                    enabled = !state.busy,
+                    modifier = Modifier.navigationBarsPadding().imePadding().padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
         },
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize().imePadding()) {
+        Box(Modifier.padding(padding).fillMaxSize()) {
             when {
-                n != null -> Card(n, state, vm)
-                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                n != null -> Conversation(n, state, vm)
+                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.brand)
                 else -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.error ?: "Not found", color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = vm::load) { Text("Retry") }
+                    Text(state.error ?: "Not found", color = Color(0xFFDC2626))
+                    TextButton(onClick = vm::load) { Text("Retry", color = c.foreground) }
                 }
             }
         }
@@ -120,151 +169,126 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete notification?") },
             text = { Text("It's removed from every device.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete() }) { Text("Delete", color = Color(0xFFDC2626)) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = c.foreground) } },
+            containerColor = c.background,
         )
     }
 }
 
+/** The agent's card as a bubble, quiet update lines, and your answers as peach bubbles on the right. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Card(n: Notification, state: DetailUiState, vm: DetailViewModel) {
+private fun Conversation(n: Notification, state: DetailUiState, vm: DetailViewModel) {
     val context = LocalContext.current
+    val c = Herald.colors
     fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
-    val sevColor = severityColor(n.severity)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Header
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SeverityBadge(n.severity, n.icon, size = 48.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(n.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        SystemLine(Formatting.absolute(n.createdAt))
+        Column(
+            Modifier.padding(end = 28.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 22.dp, bottomStart = 6.dp))
+                .background(c.bubble).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SeverityPill(n.severity)
+                if (n.isResolved) {
+                    Box(Modifier.height(24.dp).clip(CircleShape).background(c.foreground).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                        Text("✓ Resolved", color = c.background, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                n.tags.forEach { tag ->
+                    Box(Modifier.height(24.dp).clip(CircleShape).background(c.secondary).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                        Text("#$tag", color = c.secondaryLabel, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Text(n.title, style = MaterialTheme.typography.titleLarge, color = c.foreground)
+            n.body?.takeIf { it.isNotBlank() }?.let {
+                MarkdownText(it, style = MaterialTheme.typography.bodyLarge.copy(color = c.secondaryLabel))
+            }
+            n.image?.let { img ->
+                AsyncImage(
+                    model = img,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(RoundedCornerShape(16.dp)),
+                )
+            }
+            if (n.fields.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    n.fields.forEach { f ->
+                        Row {
+                            Text(f.label, style = MaterialTheme.typography.bodyMedium, color = c.muted, modifier = Modifier.weight(0.38f))
+                            Text(f.value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.foreground, modifier = Modifier.weight(0.62f))
+                        }
+                    }
+                }
+            }
+            n.progress?.let { p ->
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    InkProgress(p)
+                    Text(Formatting.progressLabel(p), style = MaterialTheme.typography.bodySmall, color = c.muted)
+                }
+            }
+            n.url?.let { url ->
                 Text(
-                    listOfNotNull(severityLabel(n.severity), Formatting.absolute(n.createdAt), n.threadId?.let { "thread $it" }).joinToString(" · "),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = sevColor,
+                    "↗ ${url.toUri().host ?: url}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = c.foreground,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { open(url) },
+                )
+            }
+            if (n.actions.isNotEmpty() && !n.isResolved) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    n.actions.forEach { a ->
+                        PillButton(
+                            onClick = {
+                                if (a.url != null) {
+                                    open(a.url)
+                                    if (!n.isRead) vm.markRead()
+                                } else {
+                                    vm.respond(a.id, a.label)
+                                }
+                            },
+                            variant = when (a.style) {
+                                ActionStyle.PRIMARY -> PillVariant.Primary
+                                ActionStyle.DESTRUCTIVE -> PillVariant.Destructive
+                                ActionStyle.DEFAULT -> PillVariant.Secondary
+                            },
+                            enabled = !state.busy,
+                        ) { Text(if (a.url != null) "${a.label} ↗" else a.label) }
+                    }
+                }
+            }
+        }
+        if (n.version > 1 && n.updatedAt != n.createdAt) SystemLine("Updated ${Formatting.relative(n.updatedAt)} · v${n.version}")
+        n.responses.forEach { r ->
+            val label = r.actionId?.let { aid -> n.actions.firstOrNull { it.id == aid }?.label ?: aid }
+            Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End) {
+                Text(
+                    listOfNotNull(label, r.text).joinToString(" · "),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (r.text == null) FontWeight.SemiBold else FontWeight.Normal,
+                    color = c.foreground,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 6.dp, bottomStart = 22.dp))
+                        .background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    listOfNotNull(r.deviceName, Formatting.relative(r.at)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.muted,
                 )
             }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(onClick = {}, label = { Text(if (n.isResolved) "Resolved" else "Active") })
-            if (!n.isRead) AssistChip(onClick = {}, label = { Text("Unread") })
-            n.tags.forEach { AssistChip(onClick = {}, label = { Text("#$it") }) }
-        }
-
-        n.image?.let { img ->
-            AsyncImage(
-                model = img,
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp)),
-            )
-        }
-
-        n.body?.takeIf { it.isNotBlank() }?.let { MarkdownText(it, style = MaterialTheme.typography.bodyLarge) }
-
-        n.progress?.let { p ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (p.indeterminate) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = sevColor)
-                } else {
-                    LinearProgressIndicator(
-                        progress = { if (p.max > 0) (p.value / p.max).toFloat().coerceIn(0f, 1f) else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = sevColor,
-                    )
-                }
-                Text(Formatting.progressLabel(p), style = MaterialTheme.typography.labelMedium)
-            }
-        }
-
-        if (n.fields.isNotEmpty()) {
-            Column {
-                n.fields.forEachIndexed { i, f ->
-                    if (i > 0) HorizontalDivider()
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        Text(f.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.4f))
-                        Text(f.value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.6f))
-                    }
-                }
-            }
-        }
-
-        n.url?.let { url -> OutlinedButton(onClick = { open(url) }) { Text("Open link") } }
-
-        if (n.actions.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                n.actions.forEach { a -> ActionButton(a, enabled = !state.busy && (a.url != null || !n.isResolved)) {
-                    if (a.url != null) {
-                        open(a.url)
-                        if (!n.isRead) vm.markRead()
-                    } else {
-                        vm.respond(a.id, a.label)
-                    }
-                } }
-            }
-        }
-
-        n.reply?.takeIf { !n.isResolved }?.let { reply ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = state.replyText,
-                    onValueChange = vm::onReplyText,
-                    placeholder = { Text(reply.placeholder ?: "Reply…") },
-                    modifier = Modifier.weight(1f),
-                    enabled = !state.busy,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { vm.sendReply() }),
-                )
-                Spacer(Modifier.width(8.dp))
-                if (reply.buttonLabel != null) {
-                    Button(onClick = vm::sendReply, enabled = !state.busy && state.replyText.isNotBlank()) { Text(reply.buttonLabel) }
-                } else {
-                    IconButton(onClick = vm::sendReply, enabled = !state.busy && state.replyText.isNotBlank()) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-                    }
-                }
-            }
-        }
-
-        if (n.responses.isNotEmpty()) {
-            Text("Responses", style = MaterialTheme.typography.titleSmall)
-            n.responses.asReversed().forEach { r ->
-                val what = buildList {
-                    r.actionId?.let { aid -> add(n.actions.firstOrNull { it.id == aid }?.label ?: aid) }
-                    r.text?.let { add("“$it”") }
-                }.joinToString(" · ")
-                Column {
-                    Text(what, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        listOfNotNull(r.deviceName, Formatting.absolute(r.at)).joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        n.resolvedAt?.let {
-            Text("Resolved ${Formatting.absolute(it)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun ActionButton(a: Action, enabled: Boolean, onClick: () -> Unit) {
-    val label = if (a.url != null) "${a.label} ↗" else a.label
-    when (a.style) {
-        ActionStyle.PRIMARY -> Button(onClick = onClick, enabled = enabled) { Text(label) }
-        ActionStyle.DESTRUCTIVE -> Button(
-            onClick = onClick,
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-        ) { Text(label) }
-        ActionStyle.DEFAULT -> FilledTonalButton(onClick = onClick, enabled = enabled) { Text(label) }
+        n.resolvedAt?.let { SystemLine("✓ Resolved ${Formatting.relative(it)}") }
     }
 }

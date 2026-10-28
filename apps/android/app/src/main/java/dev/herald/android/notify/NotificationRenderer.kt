@@ -116,7 +116,8 @@ class NotificationRenderer(private val context: Context, private val images: Ima
             Log.i(TAG, "Notifications not permitted; skipping ${n.id}")
             return
         }
-        val color = severityColor(n.severity)
+        // The shade tints Herald's icon, progress and buttons with the brand orange (severity shows in the app).
+        val color = context.getColor(R.color.brand)
         val body = n.body?.takeIf { it.isNotBlank() }
         val progress = n.progress
         val fieldLines = n.fields
@@ -268,7 +269,7 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         children.take(6).forEach { style.addLine(it.title) }
         val summary = NotificationCompat.Builder(context, top.channelId)
             .setSmallIcon(R.drawable.ic_stat_herald)
-            .setColor(severityColor(top))
+            .setColor(context.getColor(R.color.brand))
             .setContentTitle(source.ifBlank { context.getString(R.string.app_name) })
             .setContentText(context.resources.getQuantityString(R.plurals.group_summary_title, children.size, children.size))
             .setSubText(source.ifBlank { null })

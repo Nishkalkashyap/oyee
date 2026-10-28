@@ -57,9 +57,14 @@ import dev.herald.android.model.Notification
 import dev.herald.android.model.NotificationStatus
 import dev.herald.android.model.Severity
 import dev.herald.android.transport.SocketClient
-import dev.herald.android.ui.components.SeverityBadge
-import dev.herald.android.ui.components.severityColor
-import dev.herald.android.ui.components.severityLabel
+import dev.herald.android.ui.components.FilterPill
+import dev.herald.android.ui.components.InkProgress
+import dev.herald.android.ui.components.SourceAvatar
+import dev.herald.android.ui.theme.Herald
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import dev.herald.android.util.Formatting
 import dev.herald.android.util.Markdown
 
@@ -67,6 +72,7 @@ import dev.herald.android.util.Markdown
 @Composable
 fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val c = Herald.colors
     val listState = rememberLazyListState()
     val nearEnd by remember {
         derivedStateOf {
@@ -75,41 +81,44 @@ fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> 
         }
     }
     LaunchedEffect(nearEnd, state.nextCursor) { if (nearEnd && state.nextCursor != null) vm.loadMore() }
+    val unread = state.items.count { !it.isRead && !it.isResolved }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Inbox")
-                        ConnectionLabel(state.connection)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = vm::markAllRead) { Icon(Icons.Filled.Done, contentDescription = "Mark all read") }
-                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
-                },
-            )
-        },
-    ) { padding ->
+    Scaffold(containerColor = c.background) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
+            // Gluon's mobile header: large bold title, live state, and a round button that opens Settings.
+            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("Inbox", style = MaterialTheme.typography.headlineLarge, color = c.foreground)
+                        if (unread > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Text("$unread unread", style = MaterialTheme.typography.labelMedium, color = c.brand, modifier = Modifier.padding(bottom = 6.dp))
+                        }
+                    }
+                    ConnectionLabel(state.connection)
+                }
+                IconButton(onClick = vm::markAllRead, enabled = unread > 0) {
+                    Icon(Icons.Filled.Done, contentDescription = "Mark all read", tint = if (unread > 0) c.secondaryLabel else c.faint)
+                }
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(c.secondary).clickable(onClick = onSettings),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = c.secondaryLabel, modifier = Modifier.size(20.dp)) }
+            }
             FilterBar(state, vm::setFilters)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
                 when {
                     state.loading && state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = c.brand)
                     }
                     state.items.isEmpty() -> EmptyState(state)
-                    else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
                         state.error?.let { err -> item { ErrorRow(err, vm::refresh) } }
-                        items(state.items, key = { it.id }) { n ->
-                            InboxRow(n, onClick = { onOpen(n.id) })
-                            HorizontalDivider()
-                        }
+                        items(state.items, key = { it.id }) { n -> InboxRow(n, onClick = { onOpen(n.id) }) }
                         if (state.loadingMore) {
                             item {
                                 Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(Modifier.size(24.dp))
+                                    CircularProgressIndicator(Modifier.size(24.dp), color = c.brand)
                                 }
                             }
                         }
@@ -124,15 +133,15 @@ fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> 
 private fun ConnectionLabel(s: SocketClient.State) {
     val (text, color) = when (s) {
         SocketClient.State.CONNECTED -> "Live" to Color(0xFF16A34A)
-        SocketClient.State.CONNECTING -> "Connecting…" to MaterialTheme.colorScheme.onSurfaceVariant
-        SocketClient.State.BACKING_OFF -> "Reconnecting…" to Color(0xFFF59E0B)
-        SocketClient.State.WAITING_FOR_NETWORK -> "Offline" to MaterialTheme.colorScheme.error
-        SocketClient.State.IDLE -> "Not connected" to MaterialTheme.colorScheme.onSurfaceVariant
+        SocketClient.State.CONNECTING -> "Connecting…" to Herald.colors.muted
+        SocketClient.State.BACKING_OFF -> "Reconnecting…" to Color(0xFFD97706)
+        SocketClient.State.WAITING_FOR_NETWORK -> "Offline" to Color(0xFFDC2626)
+        SocketClient.State.IDLE -> "Push only" to Herald.colors.muted
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(color, CircleShape))
+        Box(Modifier.size(7.dp).background(color, CircleShape))
         Spacer(Modifier.width(6.dp))
-        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = color)
     }
 }
 
@@ -140,109 +149,78 @@ private fun ConnectionLabel(s: SocketClient.State) {
 private fun FilterBar(state: InboxUiState, onChange: (InboxFilters) -> Unit) {
     val f = state.filters
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        DropdownChip(
-            label = when (f.status) { null -> "All"; NotificationStatus.ACTIVE -> "Active"; NotificationStatus.RESOLVED -> "Resolved" },
-            selected = f.status != null,
-            options = listOf("All" to null, "Active" to NotificationStatus.ACTIVE, "Resolved" to NotificationStatus.RESOLVED),
-            onSelect = { onChange(f.copy(status = it)) },
-        )
-        DropdownChip(
-            label = f.severity?.let(::severityLabel) ?: "Severity",
-            selected = f.severity != null,
-            options = listOf<Pair<String, Severity?>>("Any severity" to null) + Severity.entries.reversed().map { severityLabel(it) to it },
-            onSelect = { onChange(f.copy(severity = it)) },
-        )
-        DropdownChip(
-            label = f.source ?: "Source",
-            selected = f.source != null,
-            options = listOf<Pair<String, String?>>("Any source" to null) +
-                state.sources.map { s -> (if (s.unread > 0) "${s.source} (${s.unread})" else s.source) to s.source },
-            onSelect = { onChange(f.copy(source = it)) },
-        )
-    }
-}
-
-@Composable
-private fun <T> DropdownChip(label: String, selected: Boolean, options: List<Pair<String, T>>, onSelect: (T) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        FilterChip(
-            selected = selected,
-            onClick = { open = true },
-            label = { Text(label, maxLines = 1) },
-            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-        )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            options.forEach { (text, value) ->
-                DropdownMenuItem(text = { Text(text) }, onClick = { open = false; onSelect(value) })
-            }
+        FilterPill("All", selected = !f.isActive) { onChange(InboxFilters()) }
+        FilterPill("Active", selected = f.status == NotificationStatus.ACTIVE) {
+            onChange(f.copy(status = if (f.status == NotificationStatus.ACTIVE) null else NotificationStatus.ACTIVE))
+        }
+        FilterPill("Resolved", selected = f.status == NotificationStatus.RESOLVED) {
+            onChange(f.copy(status = if (f.status == NotificationStatus.RESOLVED) null else NotificationStatus.RESOLVED))
+        }
+        state.sources.forEach { s ->
+            FilterPill(s.source, selected = f.source == s.source) { onChange(f.copy(source = if (f.source == s.source) null else s.source)) }
         }
     }
 }
 
+/** Gluon's list row: tinted source avatar with a severity dot, title, time (orange while unread), preview. */
 @Composable
 private fun InboxRow(n: Notification, onClick: () -> Unit) {
+    val c = Herald.colors
     val unread = !n.isRead && !n.isResolved
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(if (unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else Color.Transparent)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .alpha(if (n.isResolved) 0.6f else 1f),
-        verticalAlignment = Alignment.Top,
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        SeverityBadge(n.severity, n.icon)
+        SourceAvatar(n.source, size = 46.dp, severity = n.severity)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     n.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (n.isResolved && n.isRead) c.muted else c.foreground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(Formatting.relative(n.createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (unread) {
-                    Spacer(Modifier.width(6.dp))
-                    Box(Modifier.size(8.dp).background(severityColor(n.severity), CircleShape))
-                }
-            }
-            n.body?.takeIf { it.isNotBlank() }?.let {
                 Text(
-                    Markdown.toPlainText(it),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    Formatting.relative(n.createdAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (unread) c.brand else c.muted,
                 )
             }
-            n.progress?.let { p ->
-                Spacer(Modifier.height(6.dp))
-                if (p.indeterminate) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = severityColor(n.severity))
-                } else {
-                    LinearProgressIndicator(
-                        progress = { if (p.max > 0) (p.value / p.max).toFloat().coerceIn(0f, 1f) else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = severityColor(n.severity),
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val preview = n.body?.takeIf { it.isNotBlank() }?.let { Markdown.toPlainText(it).replace('\n', ' ') }
+                Text(
+                    if (preview != null) "${n.source} · $preview" else n.source,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (unread) c.secondaryLabel else c.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (n.responses.isNotEmpty()) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("↩ ${n.responses.size}", style = MaterialTheme.typography.labelSmall, color = c.muted)
                 }
-                Text(Formatting.progressLabel(p), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (n.isResolved) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Done, contentDescription = "Resolved", tint = Color(0xFF16A34A), modifier = Modifier.size(15.dp))
+                }
+                if (unread) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.size(9.dp).background(c.brand, CircleShape))
+                }
             }
-            Spacer(Modifier.height(2.dp))
-            val meta = buildList {
-                if (n.source.isNotBlank()) add(n.source)
-                if (n.isResolved) add("resolved")
-                if (n.actions.isNotEmpty() || n.reply != null) if (n.responses.isEmpty() && !n.isResolved) add("awaiting response")
-            }.joinToString(" · ")
-            Text(meta, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            n.progress?.takeIf { !n.isResolved }?.let { p ->
+                Spacer(Modifier.height(8.dp))
+                InkProgress(p, height = 4.dp)
+            }
         }
     }
 }
@@ -250,34 +228,42 @@ private fun InboxRow(n: Notification, onClick: () -> Unit) {
 @Composable
 private fun ErrorRow(error: String, onRetry: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(16.dp))
+            .background(Color(0x1FDC2626)).padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(error, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = onRetry) { Text("Retry") }
+        Text(error, color = Color(0xFFB91C1C), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = onRetry) { Text("Retry", color = Herald.colors.foreground) }
     }
 }
 
 @Composable
 private fun EmptyState(state: InboxUiState) {
+    val c = Herald.colors
     // Inside PullToRefreshBox the content must be scrollable for the gesture to work.
     LazyColumn(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         item {
             Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(Modifier.height(64.dp))
+                Spacer(Modifier.height(72.dp))
+                Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(c.chip), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Done, contentDescription = null, tint = c.chipForeground)
+                }
+                Spacer(Modifier.height(14.dp))
                 Text(
                     when {
                         state.error != null -> "Couldn't load notifications"
                         state.filters.isActive -> "Nothing matches these filters"
                         else -> "No notifications yet"
                     },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = c.foreground,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     state.error ?: "Send one with a webhook or an MCP tool and it shows up here instantly.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = c.muted,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

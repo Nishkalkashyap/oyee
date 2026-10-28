@@ -25,11 +25,11 @@ import dev.herald.android.model.Severity
 import dev.herald.android.util.Formatting
 
 fun severityColor(s: Severity): Color = when (s) {
-    Severity.CRITICAL -> Color(0xFFD32F2F)
-    Severity.WARNING -> Color(0xFFF59E0B)
-    Severity.INFO -> Color(0xFF2563EB)
+    Severity.CRITICAL -> Color(0xFFDC2626)
+    Severity.WARNING -> Color(0xFFD97706)
+    Severity.INFO -> Color(0xFF3B82F6)
     Severity.SUCCESS -> Color(0xFF16A34A)
-    Severity.DEBUG -> Color(0xFF6B7280)
+    Severity.DEBUG -> Color(0xFFA8A39A)
 }
 
 fun severityIcon(s: Severity): ImageVector = when (s) {

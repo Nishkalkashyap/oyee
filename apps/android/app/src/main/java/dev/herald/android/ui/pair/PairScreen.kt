@@ -32,34 +32,55 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.herald.android.ui.components.BrandMark
+import dev.herald.android.ui.components.PillButton
+import dev.herald.android.ui.components.PillVariant
+import dev.herald.android.ui.theme.Herald
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun PairScreen(vm: PairViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
-    Scaffold { padding ->
+    val c = Herald.colors
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = c.secondary,
+        unfocusedContainerColor = c.secondary,
+        disabledContainerColor = c.secondary,
+        focusedBorderColor = c.brand,
+        unfocusedBorderColor = Color.Transparent,
+        cursorColor = c.brand,
+        focusedLabelColor = c.brand,
+    )
+    Scaffold(containerColor = c.background) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Spacer(Modifier.height(32.dp))
-            Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Pair with Herald", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(20.dp))
+            BrandMark(size = 56.dp)
+            Text("Pair this phone", style = MaterialTheme.typography.headlineLarge, color = c.foreground, modifier = Modifier.padding(top = 8.dp))
             Text(
-                "In the Herald web app, open Devices → Pair a device, then enter the code shown there (or scan the QR code with your camera).",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "On the web, open Devices → Pair a device and enter the code shown there, or scan its QR code with your camera.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = c.muted,
             )
             if (state.fromLink) {
                 Text(
                     "Opened from a pairing link. Check the server below before pairing.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = c.chipForeground,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }
             OutlinedTextField(
@@ -68,6 +89,8 @@ fun PairScreen(vm: PairViewModel) {
                 label = { Text("Server URL") },
                 singleLine = true,
                 enabled = !state.busy,
+                shape = RoundedCornerShape(16.dp),
+                colors = fieldColors,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -78,7 +101,9 @@ fun PairScreen(vm: PairViewModel) {
                 placeholder = { Text("XXXX-XXXX") },
                 singleLine = true,
                 enabled = !state.busy,
-                textStyle = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace),
+                shape = RoundedCornerShape(16.dp),
+                colors = fieldColors,
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace, letterSpacing = 3.sp),
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Characters,
                     keyboardType = KeyboardType.Ascii,
@@ -88,12 +113,13 @@ fun PairScreen(vm: PairViewModel) {
                 keyboardActions = KeyboardActions(onDone = { vm.pair() }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-            Button(onClick = vm::pair, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            state.error?.let { Text(it, color = Color(0xFFDC2626), style = MaterialTheme.typography.bodyMedium) }
+            Spacer(Modifier.height(4.dp))
+            PillButton(onClick = vm::pair, variant = PillVariant.Brand, enabled = !state.busy, height = 50.dp, modifier = Modifier.fillMaxWidth()) {
                 if (state.busy) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = c.brandForeground)
                 } else {
-                    Text("Pair this device")
+                    Text("Pair this device", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
