@@ -193,7 +193,10 @@ herald/
 
 ## 8. Build & distribution
 
-- Web/server: `pnpm install && pnpm build && pnpm --filter @herald/server deploy` (wrangler). The hosted instance is maintained by us.
+**Step-by-step setup for all three tested platforms (Cloudflare, Google OAuth, Firebase, web, Android, macOS):
+[docs/setup.md](docs/setup.md).**
+
+- Web/server: `pnpm install && pnpm deploy` (builds the web app, applies D1 migrations, deploys the worker). Secrets live in Cloudflare and persist across deploys.
 - Android: `cd apps/android && ./gradlew assembleDebug` → sideload `app-debug.apk`. No Play Store.
 - macOS: `apps/apple/scripts/build-macos-app.sh` → `Herald.app` (ad-hoc signed). No notarization.
 - iOS: `cd apps/apple && xcodegen && open Herald.xcodeproj` → run on device with your own (free or paid) team.

@@ -12,6 +12,8 @@ sync across devices.
 
 Free and open source (MIT). See [PLAN.md](PLAN.md) for the product plan and [docs/protocol.md](docs/protocol.md) for the API contract.
 
+**Set it up:** [docs/setup.md](docs/setup.md) (Cloudflare, Google sign-in, Firebase, web, Android, macOS).
+
 ## Quick start
 
 ```bash
