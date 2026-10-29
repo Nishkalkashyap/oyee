@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.5
+- Update check demo: from 0.2.4, Android downloads this release in the app (download manager) instead of the browser.
+
 ## 0.2.4
 - Android: Update downloads the APK with Android's download manager instead of the browser (Brave could stall at
   100%). The banner shows progress, then **Install** opens Downloads; or tap the "Download complete" notification.
