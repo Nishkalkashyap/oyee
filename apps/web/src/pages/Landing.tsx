@@ -400,22 +400,24 @@ const INTEGRATIONS: { icon: BrandIconName; name: string; how: string }[] = [
 
 function Integrations() {
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {INTEGRATIONS.map((i) => {
         const { hex } = BRAND_ICONS[i.icon];
         return (
           <li
             key={i.name}
-            className="group flex flex-col rounded-[20px] bg-background p-4 transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-20px_rgba(28,27,25,0.35)] sm:p-5"
+            className="group flex flex-col rounded-[20px] bg-background p-4 transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-20px_rgba(28,27,25,0.35)] sm:flex-row sm:items-center sm:gap-4 sm:p-5 lg:flex-col lg:items-start lg:gap-0"
           >
             <span
-              className="flex size-11 items-center justify-center rounded-[14px] bg-zinc-100 dark:bg-zinc-800"
+              className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-zinc-100 dark:bg-zinc-800"
               style={isInk(hex) ? undefined : { backgroundColor: `color-mix(in oklab, ${hex} 13%, transparent)` }}
             >
               <BrandIcon name={i.icon} size={22} />
             </span>
-            <span className="mt-4 text-[15px] font-bold tracking-[-0.01em]">{i.name}</span>
-            <span className="mt-0.5 text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">{i.how}</span>
+            <span className="mt-4 flex min-w-0 flex-col sm:mt-0 lg:mt-4">
+              <span className="text-[15px] font-bold tracking-[-0.01em]">{i.name}</span>
+              <span className="mt-0.5 text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">{i.how}</span>
+            </span>
           </li>
         );
       })}
