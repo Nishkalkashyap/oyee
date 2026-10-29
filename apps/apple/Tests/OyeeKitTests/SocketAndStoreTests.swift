@@ -263,6 +263,28 @@ struct InboxStoreTests {
         #expect(store.lastError != nil)
     }
 
+    @Test func missingNotificationIsDroppedQuietly() async throws {
+        store.apply(.notificationCreated(make("gone")))
+        let (session, _) = StubURLProtocol.makeSession { _ in
+            (404, #"{"error":{"code":"not_found","message":"Notification gone not found"}}"#)
+        }
+        store.api = OyeeAPI(baseURL: URL(string: "https://oyee.test")!, token: "t", session: session)
+        await store.markRead("gone")
+        #expect(store.notification(id: "gone") == nil)
+        #expect(store.lastError == nil)
+    }
+
+    @Test func localTestNotificationsNeverReachTheServer() async throws {
+        let (session, id) = StubURLProtocol.makeSession { _ in (500, "") }
+        store.api = OyeeAPI(baseURL: URL(string: "https://oyee.test")!, token: "t", session: session)
+        let testID = OyeeNotification.makeLocalTestID()
+        await store.markRead(testID)
+        await store.resolve(testID)
+        await store.respond(id: testID, actionId: "ack", text: nil)
+        #expect(StubURLProtocol.requests(id).isEmpty)
+        #expect(store.lastError == nil)
+    }
+
     @Test func cacheRoundTrip() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("oyee-test-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

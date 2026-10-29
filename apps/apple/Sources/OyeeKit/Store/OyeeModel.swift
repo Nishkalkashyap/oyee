@@ -239,6 +239,11 @@ public final class OyeeModel {
     }
 
     func handleNotificationResponse(_ info: NotificationResponseInfo) async {
+        // The local test notification only exists on this device: open the inbox, never call the server.
+        if OyeeNotification.isLocalTest(id: info.notificationId) {
+            if case .open = info.kind { requestInbox() }
+            return
+        }
         switch info.kind {
         case .open:
             if let url = info.url {

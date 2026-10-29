@@ -354,6 +354,20 @@ public final class InboxStore {
         return applyChanges(collected, deletedIds: [], postNew: true)
     }
 
+    private func isNotFound(_ error: Error) -> Bool { (error as? OyeeAPIError)?.status == 404 }
+
+    /// Like `handle(_:)`, for an action on one notification. A 404 means it's gone (deleted on another device, or
+    /// never on the server): drop the local copy quietly instead of showing an error that never clears.
+    private func handle(_ error: Error, id: String) {
+        if isNotFound(error) {
+            removeLocal(id)
+            sink?.remove(ids: [id])
+            scheduleSave()
+            return
+        }
+        handle(error)
+    }
+
     private func handle(_ error: Error) {
         if let apiError = error as? OyeeAPIError, apiError.isUnauthorized {
             onUnauthorized()
@@ -379,17 +393,17 @@ public final class InboxStore {
     }
 
     public func respond(id: String, actionId: String?, text: String?) async {
-        guard let api else { return }
+        guard let api, !OyeeNotification.isLocalTest(id: id) else { return }
         do {
             let updated = try await api.respond(id: id, actionId: actionId, text: text)
             accept(updated)
         } catch {
-            handle(error)
+            handle(error, id: id)
         }
     }
 
     public func markRead(_ id: String) async {
-        guard let api else { return }
+        guard let api, !OyeeNotification.isLocalTest(id: id) else { return }
         if var local = byId[id], local.readAt == nil {
             local.readAt = Date()
             byId[id] = local
@@ -399,12 +413,12 @@ public final class InboxStore {
         do {
             accept(try await api.markRead(id: id))
         } catch {
-            handle(error)
+            handle(error, id: id)
         }
     }
 
     public func resolve(_ id: String) async {
-        guard let api else { return }
+        guard let api, !OyeeNotification.isLocalTest(id: id) else { return }
         // Optimistic: the row leaves the menu bar / Active list right away; restored if the request fails.
         let backup = byId[id]
         if var local = backup, local.status == .active {
@@ -417,8 +431,8 @@ public final class InboxStore {
         do {
             accept(try await api.resolve(id: id))
         } catch {
-            if let backup, byId[id]?.version == backup.version { byId[id] = backup; rebuild() }
-            handle(error)
+            if !isNotFound(error), let backup, byId[id]?.version == backup.version { byId[id] = backup; rebuild() }
+            handle(error, id: id)
         }
     }
 

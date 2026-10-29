@@ -378,6 +378,11 @@ public struct OyeeNotification: Codable, Sendable, Hashable, Identifiable {
 
     public var isRead: Bool { readAt != nil }
     public var isResolved: Bool { status == .resolved }
+
+    /// Ids of local test notifications (Settings → Test notification). The server never sees them.
+    static let localTestPrefix = "test-"
+    public static func isLocalTest(id: String) -> Bool { id.hasPrefix(localTestPrefix) }
+    public static func makeLocalTestID() -> String { localTestPrefix + UUID().uuidString }
     /// Whether a system notification for this card should still be visible.
     public var wantsSystemNotification: Bool { !isRead && !isResolved }
 

@@ -174,7 +174,7 @@ public final class NotificationPresenter: NSObject, NotificationSink, UNUserNoti
     /// Posts a local test notification (no server involved).
     public func sendTestNotification() {
         let sample = OyeeNotification(
-            id: "test-\(UUID().uuidString)", source: "oyee", title: "Oyee test notification",
+            id: OyeeNotification.makeLocalTestID(), source: "oyee", title: "Oyee test notification",
             body: "Notifications are working.", severity: .success,
             fields: [Field(label: "Device", value: ProcessInfo.processInfo.hostName)])
         present(sample, alert: true)
