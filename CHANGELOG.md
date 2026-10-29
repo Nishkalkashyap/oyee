@@ -17,7 +17,7 @@
   **All** tabs (`?status=resolved` / `?status=all`), and an "All caught up" state once everything is resolved.
   Unread counts (`GET /api/sources`, badges) count only active notifications.
 
-## Next app release
+## 0.2.6
 - macOS and Android: the inbox opens on **Active**. Resolved notifications leave the default list and the macOS
   menu bar and move to a **Resolved** tab (**All** shows both); resolving everything leaves "All caught up".
 
