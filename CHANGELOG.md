@@ -21,7 +21,7 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## Next app release
+## 0.2.9
 - macOS: a ✓ on each menu-bar notification resolves it in one tap.
 - Android: notifications in the shade get a **✓ Resolve** button (when one of the 3 button slots is free), so you
   don't have to open them to dismiss them.
