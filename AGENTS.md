@@ -76,6 +76,6 @@ git tag vX.Y.Z && git push origin vX.Y.Z    # app release (full checklist: docs/
 
 ## Current state (2026-10-29)
 
-- Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.7**.
+- Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.8**.
 - Verified in production: web (Brave push), Android (Galaxy S23 Ultra), macOS (menu-bar app, self-update).
 - Open follow-ups: PLAN.md §10.
