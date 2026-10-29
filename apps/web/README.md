@@ -17,7 +17,7 @@ pnpm --filter @oyee/web dev
 
 Open the Vite URL (http://localhost:5173). Vite proxies `/api` (including the `/api/ws` WebSocket), `/auth`, `/hook`,
 `/mcp` and `/healthz` to `http://localhost:8787`. Set `OYEE_API=http://host:port` to point it somewhere else.
-With `DEV_LOGIN=true` on the server, the login page shows a dev email form.
+With `DEV_LOGIN=true` on the server, the landing page shows a dev email form under the sign-in button.
 
 Note: token URLs shown after "Create webhook / MCP server URL" use the server's `PUBLIC_URL` (e.g.
 `http://localhost:8787/hook/…`). That's the right URL for scripts. The UI itself keeps working through Vite.
@@ -56,7 +56,7 @@ src/
   lib/snippets.ts            Claude Code / Codex / JSON / curl / Home Assistant / Alertmanager / Grafana / GH Actions
   lib/composer.ts, card.ts   composer → SendNotificationInput, template rendering for previews
   components/                NotificationCard, PlatformPreviews, Layout, UI primitives
-  pages/                     Login, Connect, Inbox (+ detail), Devices, Templates, Send
+  pages/                     Landing (signed-out `/` and `/login`), Connect, Inbox (+ detail), Devices, Templates, Send
 public/sw.js                 service worker: push → showNotification / close, notificationclick → respond / read / open
 ```
 

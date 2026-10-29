@@ -6,7 +6,7 @@ import { useMe } from "./lib/queries";
 import { Layout, Logo, PageContainer } from "./components/Layout";
 import { LiveProvider } from "./components/LiveProvider";
 import { Button, EmptyState, Spinner, buttonClasses } from "./components/ui";
-import { LoginPage } from "./pages/Login";
+import { LandingPage, LoginPage } from "./pages/Landing";
 import { ConnectPage } from "./pages/Connect";
 import { InboxPage } from "./pages/Inbox";
 
@@ -43,6 +43,8 @@ function AuthGate() {
   const location = useLocation();
 
   if (me.error instanceof ApiError && me.error.isUnauthorized) {
+    // Signed-out visitors to the front page get the landing page; deep links go through /login and come back.
+    if (location.pathname === "/") return <LandingPage />;
     const redirect = location.pathname + location.search;
     return <Navigate to={`/login${redirect !== "/" ? `?redirect=${encodeURIComponent(redirect)}` : ""}`} replace />;
   }

@@ -15,8 +15,8 @@ import {
 } from "./Icons";
 import { Dialog, buttonClasses, cx } from "./ui";
 
-const REPO = "https://github.com/Nishkalkashyap/oyee";
-const LATEST = `${REPO}/releases/latest`;
+export const REPO = "https://github.com/Nishkalkashyap/oyee";
+export const LATEST = `${REPO}/releases/latest`;
 
 interface LatestRelease {
   version: string;
@@ -25,7 +25,7 @@ interface LatestRelease {
 }
 
 /** The newest GitHub release, for direct download links (falls back to the releases page). */
-function useLatestRelease(enabled: boolean) {
+export function useLatestRelease(enabled: boolean) {
   return useQuery({
     queryKey: ["github-latest-release"],
     enabled,
