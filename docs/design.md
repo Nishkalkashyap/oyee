@@ -3,7 +3,7 @@
 Oyee uses **Gluon's design language** (`~/Desktop/github-repos/gluon`, `packages/kit/styles/tokens.css`): a warm
 paper palette, white panels on a soft ground, near-black ink, pill buttons, light-blue selection, and **blue reserved for
 the brand mark, unread times and counts, and send buttons**. The three clients implement the same tokens and
-components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is orange. Avatar tints are unchanged.)
+components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is orange. The peach avatar tint became slate at the same time, so nothing stays orange.)
 
 | | Web | macOS | Android |
 |---|---|---|---|
@@ -31,7 +31,7 @@ components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is 
 Severity: critical `#dc2626`, warning `#d97706`, info `#3b82f6`, success `#16a34a`, debug faint. Severity appears only
 as a small dot on the source avatar and a soft pill on the card, never as a stripe or background.
 
-Avatars use six warm pastel tints with matching ink (`#FDE7D7/#9A3412`, `#D5F0EC/#0F5F57`, `#E2ECFB/#1E4E9A`,
+Avatars use six pastel tints with matching ink (`#E4E8EF/#334155`, `#D5F0EC/#0F5F57`, `#E2ECFB/#1E4E9A`,
 `#E3F2E1/#2F6B2A`, `#F9D3DE/#9D174D`, `#EDE4F7/#5B21B6`), picked by `hash = hash * 31 + codepoint` over the source name,
 so a source has the same color everywhere.
 

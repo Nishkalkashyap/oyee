@@ -27,9 +27,9 @@ public enum Theme {
     public static let rowSelected = dynamic(light: 0xECE9E3, dark: 0x35312D)
     public static let secondaryLabel = dynamic(light: 0x44403C, dark: 0xD6D0C6)
 
-    /// Warm pastel avatar fills with matching ink, picked by hashing the name (same palette and hash as the web app).
+    /// Pastel avatar fills with matching ink, picked by hashing the name (same palette and hash as the web app).
     static let tints: [(fill: UInt32, ink: UInt32)] = [
-        (0xFDE7D7, 0x9A3412), (0xD5F0EC, 0x0F5F57), (0xE2ECFB, 0x1E4E9A),
+        (0xE4E8EF, 0x334155), (0xD5F0EC, 0x0F5F57), (0xE2ECFB, 0x1E4E9A),
         (0xE3F2E1, 0x2F6B2A), (0xF9D3DE, 0x9D174D), (0xEDE4F7, 0x5B21B6),
     ]
 

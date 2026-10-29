@@ -18,6 +18,11 @@
   Unread counts (`GET /api/sources`, badges) count only active notifications.
 - New accent colour: Ocean blue replaces orange across the web app (brand mark, unread counts, send buttons,
   selected chips, your reply bubbles), the favicon and the installable web-app icons.
+- Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
+  such as your own account avatar, change colour).
+
+## Next app release
+- macOS and Android: the peach avatar tint is now slate, matching the web, so no orange is left.
 
 ## 0.2.7
 - New accent colour: Ocean blue replaces orange in the macOS and Android apps, including the app icon, the Android

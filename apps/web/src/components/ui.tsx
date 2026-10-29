@@ -340,9 +340,9 @@ export function Avatar({ name, src, size = 28, letters = 1 }: { name: string; sr
   );
 }
 
-// Gluon's warm pastel avatar fills with matching ink, picked by hashing the name.
+// Pastel avatar fills with matching ink, picked by hashing the name.
 const TINTS = [
-  { background: "#FDE7D7", color: "#9A3412" },
+  { background: "#E4E8EF", color: "#334155" },
   { background: "#D5F0EC", color: "#0F5F57" },
   { background: "#E2ECFB", color: "#1E4E9A" },
   { background: "#E3F2E1", color: "#2F6B2A" },

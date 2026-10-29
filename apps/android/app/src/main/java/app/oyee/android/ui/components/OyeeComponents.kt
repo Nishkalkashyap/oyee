@@ -52,9 +52,9 @@ import app.oyee.android.model.Progress
 import app.oyee.android.model.Severity
 import app.oyee.android.ui.theme.Oyee
 
-// Warm pastel avatar fills with matching ink, picked by hashing the name (same palette and hash as web and macOS).
+// Pastel avatar fills with matching ink, picked by hashing the name (same palette and hash as web and macOS).
 private val Tints = listOf(
-    Color(0xFFFDE7D7) to Color(0xFF9A3412),
+    Color(0xFFE4E8EF) to Color(0xFF334155),
     Color(0xFFD5F0EC) to Color(0xFF0F5F57),
     Color(0xFFE2ECFB) to Color(0xFF1E4E9A),
     Color(0xFFE3F2E1) to Color(0xFF2F6B2A),
