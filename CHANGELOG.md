@@ -21,7 +21,7 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## Next app release
+## 0.2.10
 - macOS: clicking the Settings test notification no longer shows "Notification test-… not found" in the inbox (it
   was sent to the server, which never had it). Acting on a notification that was deleted on another device now
   removes it quietly instead of leaving an error.
