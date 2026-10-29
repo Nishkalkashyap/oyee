@@ -137,6 +137,7 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /healthz` → `{ "ok": true }`
 - `GET /api/config` (no auth) → `{ "version": "0.1.0", "vapidPublicKey": "…" | null, "fcmEnabled": true, "devLogin": false }`
 - `GET /api/me` → `User` = `{ "id", "email", "name", "avatarUrl" }`
+- `GET /api/usage` → `{ "day": "2026-10-29", "resetsAt": "…", "items": [{ "kind": "send", "label", "used", "limit" }] }` (today's quotas, §3.1)
 
 ### Tokens (session only)
 - `GET /api/tokens` → `{ "items": TokenInfo[] }`. `TokenInfo` = `{ id, kind: "webhook"|"mcp", label, prefix: "oyee_wh_ab12", defaultSource, createdAt, lastUsedAt }`
@@ -176,6 +177,27 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `PUT /api/templates/:name` `{ "description"?, "card" }` → `Template` (session only, upsert)
 - `DELETE /api/templates/:name` → `204` (session only)
 - `POST /api/templates/:name/preview` `{ "vars": {} }` → rendered `SendNotificationInput` (session only)
+
+### 3.1 Limits
+Per account (all tokens, devices and the web app together). Daily limits reset at 00:00 UTC; per-minute limits use
+fixed one-minute windows. Over a limit the server answers `429 rate_limited` with a `Retry-After` header (seconds) and
+a message saying which limit was hit; MCP tools return the same message as a tool error. At 80% and 100% of the daily
+send, update and reply limits the inbox gets one notice (source `oyee`). Values live in `QUOTAS` / `LIMITS` in
+`packages/schema`.
+
+| Quota | Per day | Per minute | Counts |
+|---|---|---|---|
+| `send` | 1,000 | 120 (and 60 per webhook/MCP token) | new notifications, including `replaceKey` replacements |
+| `update` | 5,000 | — | update, resolve, read, read-all, delete |
+| `respond` | 1,000 | 30 | replies and action taps |
+| `read` | 20,000 | 300 | list, get, sources, templates, `wait_for_response`, WebSocket `sync` |
+| `pairing` | 20 | 5 | pairing codes |
+
+- At most 10 devices, 20 tokens and 100 templates per account (`409 conflict` beyond that).
+- Pushes for updates to one notification are coalesced to one per 2 s: the first goes out at once, the latest one
+  when the interval ends (with `alert` if any update in between asked for it). WebSocket clients get every update.
+- Per IP: 5 new accounts per day (existing users can always sign in), and after 30 failed token or pairing-code
+  attempts in a minute further failures get `429`.
 
 ---
 

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Principal } from "./auth/principal";
 import { findTokenBySecret } from "./db";
 import type { Env } from "./env";
+import { authFailure } from "./lib/abuse";
 import { ApiError, errorResponse, notFound, unauthorized } from "./lib/errors";
 import { handleMcpRequest } from "./mcp/server";
 import { api } from "./routes/api";
@@ -36,7 +37,7 @@ app.route("/hook", hook);
 async function mcp(c: import("hono").Context<AppEnv>, secret: string | null) {
   if (!secret) throw unauthorized("MCP token required: use /mcp/<token> or Authorization: Bearer <token>");
   const token = await findTokenBySecret(c.env.DB, secret, "mcp");
-  if (!token) throw unauthorized("Invalid or revoked MCP token");
+  if (!token) throw await authFailure(c, unauthorized("Invalid or revoked MCP token"));
   return handleMcpRequest(c.req.raw, c.env, token);
 }
 

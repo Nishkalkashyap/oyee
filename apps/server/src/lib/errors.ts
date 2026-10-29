@@ -16,10 +16,13 @@ const STATUS: Record<ErrorCode, number> = {
 export class ApiError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
-  constructor(code: ErrorCode, message: string) {
+  /** Seconds until the request may succeed (sent as `Retry-After` on 429s). */
+  readonly retryAfter?: number;
+  constructor(code: ErrorCode, message: string, retryAfter?: number) {
     super(message);
     this.code = code;
     this.status = STATUS[code];
+    this.retryAfter = retryAfter;
   }
 
   toJSON() {
@@ -35,9 +38,12 @@ export const badRequest = (m: string) => new ApiError("bad_request", m);
 export const unauthorized = (m = "Authentication required") => new ApiError("unauthorized", m);
 export const forbidden = (m = "Not allowed with this credential") => new ApiError("forbidden", m);
 export const notFound = (m = "Not found") => new ApiError("not_found", m);
+export const conflict = (m: string) => new ApiError("conflict", m);
+export const rateLimited = (m: string, retryAfter: number) => new ApiError("rate_limited", m, Math.max(1, Math.ceil(retryAfter)));
 
 export function errorResponse(err: ApiError): Response {
-  return Response.json(err.toJSON(), { status: err.status });
+  const headers = err.retryAfter ? { "Retry-After": String(err.retryAfter) } : undefined;
+  return Response.json(err.toJSON(), { status: err.status, headers });
 }
 
 /** Parses `data` with `schema`, throwing a `bad_request` ApiError with a readable message on failure. */
@@ -55,7 +61,9 @@ export function formatZodError(error: z.ZodError): string {
 }
 
 /** What InboxDO RPC methods return: expected errors travel as values (see `guard` in inbox/do.ts). */
-export type RpcResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode; message: string } };
+export type RpcResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: { code: ErrorCode; message: string; retryAfter?: number } };
 
 /** Unwraps an InboxDO RPC result, rethrowing expected failures as ApiErrors. */
 type OkValue<R> = R extends { ok: true; value: infer V } ? V : never;
@@ -63,5 +71,5 @@ type OkValue<R> = R extends { ok: true; value: infer V } ? V : never;
 export async function rpc<P extends PromiseLike<RpcResult<unknown>>>(p: P): Promise<OkValue<Awaited<P>>> {
   const r = (await p) as RpcResult<unknown>;
   if (r.ok) return r.value as OkValue<Awaited<P>>;
-  throw new ApiError(r.error.code, r.error.message);
+  throw new ApiError(r.error.code, r.error.message, r.error.retryAfter);
 }

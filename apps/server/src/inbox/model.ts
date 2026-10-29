@@ -17,7 +17,7 @@ export interface Actor {
   /** Device that performed the action (device token), if any. */
   deviceId: string | null;
   deviceName: string | null;
-  /** Webhook/MCP token used to send, if any (rate limit + callback signing). */
+  /** Webhook/MCP token used to send, if any (per-token rate limit + callback signing). */
   tokenId: string | null;
   /** Default `source` for sends: token label/defaultSource, "web" or the device name. */
   defaultSource: string;
@@ -26,8 +26,6 @@ export interface Actor {
 export interface SendOptions {
   /** Webhook rule: if no title, use the first body line (≤200 chars) or "Notification". */
   titleFallback?: boolean;
-  /** Apply the per-token rate limit (webhook/MCP). */
-  rateLimit?: boolean;
 }
 
 export type SendInput = SendNotificationInput;

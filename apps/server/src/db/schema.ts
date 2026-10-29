@@ -5,7 +5,7 @@
  * Change this file, then `pnpm --filter @oyee/server db:generate` to create a migration in `migrations/`.
  */
 import { sql } from "drizzle-orm";
-import { check, index, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { Platform, TokenKind } from "@oyee/schema";
 
 export const users = sqliteTable("users", {
@@ -94,6 +94,17 @@ export const oauthStates = sqliteTable("oauth_states", {
   createdAt: text("created_at").notNull(),
   expiresAt: text("expires_at").notNull(),
 });
+
+/** Per-IP counters (sign-ups per UTC day). `key` is an HMAC of the IP: raw addresses are never stored. */
+export const ipCounters = sqliteTable(
+  "ip_counters",
+  {
+    key: text("key").notNull(),
+    win: integer("win").notNull(), // UTC day number
+    count: integer("count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.key, t.win] })],
+);
 
 export type UserRow = typeof users.$inferSelect;
 export type TokenRow = typeof tokens.$inferSelect;

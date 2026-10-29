@@ -153,7 +153,9 @@ oyee/
 - Tokens are random and 32+ bytes, prefixed (`oyee_wh_`, `oyee_mcp_`, `oyee_dev_`), stored as SHA-256 hashes, shown in plaintext once, and revocable.
 - Scopes: session = everything; `mcp` = notification + template tools; `webhook` = send only; `device` = read/act on notifications, register its own push transport, open a WebSocket.
 - Optional `ALLOWED_EMAILS` allowlist so an instance can be private.
-- Per-token rate limit (default 60 sends/min) and payload size limits.
+- Per-account daily quotas (1,000 sends, 5,000 updates, 1,000 replies, 20,000 reads), per-minute bursts, 60 sends/min
+  per token, caps on devices/tokens/templates, coalesced update pushes, per-IP sign-up and failed-auth limits, and
+  payload size limits (docs/protocol.md §3.1).
 - Callback URLs are called server-side with a signed `X-Oyee-Signature` (HMAC-SHA256 with a per-token secret).
 - `DEV_LOGIN=true` enables a local-only login bypass for development and tests. It must never be enabled in production.
 

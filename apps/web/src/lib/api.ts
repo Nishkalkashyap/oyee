@@ -20,6 +20,7 @@ import type {
   TokenInfo,
   UpdateNotificationInput,
   UpsertTemplateInput,
+  Usage,
   User,
 } from "@oyee/schema";
 
@@ -130,6 +131,7 @@ export type ListParams = Partial<Omit<ListNotificationsQuery, "limit">> & { limi
 export const api = {
   config: () => request<ServerConfig>("GET", "/api/config"),
   me: () => request<User>("GET", "/api/me"),
+  usage: () => request<Usage>("GET", "/api/usage"),
   logout: () => request<unknown>("POST", "/auth/logout"),
 
   tokens: {

@@ -5,6 +5,8 @@ export interface Env {
   DB: D1Database;
   INBOX: DurableObjectNamespace<InboxDO>;
   ASSETS?: Fetcher;
+  /** Workers Rate Limiting binding for failed token / pairing-code attempts, keyed by client IP. */
+  AUTH_FAILURES?: RateLimit;
 
   PUBLIC_URL?: string;
   GOOGLE_CLIENT_ID?: string;

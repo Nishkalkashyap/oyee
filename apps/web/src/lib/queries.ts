@@ -29,6 +29,7 @@ export const PAGE_SIZE = 30;
 export const qk = {
   config: ["config"] as const,
   me: ["me"] as const,
+  usage: ["usage"] as const,
   tokens: ["tokens"] as const,
   devices: ["devices"] as const,
   sources: ["sources"] as const,
@@ -93,6 +94,11 @@ export function useConfig() {
 
 export function useMe() {
   return useQuery({ queryKey: qk.me, queryFn: api.me, staleTime: 5 * 60_000, retry: false });
+}
+
+/** Today's quota usage; refetched each time it's shown (e.g. opening the account menu). */
+export function useUsage(enabled: boolean) {
+  return useQuery({ queryKey: qk.usage, queryFn: api.usage, enabled, staleTime: 0 });
 }
 
 // ─── Tokens ─────────────────────────────────────────────────────────────────

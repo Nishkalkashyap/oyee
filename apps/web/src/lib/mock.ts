@@ -3,6 +3,8 @@
  * without the backend. Loaded lazily; never part of the main bundle.
  */
 import {
+  QUOTAS,
+  QuotaKind,
   renderTemplateValue,
   type Device,
   type Notification,
@@ -382,6 +384,15 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
   if (p === "/api/me") {
     startDemo();
     return ok(user);
+  }
+  if (p === "/api/usage") {
+    const day = new Date().toISOString().slice(0, 10);
+    const used: Record<QuotaKind, number> = { send: 312, update: 1840, respond: 9, read: 2210, pairing: 1 };
+    return ok({
+      day,
+      resetsAt: new Date(Date.parse(day) + 86_400_000).toISOString(),
+      items: QuotaKind.options.map((kind) => ({ kind, label: QUOTAS[kind].label, used: used[kind], limit: QUOTAS[kind].perDay })),
+    });
   }
 
   // Tokens

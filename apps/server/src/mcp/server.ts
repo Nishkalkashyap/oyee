@@ -73,7 +73,7 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
         "`template` + `vars` to render a saved template.",
       inputSchema: SendNotificationInput,
     },
-    (input) => run(() => rpc(stub().send(actor, input, { rateLimit: true }))),
+    (input) => run(() => rpc(stub().send(actor, input))),
   );
 
   server.registerTool(
@@ -126,7 +126,7 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
           platforms: input.platforms,
         };
         if (!send.actions?.length && !send.reply) send.reply = { placeholder: "Reply…", buttonLabel: "Send" };
-        const n = await rpc(stub().send(actor, send, { rateLimit: true }));
+        const n = await rpc(stub().send(actor, send));
         return { id: n.id };
       }),
   );

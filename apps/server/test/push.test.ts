@@ -83,6 +83,33 @@ describe("Web Push fan-out", () => {
   });
 });
 
+describe("update coalescing", () => {
+  it("sends at most one push per notification per interval, keeping the latest update", async () => {
+    const cookie = await devLogin();
+    const ua = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
+    const p256dh = b64urlEncode((await crypto.subtle.exportKey("raw", ua.publicKey)) as ArrayBuffer);
+    const uaJwk = (await crypto.subtle.exportKey("jwk", ua.privateKey)) as JsonWebKey;
+    const auth = b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
+    const endpoint = `https://push.example.net/sub/${crypto.randomUUID()}`;
+    await call("POST", "/api/devices/web", { cookie }, { name: "Firefox", subscription: { endpoint, keys: { p256dh, auth } } });
+    const seen = intercept(["https://push.example.net/"], () => new Response(null, { status: 201 }));
+
+    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Deploy", progress: { value: 0 } });
+    await eventually(() => seen.length === 1);
+    for (const value of [0.25, 0.5, 0.75, 1]) {
+      await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { progress: { value }, alert: value === 0.5 });
+    }
+    await sleep(500);
+    expect(seen).toHaveLength(1); // still inside the interval after the "created" push
+    await eventually(() => seen.length === 2, 4000);
+    await sleep(300);
+    expect(seen).toHaveLength(2);
+    const last = JSON.parse(new TextDecoder().decode(await decryptPayload(seen[1]!.body, uaJwk, p256dh, auth)));
+    // Silent updates aren't pushed to browsers: this one went out because an update in the burst asked to alert.
+    expect(last).toMatchObject({ type: "notification.updated", notification: { progress: { value: 1 } } });
+  });
+});
+
 describe("FCM fan-out", () => {
   it("sends data-only messages with a service-account token and drops UNREGISTERED tokens", async () => {
     const cookie = await devLogin();

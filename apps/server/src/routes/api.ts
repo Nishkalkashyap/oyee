@@ -11,6 +11,7 @@ import {
   UpdateNotificationInput,
   UpdateSelfDeviceInput,
   UpsertTemplateInput,
+  LIMITS,
   type PairingCode,
   type ServerConfig,
 } from "@oyee/schema";
@@ -22,6 +23,8 @@ import {
   consumePairingCode,
   createPairedDevice,
   createPairingCode,
+  countDevices,
+  countTokens,
   createToken,
   deleteDevice,
   deleteToken,
@@ -32,9 +35,11 @@ import {
   toDevice,
   updateDevice,
   upsertWebDevice,
+  webDeviceExists,
 } from "../db";
 import { isDevLogin, publicUrl, SERVER_VERSION, type Env } from "../env";
-import { badRequest, notFound, parseOrThrow, rpc, unauthorized } from "../lib/errors";
+import { authFailure } from "../lib/abuse";
+import { badRequest, conflict, notFound, parseOrThrow, rpc, unauthorized } from "../lib/errors";
 import { readJson } from "../lib/http";
 import { formatPairingCode, newPairingCode, normalizePairingCode } from "../lib/ids";
 import { parseServiceAccount } from "../push/fcm";
@@ -58,12 +63,18 @@ api.get("/config", (c) => {
 api.post("/devices/pair", async (c) => {
   const input = await readJson(c, PairInput);
   const userId = await consumePairingCode(c.env.DB, normalizePairingCode(input.code));
-  if (!userId) throw badRequest("Invalid or expired pairing code");
-  const user = await getUser(c.env.DB, userId);
-  if (!user) throw badRequest("Invalid or expired pairing code");
+  const user = userId ? await getUser(c.env.DB, userId) : null;
+  if (!userId || !user) throw await authFailure(c, badRequest("Invalid or expired pairing code"));
+  await assertDeviceRoom(c.env, userId);
   const { device, token } = await createPairedDevice(c.env.DB, userId, { name: input.name, platform: input.platform });
   return c.json({ device: toDevice(device), token, user }, 201);
 });
+
+async function assertDeviceRoom(env: Env, userId: string) {
+  if ((await countDevices(env.DB, userId)) >= LIMITS.maxDevicesPerUser) {
+    throw conflict(`You can have at most ${LIMITS.maxDevicesPerUser} devices: remove one in Devices first`);
+  }
+}
 
 // ─── Authenticated ──────────────────────────────────────────────────────────
 
@@ -83,11 +94,16 @@ const principal = (c: { get(k: "principal"): Principal }) => c.get("principal");
 
 api.get("/me", (c) => c.json(principal(c).user));
 
+api.get("/usage", async (c) => c.json(await rpc(inbox(c.env, principal(c).user.id).usage())));
+
 // Tokens (session only)
 api.get("/tokens", sessionOnly, async (c) => c.json({ items: await listTokens(c.env.DB, principal(c).user.id) }));
 
 api.post("/tokens", sessionOnly, async (c) => {
   const input = await readJson(c, CreateTokenInput);
+  if ((await countTokens(c.env.DB, principal(c).user.id)) >= LIMITS.maxTokensPerUser) {
+    throw conflict(`You can have at most ${LIMITS.maxTokensPerUser} tokens: delete one first`);
+  }
   const { token, secret, callbackSecret } = await createToken(c.env.DB, principal(c).user.id, input);
   const base = publicUrl(c.env, c.req.raw);
   const url = input.kind === "webhook" ? `${base}/hook/${secret}` : `${base}/mcp/${secret}`;
@@ -103,6 +119,7 @@ api.delete("/tokens/:id", sessionOnly, async (c) => {
 // Devices
 api.post("/devices/pairing-codes", sessionOnly, async (c) => {
   const userId = principal(c).user.id;
+  await rpc(inbox(c.env, userId).useQuota("pairing"));
   let code = "";
   let expiresAt = "";
   for (let attempt = 0; ; attempt++) {
@@ -130,7 +147,9 @@ api.get("/devices", sessionOnly, async (c) => {
 
 api.post("/devices/web", sessionOnly, async (c) => {
   const input = await readJson(c, RegisterWebDeviceInput);
-  const row = await upsertWebDevice(c.env.DB, principal(c).user.id, input);
+  const userId = principal(c).user.id;
+  if (!(await webDeviceExists(c.env.DB, userId, input.subscription.endpoint))) await assertDeviceRoom(c.env, userId);
+  const row = await upsertWebDevice(c.env.DB, userId, input);
   return c.json(toDevice(row), 201);
 });
 

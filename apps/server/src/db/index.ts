@@ -1,11 +1,22 @@
-/** D1 data access via Drizzle: users, sessions, tokens, devices, pairing codes, OAuth states. */
-import { and, desc, eq, isNotNull, lt, ne, or } from "drizzle-orm";
+/** D1 data access via Drizzle: users, sessions, tokens, devices, pairing codes, OAuth states, per-IP counters. */
+import { and, count, desc, eq, isNotNull, lt, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Device, Platform, TokenInfo, TokenKind, Transport, User, WebPushSubscription } from "@oyee/schema";
 import { b64urlEncode, randomBytes, sha256Hex } from "../lib/encoding";
 import { newId, newSecret, secretPrefix } from "../lib/ids";
 import * as schema from "./schema";
-import { devices, oauthStates, pairingCodes, sessions, tokens, users, type DeviceRow, type TokenRow, type UserRow } from "./schema";
+import {
+  devices,
+  ipCounters,
+  oauthStates,
+  pairingCodes,
+  sessions,
+  tokens,
+  users,
+  type DeviceRow,
+  type TokenRow,
+  type UserRow,
+} from "./schema";
 
 export type { DeviceRow } from "./schema";
 
@@ -24,6 +35,11 @@ export const toUser = (r: Pick<UserRow, "id" | "email" | "name" | "avatarUrl">):
 export async function getUser(db: D1Database, id: string): Promise<User | null> {
   const r = await orm(db).select().from(users).where(eq(users.id, id)).get();
   return r ? toUser(r) : null;
+}
+
+export async function userExists(db: D1Database, email: string): Promise<boolean> {
+  const r = await orm(db).select({ id: users.id }).from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+  return r !== undefined;
 }
 
 /** Creates or updates a user by email (and Google `sub` when known). */
@@ -390,4 +406,37 @@ export async function consumeOAuthState(
   const r = await orm(db).delete(oauthStates).where(eq(oauthStates.state, state)).returning().get();
   if (!r || Date.parse(r.expiresAt) < Date.now()) return null;
   return { codeVerifier: r.codeVerifier, redirect: r.redirect };
+}
+
+// ─── Limits ─────────────────────────────────────────────────────────────────
+
+export async function countTokens(db: D1Database, userId: string): Promise<number> {
+  return (await orm(db).select({ n: count() }).from(tokens).where(eq(tokens.userId, userId)).get())?.n ?? 0;
+}
+
+export async function countDevices(db: D1Database, userId: string): Promise<number> {
+  return (await orm(db).select({ n: count() }).from(devices).where(eq(devices.userId, userId)).get())?.n ?? 0;
+}
+
+export async function webDeviceExists(db: D1Database, userId: string, endpoint: string): Promise<boolean> {
+  const r = await orm(db)
+    .select({ id: devices.id })
+    .from(devices)
+    .where(and(eq(devices.userId, userId), eq(devices.webPushEndpoint, endpoint)))
+    .get();
+  return r !== undefined;
+}
+
+/** Increments the counter for `key` in window `win` and returns the new count. Drops windows older than 2. */
+export async function bumpIpCounter(db: D1Database, key: string, win: number): Promise<number> {
+  const d = orm(db);
+  const [row] = await d.batch([
+    d
+      .insert(ipCounters)
+      .values({ key, win, count: 1 })
+      .onConflictDoUpdate({ target: [ipCounters.key, ipCounters.win], set: { count: sql`${ipCounters.count} + 1` } })
+      .returning({ count: ipCounters.count }),
+    d.delete(ipCounters).where(lt(ipCounters.win, win - 2)),
+  ]);
+  return row[0]?.count ?? 1;
 }

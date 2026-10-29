@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app";
 import { isDevLogin } from "../env";
 import { consumeOAuthState, createSession, deleteSession, saveOAuthState, upsertUser } from "../db";
+import { signupAllowed } from "../lib/abuse";
 import { b64urlDecodeString, b64urlEncode, randomBytes, timingSafeEqual, utf8 } from "../lib/encoding";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import {
@@ -121,6 +122,7 @@ authRoutes.get("/google/callback", async (c) => {
     return c.redirect(loginError("email_not_verified"), 302);
   }
   if (!emailAllowed(env.ALLOWED_EMAILS, claims.email)) return c.redirect(loginError("not_allowed"), 302);
+  if (!(await signupAllowed(c, claims.email))) return c.redirect(loginError("too_many_signups"), 302);
 
   const user = await upsertUser(env.DB, {
     email: claims.email,
@@ -137,6 +139,7 @@ authRoutes.get("/dev-login", async (c) => {
   const email = (c.req.query("email") ?? "dev@example.com").trim().toLowerCase();
   if (!z.string().email().safeParse(email).success) throw badRequest("email: invalid");
   if (!emailAllowed(c.env.ALLOWED_EMAILS, email)) throw forbidden("Email not allowed on this instance");
+  if (!(await signupAllowed(c, email))) throw forbidden("Too many new accounts from your network today");
   const user = await upsertUser(c.env.DB, { email, name: c.req.query("name") ?? email.split("@")[0] ?? null });
   setSessionCookie(c, await createSession(c.env.DB, user.id, c.req.header("User-Agent") ?? null));
   return c.redirect(safeRedirect(c.req.query("redirect")), 302);

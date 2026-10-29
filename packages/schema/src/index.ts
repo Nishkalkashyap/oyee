@@ -438,7 +438,35 @@ export const LIMITS = {
   retentionDays: 30,
   maxNotificationsPerUser: 5000,
   sendsPerMinutePerToken: 60,
+  maxDevicesPerUser: 10,
+  maxTokensPerUser: 20,
+  maxTemplatesPerUser: 100,
+  /** Pushes for updates to one notification are coalesced to at most one per interval (the socket gets every one). */
+  updatePushIntervalMs: 2000,
+  signupsPerIpPerDay: 5,
+  authFailuresPerIpPerMinute: 30,
 } as const;
+
+// ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
+
+export const QuotaKind = z.enum(["send", "update", "respond", "read", "pairing"]);
+export type QuotaKind = z.infer<typeof QuotaKind>;
+
+/** Daily limits reset at 00:00 UTC; per-minute limits use fixed one-minute windows. */
+export const QUOTAS: Record<QuotaKind, { perDay: number; perMinute: number | null; label: string }> = {
+  send: { perDay: 1000, perMinute: 120, label: "Notifications sent" },
+  update: { perDay: 5000, perMinute: null, label: "Updates" },
+  respond: { perDay: 1000, perMinute: 30, label: "Replies and actions" },
+  read: { perDay: 20000, perMinute: 300, label: "Reads" },
+  pairing: { perDay: 20, perMinute: 5, label: "Pairing codes" },
+};
+
+export const Usage = z.object({
+  day: z.string(),
+  resetsAt: isoDate,
+  items: z.array(z.object({ kind: QuotaKind, label: z.string(), used: z.number().int(), limit: z.number().int() })),
+});
+export type Usage = z.infer<typeof Usage>;
 
 // ─── Template rendering (shared by server + web preview) ────────────────────
 

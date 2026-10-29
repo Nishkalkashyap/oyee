@@ -3,6 +3,7 @@ import { SendNotificationInput } from "@oyee/schema";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../app";
 import { findTokenBySecret } from "../db";
+import { authFailure } from "../lib/abuse";
 import { badRequest, parseOrThrow, rpc, unauthorized } from "../lib/errors";
 import { readBodyText } from "../lib/http";
 import type { Actor } from "../inbox/model";
@@ -46,7 +47,7 @@ function withQueryTargets(input: SendNotificationInput, query: Record<string, st
 
 hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
   const token = await findTokenBySecret(c.env.DB, c.req.param("token"), "webhook");
-  if (!token) throw unauthorized("Invalid or revoked webhook token");
+  if (!token) throw await authFailure(c, unauthorized("Invalid or revoked webhook token"));
   const actor: Actor = {
     userId: token.userId,
     deviceId: null,
@@ -60,7 +61,7 @@ hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
   switch (action.kind) {
     case "send": {
       const input = withQueryTargets(action.input, c.req.query());
-      const n = await rpc(stub.send(actor, input, { titleFallback: true, rateLimit: true }));
+      const n = await rpc(stub.send(actor, input, { titleFallback: true }));
       return c.json({ id: n.id, version: n.version });
     }
     case "resolve": {

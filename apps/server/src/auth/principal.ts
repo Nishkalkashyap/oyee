@@ -3,6 +3,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv } from "../app";
 import { findDeviceByToken, getSessionUser, getUser, SESSION_TTL_DAYS, type DeviceRow } from "../db";
+import { authFailure } from "../lib/abuse";
 import { forbidden, unauthorized } from "../lib/errors";
 import type { Actor } from "../inbox/model";
 
@@ -44,7 +45,7 @@ export async function resolvePrincipal(c: Context<AppEnv>, allowQueryToken = fal
   if (token) {
     if ((token.startsWith("oyee_dev_") || token.startsWith("hrd_dev_"))) {
       const device = await findDeviceByToken(db, token);
-      if (!device) throw unauthorized("Invalid or revoked device token");
+      if (!device) throw await authFailure(c, unauthorized("Invalid or revoked device token"));
       const user = await getUser(db, device.userId);
       if (!user) throw unauthorized("Invalid or revoked device token");
       return { kind: "device", user, device };

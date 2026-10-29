@@ -1,16 +1,18 @@
 /**
  * InboxDO — one per user (`idFromName(userId)`), SQLite-backed.
- * Holds notifications (+ tombstones for sync), templates, per-token rate-limit counters, hibernatable WebSockets and
+ * Holds notifications (+ tombstones for sync), templates, per-token and per-account quota counters, hibernatable WebSockets and
  * in-memory `wait_for_response` waiters. Every mutation is broadcast over WebSocket and fanned out to push transports.
  */
 import { DurableObject } from "cloudflare:workers";
 import {
   ClientMessage,
   LIMITS,
+  QUOTAS,
   type ListNotificationsQuery,
   type McpWaitResult,
   type Notification,
   type Page,
+  type QuotaKind,
   type Response as OyeeResponse,
   type RespondInput,
   type SendNotificationInput,
@@ -20,10 +22,11 @@ import {
   type TemplateCard,
   type UpdateNotificationInput,
   type UpsertTemplateInput,
+  type Usage,
   renderTemplateValue,
 } from "@oyee/schema";
 import type { Env } from "../env";
-import { ApiError, badRequest, notFound, type RpcResult } from "../lib/errors";
+import { ApiError, badRequest, conflict, notFound, rateLimited, type RpcResult } from "../lib/errors";
 import { b64urlDecodeString, b64urlEncode } from "../lib/encoding";
 import { newId } from "../lib/ids";
 import { listDevices } from "../db";
@@ -40,6 +43,13 @@ import {
   type Actor,
   type SendOptions,
 } from "./model";
+
+type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
+
+const MINUTE = 60_000;
+const DAY = 86_400_000;
+/** Quotas that post an inbox notice at 80% and 100% of the daily limit. */
+const WARN_KINDS: QuotaKind[] = ["send", "update", "respond"];
 
 interface StoredRow {
   data: string;
@@ -85,7 +95,7 @@ async function guard<T>(fn: () => T | Promise<T>): Promise<RpcResult<T>> {
   try {
     return { ok: true, value: await fn() };
   } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: { code: e.code, message: e.message } };
+    if (e instanceof ApiError) return { ok: false, error: { code: e.code, message: e.message, retryAfter: e.retryAfter } };
     throw e;
   }
 }
@@ -94,6 +104,8 @@ export class InboxDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private waiters = new Map<string, Set<(r: OyeeResponse) => void>>();
   private alarmEnsured = false;
+  /** Per-notification push coalescing for updates (see LIMITS.updatePushIntervalMs). In memory: resets on eviction. */
+  private pushSlots = new Map<string, { last: number; pending: UpdatedEvent | null }>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -135,6 +147,8 @@ export class InboxDO extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS templates (name TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS rate_limits (token_id TEXT NOT NULL, win INTEGER NOT NULL, count INTEGER NOT NULL,
         PRIMARY KEY (token_id, win));
+      CREATE TABLE IF NOT EXISTS usage (kind TEXT NOT NULL, period TEXT NOT NULL, win INTEGER NOT NULL,
+        count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
   }
 
@@ -220,8 +234,50 @@ export class InboxDO extends DurableObject<Env> {
 
   private emit(userId: string, events: InboxEvent[], pushEvents: InboxEvent[] = events) {
     for (const ev of events) this.broadcast(ev);
-    if (pushEvents.length) {
-      this.ctx.waitUntil(fanoutPush(this.env, userId, pushEvents).catch((e) => console.error("push fan-out failed", e)));
+    const only = pushEvents.length === 1 ? pushEvents[0]! : null;
+    if (only?.type === "notification.updated") return this.pushCoalesced(userId, only);
+    for (const ev of pushEvents) {
+      if (ev.type === "notification.created") this.pushSlots.set(ev.notification.id, { last: Date.now(), pending: null });
+      if (ev.type === "notification.deleted") this.pushSlots.delete(ev.id);
+    }
+    if (pushEvents.length) this.push(userId, pushEvents);
+  }
+
+  private push(userId: string, events: InboxEvent[]) {
+    this.ctx.waitUntil(fanoutPush(this.env, userId, events).catch((e) => console.error("push fan-out failed", e)));
+  }
+
+  /**
+   * At most one push per notification per interval: a burst of progress updates sends the first right away and the
+   * latest one when the interval ends (keeping `alert` if any update in between asked for it).
+   */
+  private pushCoalesced(userId: string, ev: UpdatedEvent) {
+    const id = ev.notification.id;
+    const now = Date.now();
+    const slot = this.pushSlots.get(id);
+    if (!slot || now - slot.last >= LIMITS.updatePushIntervalMs) {
+      this.pushSlots.set(id, { last: now, pending: null });
+      this.push(userId, [ev]);
+      this.sweepPushSlots(now);
+      return;
+    }
+    const scheduled = slot.pending !== null;
+    slot.pending = { ...ev, alert: ev.alert || (slot.pending?.alert ?? false) };
+    if (scheduled) return;
+    const flush = new Promise((r) => setTimeout(r, slot.last + LIMITS.updatePushIntervalMs - now)).then(() => {
+      if (this.pushSlots.get(id) !== slot || !slot.pending) return; // deleted meanwhile
+      const pending = slot.pending;
+      slot.pending = null;
+      slot.last = Date.now();
+      return fanoutPush(this.env, userId, [pending]);
+    });
+    this.ctx.waitUntil(flush.catch((e) => console.error("push fan-out failed", e)));
+  }
+
+  private sweepPushSlots(now: number) {
+    if (this.pushSlots.size < 256) return;
+    for (const [id, slot] of this.pushSlots) {
+      if (!slot.pending && now - slot.last >= LIMITS.updatePushIntervalMs) this.pushSlots.delete(id);
     }
   }
 
@@ -240,6 +296,59 @@ export class InboxDO extends DurableObject<Env> {
     }
   }
 
+  private bumpUsage(kind: QuotaKind, period: "m" | "d", win: number): number {
+    return this.sql
+      .exec<{ count: number }>(
+        `INSERT INTO usage (kind, period, win, count) VALUES (?, ?, ?, 1)
+         ON CONFLICT(kind, period, win) DO UPDATE SET count = count + 1 RETURNING count`,
+        kind,
+        period,
+        win,
+      )
+      .one().count;
+  }
+
+  /**
+   * Counts one use of a per-account quota, throwing `rate_limited` (with Retry-After) past the per-minute or daily
+   * limit. With `userId`, crossing 80% and 100% of the daily limit posts a notice to the inbox.
+   */
+  private consume(kind: QuotaKind, userId?: string) {
+    const q = QUOTAS[kind];
+    const now = Date.now();
+    const label = q.label.toLowerCase();
+    if (q.perMinute !== null && this.bumpUsage(kind, "m", Math.floor(now / MINUTE)) > q.perMinute) {
+      throw rateLimited(`Too many ${label}: the limit is ${q.perMinute} per minute`, (MINUTE - (now % MINUTE)) / 1000);
+    }
+    const used = this.bumpUsage(kind, "d", Math.floor(now / DAY));
+    if (used > q.perDay) {
+      throw rateLimited(
+        `Daily limit reached: ${q.perDay.toLocaleString("en-US")} ${label} per day. It resets at 00:00 UTC.`,
+        (DAY - (now % DAY)) / 1000,
+      );
+    }
+    this.ctx.waitUntil(this.ensureAlarm());
+    if (userId && WARN_KINDS.includes(kind) && (used === Math.ceil(q.perDay * 0.8) || used === q.perDay)) {
+      this.ctx.waitUntil(this.postQuotaNotice(userId, kind, used));
+    }
+  }
+
+  private async postQuotaNotice(userId: string, kind: QuotaKind, used: number) {
+    const q = QUOTAS[kind];
+    const limit = q.perDay.toLocaleString("en-US");
+    const full = used >= q.perDay;
+    const actor: Actor = { userId, deviceId: null, deviceName: null, tokenId: null, defaultSource: "oyee" };
+    const input = resolveSendInput({
+      title: full ? `Daily limit reached: ${q.label.toLowerCase()}` : `80% of today's ${q.label.toLowerCase()} used`,
+      body: full
+        ? `You've used all ${limit} for today. More are rejected until 00:00 UTC.`
+        : `${used.toLocaleString("en-US")} of ${limit} used today. The limit resets at 00:00 UTC.`,
+      severity: full ? "critical" : "warning",
+      source: "oyee",
+      replaceKey: `oyee-quota-${kind}`,
+    }, null);
+    await this.store(actor, input, null);
+  }
+
   private getTemplateRow(name: string): Template | null {
     const r = this.sql.exec<{ data: string }>("SELECT data FROM templates WHERE name = ?", name).toArray()[0];
     return r ? (JSON.parse(r.data) as Template) : null;
@@ -249,7 +358,8 @@ export class InboxDO extends DurableObject<Env> {
 
   async send(actor: Actor, input: SendNotificationInput, opts: SendOptions = {}): Promise<RpcResult<Notification>> {
     return guard(async () => {
-      if (opts.rateLimit && actor.tokenId) this.checkRate(actor.tokenId);
+      if (actor.tokenId) this.checkRate(actor.tokenId);
+      this.consume("send", actor.userId);
       let template: Template | null = null;
       if (input.template) {
         template = this.getTemplateRow(input.template);
@@ -260,36 +370,46 @@ export class InboxDO extends DurableObject<Env> {
         resolved.devices?.length || resolved.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), resolved)
           : null;
-      const now = new Date().toISOString();
-      const fresh = buildNotification(newId("ntf"), resolved, actor, now, targets);
-      assertUniqueActionIds(fresh.actions);
-      const replaceKey = resolved.replaceKey ?? null;
-
-      if (replaceKey) {
-        const row = this.sql
-          .exec<StoredRow>(
-            "SELECT data, replace_key, token_id, seq FROM notifications WHERE replace_key = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
-            replaceKey,
-          )
-          .toArray()[0];
-        if (row) {
-          const existing = JSON.parse(row.data) as Notification;
-          const n = replaceContent(existing, fresh, now);
-          this.save(n, replaceKey, actor.tokenId ?? row.token_id);
-          this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
-          return n;
-        }
-      }
-
-      this.save(fresh, replaceKey, actor.tokenId);
-      this.emit(actor.userId, [{ type: "notification.created", notification: fresh }]);
-      await this.ensureAlarm();
-      return fresh;
+      return this.store(actor, resolved, targets);
     });
+  }
+
+  /** Creates the notification, or replaces the active one with the same replaceKey. No quota checks. */
+  private async store(
+    actor: Actor,
+    resolved: ReturnType<typeof resolveSendInput>,
+    targets: string[] | null,
+  ): Promise<Notification> {
+    const now = new Date().toISOString();
+    const fresh = buildNotification(newId("ntf"), resolved, actor, now, targets);
+    assertUniqueActionIds(fresh.actions);
+    const replaceKey = resolved.replaceKey ?? null;
+
+    if (replaceKey) {
+      const row = this.sql
+        .exec<StoredRow>(
+          "SELECT data, replace_key, token_id, seq FROM notifications WHERE replace_key = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
+          replaceKey,
+        )
+        .toArray()[0];
+      if (row) {
+        const existing = JSON.parse(row.data) as Notification;
+        const n = replaceContent(existing, fresh, now);
+        this.save(n, replaceKey, actor.tokenId ?? row.token_id);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+        return n;
+      }
+    }
+
+    this.save(fresh, replaceKey, actor.tokenId);
+    this.emit(actor.userId, [{ type: "notification.created", notification: fresh }]);
+    await this.ensureAlarm();
+    return fresh;
   }
 
   async update(actor: Actor, id: string, patch: UpdateNotificationInput): Promise<RpcResult<Notification>> {
     return guard(() => {
+      this.consume("update", actor.userId);
       const rec = this.mustLoad(id);
       const n = applyPatch(rec.n, patch, new Date().toISOString());
       this.save(n, rec.replaceKey, rec.tokenId);
@@ -300,6 +420,7 @@ export class InboxDO extends DurableObject<Env> {
 
   async respond(actor: Actor, id: string, input: RespondInput): Promise<RpcResult<Notification>> {
     return guard(() => {
+      this.consume("respond", actor.userId);
       const rec = this.mustLoad(id);
       const action = input.actionId !== undefined ? rec.n.actions.find((a) => a.id === input.actionId) : undefined;
       if (input.actionId !== undefined && !action) throw badRequest(`actionId: unknown action "${input.actionId}"`);
@@ -341,6 +462,7 @@ export class InboxDO extends DurableObject<Env> {
     return guard(() => {
       const rec = this.mustLoad(id);
       if (rec.n.readAt) return rec.n;
+      this.consume("update", actor.userId);
       const now = new Date().toISOString();
       const n: Notification = { ...rec.n, readAt: now, version: rec.n.version + 1, updatedAt: now };
       this.save(n, rec.replaceKey, rec.tokenId);
@@ -351,6 +473,7 @@ export class InboxDO extends DurableObject<Env> {
 
   async readAll(actor: Actor, source?: string): Promise<RpcResult<{ updated: number }>> {
     return guard(() => {
+      this.consume("update", actor.userId);
       const rows = (
         source
           ? this.sql.exec<StoredRow>(
@@ -375,7 +498,11 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   async resolve(actor: Actor, id: string): Promise<RpcResult<Notification>> {
-    return guard(() => this.resolveLoaded(actor, this.mustLoad(id)));
+    return guard(() => {
+      const rec = this.mustLoad(id);
+      if (rec.n.status !== "resolved") this.consume("update", actor.userId);
+      return this.resolveLoaded(actor, rec);
+    });
   }
 
   private resolveLoaded(actor: Actor, rec: Loaded, patch?: UpdateNotificationInput): Notification {
@@ -392,6 +519,7 @@ export class InboxDO extends DurableObject<Env> {
   async resolveByReplaceKey(actor: Actor, replaceKey: string, patch?: UpdateNotificationInput): Promise<RpcResult<Notification | null>> {
     return guard(() => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
+      this.consume("update", actor.userId);
       const row = this.sql
         .exec<StoredRow>(
           "SELECT data, replace_key, token_id, seq FROM notifications WHERE replace_key = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
@@ -406,17 +534,22 @@ export class InboxDO extends DurableObject<Env> {
   async remove(actor: Actor, id: string): Promise<RpcResult<void>> {
     return guard(() => {
       this.mustLoad(id);
+      this.consume("update", actor.userId);
       this.deleteRow(id, new Date().toISOString());
       this.emit(actor.userId, [{ type: "notification.deleted", id }]);
     });
   }
 
   async get(id: string): Promise<RpcResult<Notification>> {
-    return guard(() => this.mustLoad(id).n);
+    return guard(() => {
+      this.consume("read");
+      return this.mustLoad(id).n;
+    });
   }
 
   async list(q: ListNotificationsQuery): Promise<RpcResult<Page<Notification>>> {
     return guard(() => {
+      this.consume("read");
       const where: string[] = [];
       const params: SqlStorageValue[] = [];
       if (q.source) (where.push("source = ?"), params.push(q.source));
@@ -473,18 +606,22 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   async sources(): Promise<RpcResult<SourceSummary[]>> {
-    return guard(() => this.sql
-      .exec<{ source: string; count: number; unread: number; lastAt: string }>(
-        `SELECT source, COUNT(*) AS count, SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
-           MAX(created_at) AS lastAt FROM notifications GROUP BY source ORDER BY lastAt DESC`,
-      )
-      .toArray()
-      .map((r) => ({ source: r.source, count: r.count, unread: r.unread, lastAt: r.lastAt })));
+    return guard(() => {
+      this.consume("read");
+      return this.sql
+        .exec<{ source: string; count: number; unread: number; lastAt: string }>(
+          `SELECT source, COUNT(*) AS count, SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
+             MAX(created_at) AS lastAt FROM notifications GROUP BY source ORDER BY lastAt DESC`,
+        )
+        .toArray()
+        .map((r) => ({ source: r.source, count: r.count, unread: r.unread, lastAt: r.lastAt }));
+    });
   }
 
   /** Long-poll for a response. Resolves immediately if the notification already has one. */
   async waitForResponse(id: string, timeoutSeconds: number): Promise<RpcResult<McpWaitResult>> {
     return guard(() => {
+      this.consume("read");
       const rec = this.mustLoad(id);
       const last = rec.n.responses[rec.n.responses.length - 1];
       if (last) return { status: "answered", response: last } as McpWaitResult;
@@ -509,16 +646,18 @@ export class InboxDO extends DurableObject<Env> {
   // ─── Templates (RPC) ──────────────────────────────────────────────────────
 
   async listTemplates(): Promise<RpcResult<Template[]>> {
-    return guard(() =>
-      this.sql
+    return guard(() => {
+      this.consume("read");
+      return this.sql
         .exec<{ data: string }>("SELECT data FROM templates ORDER BY name")
         .toArray()
-        .map((r) => JSON.parse(r.data) as Template),
-    );
+        .map((r) => JSON.parse(r.data) as Template);
+    });
   }
 
   async getTemplate(name: string): Promise<RpcResult<Template>> {
     return guard(() => {
+      this.consume("read");
       const t = this.getTemplateRow(name);
       if (!t) throw notFound(`Template "${name}" not found`);
       return t;
@@ -529,6 +668,12 @@ export class InboxDO extends DurableObject<Env> {
     return guard(() => {
       if (input.card.actions) assertUniqueActionIds(input.card.actions);
       const existing = this.getTemplateRow(name);
+      if (!existing) {
+        const { count } = this.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM templates").one();
+        if (count >= LIMITS.maxTemplatesPerUser) {
+          throw conflict(`You can have at most ${LIMITS.maxTemplatesPerUser} templates: delete one first`);
+        }
+      }
       const now = new Date().toISOString();
       const t: Template = {
         id: existing?.id ?? newId("tpl"),
@@ -559,6 +704,34 @@ export class InboxDO extends DurableObject<Env> {
       const t = this.getTemplateRow(name);
       if (!t) throw notFound(`Template "${name}" not found`);
       return { ...renderTemplateValue(t.card, vars), template: name };
+    });
+  }
+
+  // ─── Quotas (RPC) ─────────────────────────────────────────────────────────
+
+  /** Counts one use of a quota enforced outside the inbox (e.g. pairing codes, stored in D1). */
+  async useQuota(kind: QuotaKind): Promise<RpcResult<void>> {
+    return guard(() => this.consume(kind));
+  }
+
+  /** Today's usage of every daily quota (UTC). */
+  async usage(now = Date.now()): Promise<RpcResult<Usage>> {
+    return guard(() => {
+      const day = Math.floor(now / DAY);
+      const rows = this.sql
+        .exec<{ kind: string; count: number }>("SELECT kind, count FROM usage WHERE period = 'd' AND win = ?", day)
+        .toArray();
+      const used = new Map(rows.map((r) => [r.kind, r.count]));
+      return {
+        day: new Date(day * DAY).toISOString().slice(0, 10),
+        resetsAt: new Date((day + 1) * DAY).toISOString(),
+        items: (Object.keys(QUOTAS) as QuotaKind[]).map((kind) => ({
+          kind,
+          label: QUOTAS[kind].label,
+          used: Math.min(used.get(kind) ?? 0, QUOTAS[kind].perDay),
+          limit: QUOTAS[kind].perDay,
+        })),
+      };
     });
   }
 
@@ -605,6 +778,11 @@ export class InboxDO extends DurableObject<Env> {
       return;
     }
     if (parsed.type === "sync") {
+      try {
+        this.consume("read");
+      } catch {
+        return; // over quota: the client retries on its next reconnect
+      }
       ws.send(JSON.stringify(this.syncResult(parsed.since)));
     }
   }
@@ -701,6 +879,11 @@ export class InboxDO extends DurableObject<Env> {
     for (const id of ids) this.deleteRow(id, nowIso);
     this.sql.exec("DELETE FROM tombstones WHERE deleted_at < ?", cutoff);
     this.sql.exec("DELETE FROM rate_limits WHERE win < ?", Math.floor(now / 60_000) - 5);
+    this.sql.exec(
+      "DELETE FROM usage WHERE (period = 'm' AND win < ?) OR (period = 'd' AND win < ?)",
+      Math.floor(now / MINUTE) - 5,
+      Math.floor(now / DAY) - 2,
+    );
     for (const id of ids.slice(0, MAX_BULK_PUSH)) this.broadcast({ type: "notification.deleted", id });
     return ids;
   }

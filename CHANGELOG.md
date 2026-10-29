@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (server and web)
+- Rate limits per account: 1,000 notifications, 5,000 updates and 1,000 replies a day, with per-minute burst limits,
+  `429` + `Retry-After` when exceeded, and an inbox notice at 80% and 100%. Today's usage is in the web account menu.
+- At most 10 devices, 20 tokens and 100 templates per account. Push notifications for rapid updates (progress bars)
+  are coalesced to one per 2 seconds per notification.
+- Per-IP limits on new accounts and failed token attempts.
+- Web: Help button in the sidebar with downloads for every platform and links to the docs.
+
 ## 0.2.5
 - Update check demo: from 0.2.4, Android downloads this release in the app (download manager) instead of the browser.
 

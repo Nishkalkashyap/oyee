@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { User } from "@oyee/schema";
+import type { Usage, User } from "@oyee/schema";
 import { api } from "../lib/api";
 import { isMockMode } from "../lib/env";
-import { useUnreadCount } from "../lib/queries";
+import { useUnreadCount, useUsage } from "../lib/queries";
 import { useTheme, type ThemePref } from "../lib/theme";
 import { HelpDialog } from "./HelpDialog";
 import {
@@ -48,12 +48,51 @@ export function Logo({ className }: { className?: string }) {
   );
 }
 
+/** Quotas shown in the account menu (reads and pairing codes are rarely close to their limits). */
+const SHOWN_QUOTAS = new Set(["send", "update", "respond"]);
+
+function UsageMeter({ usage }: { usage: Usage }) {
+  const hours = Math.max(1, Math.round((Date.parse(usage.resetsAt) - Date.now()) / 3_600_000));
+  return (
+    <div className="px-2.5 py-1.5">
+      <div className="mb-1.5 flex items-baseline justify-between text-[11px] font-medium text-zinc-500">
+        <span>Today</span>
+        <span className="font-normal">Resets in {hours}h</span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {usage.items
+          .filter((i) => SHOWN_QUOTAS.has(i.kind))
+          .map((i) => {
+            const pct = Math.min(100, (i.used / i.limit) * 100);
+            return (
+              <div key={i.kind}>
+                <div className="flex justify-between text-xs">
+                  <span className="text-secondary-label">{i.label}</span>
+                  <span className="tabular-nums">
+                    {i.used.toLocaleString()} <span className="text-zinc-400">/ {i.limit.toLocaleString()}</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className={cx("h-full rounded-full", pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-brand")}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
 function UserMenu({ user }: { user: User }) {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useTheme();
   const ref = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const usage = useUsage(open).data;
 
   useEffect(() => {
     if (!open) return;
@@ -107,6 +146,12 @@ function UserMenu({ user }: { user: User }) {
             <div className="truncate text-xs text-zinc-500">{user.email}</div>
           </div>
           <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
+          {usage && (
+            <>
+              <UsageMeter usage={usage} />
+              <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
+            </>
+          )}
           <div className="px-2.5 py-1.5">
             <div className="mb-1.5 text-[11px] font-medium text-zinc-500">Theme</div>
             <div className="grid grid-cols-3 gap-1">

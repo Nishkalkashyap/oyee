@@ -7,6 +7,7 @@ import { Button, Input, buttonClasses, BrandMark } from "../components/ui";
 
 const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: "This email isn't allowed on this Oyee instance. Ask the admin to add it to ALLOWED_EMAILS.",
+  too_many_signups: "Too many new accounts were created from your network today. Try again tomorrow.",
   access_denied: "Google sign-in was cancelled.",
   invalid_state: "The sign-in session expired or was tampered with. Please try again.",
   oauth_failed: "Google sign-in failed. Please try again.",
