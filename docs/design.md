@@ -1,9 +1,9 @@
 # Oyee design language
 
 Oyee uses **Gluon's design language** (`~/Desktop/github-repos/gluon`, `packages/kit/styles/tokens.css`): a warm
-paper palette, white panels on a soft ground, near-black ink, pill buttons, peach selection, and **orange reserved for
+paper palette, white panels on a soft ground, near-black ink, pill buttons, light-blue selection, and **blue reserved for
 the brand mark, unread times and counts, and send buttons**. The three clients implement the same tokens and
-components:
+components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is orange. Avatar tints are unchanged.)
 
 | | Web | macOS | Android |
 |---|---|---|---|
@@ -19,8 +19,8 @@ components:
 | background | `#ffffff` | `#1e1c1a` | panels, rows |
 | foreground | `#1c1b19` | `#f1ede6` | ink: text, primary buttons, progress |
 | card | `#f7f6f3` | `#262421` | soft cards inside a panel |
-| brand | `#d9480f` | `#ff6b1a` | the "h" mark, unread time/dot/count, send, create buttons |
-| chip / chip-fg | `#fde7d7` / `#9a3412` | `#4a2713` / `#fdba8c` | selected filter, tab pill, your reply bubbles |
+| brand / brand-fg | `#1f6feb` / `#ffffff` | `#58a6ff` / `#0d1b2e` | the Oyee mark, unread time/dot/count, send, create buttons |
+| chip / chip-fg | `#dde9fb` / `#1e4e9a` | `#16294a` / `#a9c9f7` | selected filter, tab pill, your reply bubbles |
 | thread | `#f7f4ef` | `#181614` | conversation background |
 | bubble | `#ffffff` | `#2b2825` | the notification card in a conversation, composer |
 | secondary | `#f3f2ef` | `#2b2825` | soft buttons, chips, search field |
@@ -40,23 +40,23 @@ so a source has the same color everywhere.
 - **Figtree** for everything; **JetBrains Mono** for tokens and IDs (web). Titles are large and bold with tight tracking
   (page title 24–30, card title 18 bold, row title 15 semibold, body 14–15).
 - Panels have 22px corners on the ground; rows 16px; bubbles 22px with one 6px corner toward the speaker.
-- Buttons are pills: **primary** ink, **brand** orange (create / send), **secondary** soft fill, **ghost** quiet. They
+- Buttons are pills: **primary** ink, **brand** blue (create / send), **secondary** soft fill, **ghost** quiet. They
   scale to 0.96 when pressed.
 - Progress bars are ink on a light track (critical is red).
 
 ## Layout
 
-- **Web:** 76px rail (brand mark, sections with icon + label, the active one on a white tile with an orange count),
-  content in a rounded white panel. Phones get a bottom tab bar with a peach pill behind the active icon.
-- **Inbox:** large title, search pill, peach filter chips, rows with avatar + severity dot, title, time (orange while
-  unread), preview and an orange unread dot.
+- **Web:** 76px rail (brand mark, sections with icon + label, the active one on a white tile with a blue count),
+  content in a rounded white panel. Phones get a bottom tab bar with a light-blue pill behind the active icon.
+- **Inbox:** large title, search pill, light-blue filter chips, rows with avatar + severity dot, title, time (blue while
+  unread), preview and a blue unread dot.
 - **Conversation detail:** header (source avatar, recipients, resolve, delete), the card as a white bubble, updates and
-  resolution as quiet centered lines, responses as peach bubbles on the right with the device name, and a composer with
-  an orange round send button when the card has a reply box.
+  resolution as quiet centered lines, responses as light-blue bubbles on the right with the device name, and a composer with
+  a blue round send button when the card has a reply box.
 - **macOS:** the inbox window is the ground with two 22pt panels (list, conversation); the menu-bar popover has the
   brand header, compact rows and a pill footer.
 - **Android:** Gluon's mobile header (large title, live state, round Settings button), pills, rows and the same
-  conversation view. The system notification shade is drawn by Android; Oyee sets the orange accent.
+  conversation view. The system notification shade is drawn by Android; Oyee sets the blue accent.
 - **Settings (macOS, Android):** Gluon's settings layout. Large bold title with a muted description, an account card
   (avatar, email, server, this device, connection, reconnect / unpair), bold section headings, and rows with a semibold
   title, a muted description and the control on the right, separated by hairlines. Switches use Gluon's style: grey

@@ -302,7 +302,7 @@ function WebPushPanel({ devices }: { devices: Device[] | undefined }) {
   return (
     <Panel className="p-5">
       <div className="flex items-start gap-3">
-        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[#fde7d7] text-[#9a3412]">
+        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-chip text-chip-foreground">
           <GlobeIcon size={17} />
         </span>
         <div className="min-w-0 flex-1">

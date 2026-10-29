@@ -22,7 +22,7 @@ import app.oyee.android.ui.components.PillVariant
 import app.oyee.android.ui.theme.Oyee
 import kotlinx.coroutines.launch
 
-/** Peach banner at the top of the inbox while an update is available, downloading or ready to install. */
+/** Light-blue banner at the top of the inbox while an update is available, downloading or ready to install. */
 @Composable
 fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
     val state by updater.state.collectAsStateWithLifecycle()

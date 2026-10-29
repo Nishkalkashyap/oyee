@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFD9480F</color>
-    <color name="brand">#FFD9480F</color>
+    <color name="ic_launcher_background">#FF1F6FEB</color>
+    <color name="brand">#FF1F6FEB</color>
     <color name="severity_critical">#FFDC2626</color>
     <color name="severity_warning">#FFD97706</color>
     <color name="severity_info">#FF3B82F6</color>

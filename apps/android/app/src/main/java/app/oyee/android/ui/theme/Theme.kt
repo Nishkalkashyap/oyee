@@ -43,8 +43,8 @@ data class OyeeColors(
 
 val LightOyee = OyeeColors(
     ground = Color(0xFFF3F2EF), background = Color(0xFFFFFFFF), foreground = Color(0xFF1C1B19),
-    card = Color(0xFFF7F6F3), brand = Color(0xFFD9480F), brandForeground = Color(0xFFFFFFFF),
-    chip = Color(0xFFFDE7D7), chipForeground = Color(0xFF9A3412), thread = Color(0xFFF7F4EF),
+    card = Color(0xFFF7F6F3), brand = Color(0xFF1F6FEB), brandForeground = Color(0xFFFFFFFF),
+    chip = Color(0xFFDDE9FB), chipForeground = Color(0xFF1E4E9A), thread = Color(0xFFF7F4EF),
     bubble = Color(0xFFFFFFFF), secondary = Color(0xFFF3F2EF), accent = Color(0xFFE9E5DE),
     muted = Color(0xFF6B675F), faint = Color(0xFFA8A39A), border = Color(0xFFECE9E3),
     rowSelected = Color(0xFFECE9E3), secondaryLabel = Color(0xFF44403C),
@@ -52,8 +52,8 @@ val LightOyee = OyeeColors(
 
 val DarkOyee = OyeeColors(
     ground = Color(0xFF131211), background = Color(0xFF1E1C1A), foreground = Color(0xFFF1EDE6),
-    card = Color(0xFF262421), brand = Color(0xFFFF6B1A), brandForeground = Color(0xFF1C1B19),
-    chip = Color(0xFF4A2713), chipForeground = Color(0xFFFDBA8C), thread = Color(0xFF181614),
+    card = Color(0xFF262421), brand = Color(0xFF58A6FF), brandForeground = Color(0xFF0D1B2E),
+    chip = Color(0xFF16294A), chipForeground = Color(0xFFA9C9F7), thread = Color(0xFF181614),
     bubble = Color(0xFF2B2825), secondary = Color(0xFF2B2825), accent = Color(0xFF35312D),
     muted = Color(0xFFA39D92), faint = Color(0xFF6E685F), border = Color(0xFF302D29),
     rowSelected = Color(0xFF35312D), secondaryLabel = Color(0xFFD6D0C6),

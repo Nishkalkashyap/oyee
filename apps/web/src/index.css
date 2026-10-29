@@ -7,16 +7,16 @@
 
 /*
  * Oyee uses Gluon's design language (docs/design.md): a warm paper ground, white panels with 22px corners,
- * near-black ink, pill buttons, peach selection, and orange reserved for the brand mark, unread counts and send.
+ * near-black ink, pill buttons, light-blue selection, and blue reserved for the brand mark, unread counts and send.
  */
 :root {
   --ground: #f3f2ef;
   --background: #ffffff;
   --foreground: #1c1b19;
-  --brand: #d9480f;
+  --brand: #1f6feb;
   --brand-foreground: #ffffff;
-  --chip: #fde7d7;
-  --chip-foreground: #9a3412;
+  --chip: #dde9fb;
+  --chip-foreground: #1e4e9a;
   --thread: #f7f4ef;
   --bubble: #ffffff;
   --row-selected: #ece9e3;
@@ -26,10 +26,10 @@
   --ground: #131211;
   --background: #1e1c1a;
   --foreground: #f1ede6;
-  --brand: #ff6b1a;
-  --brand-foreground: #1c1b19;
-  --chip: #4a2713;
-  --chip-foreground: #fdba8c;
+  --brand: #58a6ff;
+  --brand-foreground: #0d1b2e;
+  --chip: #16294a;
+  --chip-foreground: #a9c9f7;
   --thread: #181614;
   --bubble: #2b2825;
   --row-selected: #35312d;

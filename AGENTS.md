@@ -45,7 +45,7 @@ docs/             protocol, setup, design, operations, brand (logo SVGs), screen
 - Keep accepting legacy `hrd_` token prefixes alongside `oyee_` (Oyee was called Herald until 2026-10-28).
 - D1 schema changes go through Drizzle (`src/db/schema.ts` → `db:generate`), never hand-written SQL migrations.
 - Focus platforms: web, Android, macOS. iOS code exists but is deprioritized (no APNs, no distribution).
-- UI follows docs/design.md (warm paper palette, Figtree, pill buttons, peach selection). The maintainer rejected
+- UI follows docs/design.md (warm paper palette, Figtree, pill buttons, light-blue selection). The maintainer rejected
   gradient-heavy "Vercel-style" mockups.
 - Releases are user-facing: Macs auto-install them and phones get notified. Publish only when asked.
 

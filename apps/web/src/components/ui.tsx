@@ -17,7 +17,7 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 type ButtonVariant = "primary" | "brand" | "secondary" | "ghost" | "danger" | "outline-danger";
 type ButtonSize = "sm" | "md" | "lg";
 
-// Gluon's pill buttons: filled ink primary, orange brand (send / create), soft secondary and quiet ghost.
+// Gluon's pill buttons: filled ink primary, blue brand (send / create), soft secondary and quiet ghost.
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-foreground text-background hover:opacity-90",
   brand: "bg-brand text-brand-foreground hover:opacity-90",
@@ -383,7 +383,7 @@ export function OyeeMark({ className }: { className?: string }) {
   );
 }
 
-/** The brand tile: the mark in white on orange. */
+/** The brand tile: the mark in white on blue. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
@@ -395,7 +395,7 @@ export function BrandMark({ className }: { className?: string }) {
   );
 }
 
-/** Single-select peach pill filters (Gluon's FilterChips). */
+/** Single-select light-blue pill filters (Gluon's FilterChips). */
 export function FilterChip({
   active,
   onClick,

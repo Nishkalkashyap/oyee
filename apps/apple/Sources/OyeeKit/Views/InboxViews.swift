@@ -31,7 +31,7 @@ public struct InboxFilterControls: View {
     }
 }
 
-/// The inbox list in Gluon's language: large title, search pill, peach filter chips and rounded rows.
+/// The inbox list in Gluon's language: large title, search pill, light-blue filter chips and rounded rows.
 public struct InboxListView: View {
     @Bindable var store: InboxStore
     @Binding var selection: String?
@@ -188,7 +188,7 @@ public struct InboxListView: View {
     }
 }
 
-/// The conversation view: the agent's card as a bubble, quiet update lines, your answers as peach bubbles on the
+/// The conversation view: the agent's card as a bubble, quiet update lines, your answers as light-blue bubbles on the
 /// right and a composer at the bottom. Marks the notification read when shown.
 public struct NotificationDetailView: View {
     let notification: OyeeNotification

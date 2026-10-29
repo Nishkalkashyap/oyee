@@ -209,7 +209,7 @@ export function SendPage() {
                   max={s.progress.max || 100}
                   value={s.progress.value}
                   onChange={(e) => set("progress", { ...s.progress, value: Number(e.target.value) })}
-                  className="col-span-full accent-[#d9480f]"
+                  className="col-span-full accent-brand"
                 />
               </div>
             ) : (

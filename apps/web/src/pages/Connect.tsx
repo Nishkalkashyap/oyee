@@ -295,7 +295,7 @@ export function ConnectPage() {
           title={KIND_COPY.mcp.button}
           description={KIND_COPY.mcp.description}
           onClick={() => setKind("mcp")}
-          accent="bg-[#fde7d7] text-[#9a3412]"
+          accent="bg-chip text-chip-foreground"
           cta="brand"
         />
         <BigAction

@@ -1,4 +1,4 @@
-// Renders the Oyee app icon (the white mark on the orange squircle) into an .iconset directory.
+// Renders the Oyee app icon (the white mark on the blue squircle) into an .iconset directory.
 // Usage: swift scripts/make-icon.swift <output.iconset>
 import AppKit
 
@@ -16,7 +16,7 @@ func render(pixels: Int) -> Data? {
     let inset = size * 0.09
     let rect = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let path = NSBezierPath(roundedRect: rect, xRadius: rect.width * 0.225, yRadius: rect.width * 0.225)
-    NSColor(srgbRed: 0xD9 / 255, green: 0x48 / 255, blue: 0x0F / 255, alpha: 1).setFill()  // brand orange
+    NSColor(srgbRed: 0x1F / 255, green: 0x6F / 255, blue: 0xEB / 255, alpha: 1).setFill()  // brand blue
     path.fill()
 
     // The Oyee mark (docs/brand/oyee-mark.svg): an "o" speech bubble with an unread dot, on a 24-unit grid.

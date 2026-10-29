@@ -163,7 +163,7 @@ enum MenuBarIcon {
     }()
 }
 
-/// Peach banner while an update is available, downloading or failed.
+/// Light-blue banner while an update is available, downloading or failed.
 struct UpdateBanner: View {
     let updater: Updater
 

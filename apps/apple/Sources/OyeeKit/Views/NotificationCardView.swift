@@ -190,7 +190,7 @@ public struct NotificationCardView: View {
     }
 }
 
-/// Gluon's list row: the source's tinted avatar with a severity dot, title, time (orange while unread), preview.
+/// Gluon's list row: the source's tinted avatar with a severity dot, title, time (blue while unread), preview.
 public struct NotificationRowView: View {
     let notification: OyeeNotification
     var selected: Bool
@@ -251,7 +251,7 @@ public struct NotificationRowView: View {
     }
 }
 
-/// Gluon's composer: a rounded bubble field with an orange send button.
+/// Gluon's composer: a rounded bubble field with a blue send button.
 public struct ReplyComposer: View {
     let placeholder: String
     let onSend: (String) async -> Void

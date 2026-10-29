@@ -16,6 +16,12 @@
 - Inbox: resolved notifications leave the default view. The web inbox opens on **Active**, with **Resolved** and
   **All** tabs (`?status=resolved` / `?status=all`), and an "All caught up" state once everything is resolved.
   Unread counts (`GET /api/sources`, badges) count only active notifications.
+- New accent colour: Ocean blue replaces orange across the web app (brand mark, unread counts, send buttons,
+  selected chips, your reply bubbles), the favicon and the installable web-app icons.
+
+## Next app release
+- New accent colour: Ocean blue replaces orange in the macOS and Android apps, including the app icon, the Android
+  launcher icon and the tint of Android system notifications.
 
 ## 0.2.6
 - macOS and Android: the inbox opens on **Active**. Resolved notifications leave the default list and the macOS

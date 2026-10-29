@@ -68,7 +68,7 @@ fun avatarTint(name: String): Pair<Color, Color> {
     return Tints[Math.floorMod(hash, Tints.size)]
 }
 
-/** The brand tile: the Oyee mark (an "o" speech bubble with an unread dot) in white on orange. */
+/** The brand tile: the Oyee mark (an "o" speech bubble with an unread dot) in white on blue. */
 @Composable
 fun BrandMark(size: Dp = 28.dp) {
     Box(
@@ -110,7 +110,7 @@ fun SourceAvatar(name: String, size: Dp = 44.dp, severity: Severity? = null, mod
 
 enum class PillVariant { Primary, Brand, Secondary, Ghost, Destructive }
 
-/** Gluon's pill buttons: ink primary, orange brand, soft secondary, quiet ghost. Gives a little when pressed. */
+/** Gluon's pill buttons: ink primary, blue brand, soft secondary, quiet ghost. Gives a little when pressed. */
 @Composable
 fun PillButton(
     onClick: () -> Unit,
@@ -148,7 +148,7 @@ fun PillButton(
     }
 }
 
-/** Single-select pill filter: grey, peach when selected. */
+/** Single-select pill filter: grey, light-blue when selected. */
 @Composable
 fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
     val c = Oyee.colors
@@ -167,7 +167,7 @@ fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Orange unread count. */
+/** Blue unread count. */
 @Composable
 fun CountBadge(count: Int, modifier: Modifier = Modifier) {
     if (count <= 0) return
@@ -222,7 +222,7 @@ fun SystemLine(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Gluon's composer: a rounded bubble field with an orange round send button. */
+/** Gluon's composer: a rounded bubble field with a blue round send button. */
 @Composable
 fun Composer(
     value: String,

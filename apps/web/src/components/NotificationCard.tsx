@@ -189,7 +189,7 @@ export function NotificationCard({
   );
 }
 
-/** Gluon's composer: a rounded bubble field with an orange send button. ⌘/Ctrl+Enter sends. */
+/** Gluon's composer: a rounded bubble field with a blue send button. ⌘/Ctrl+Enter sends. */
 export function ReplyComposer({
   placeholder,
   disabled,

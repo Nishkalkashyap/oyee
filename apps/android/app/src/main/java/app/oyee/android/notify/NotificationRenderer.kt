@@ -116,7 +116,7 @@ class NotificationRenderer(private val context: Context, private val images: Ima
             Log.i(TAG, "Notifications not permitted; skipping ${n.id}")
             return
         }
-        // The shade tints Oyee's icon, progress and buttons with the brand orange (severity shows in the app).
+        // The shade tints Oyee's icon, progress and buttons with the brand blue (severity shows in the app).
         val color = context.getColor(R.color.brand)
         val body = n.body?.takeIf { it.isNotBlank() }
         val progress = n.progress

@@ -164,7 +164,7 @@ private fun FilterBar(state: InboxUiState, onChange: (InboxFilters) -> Unit) {
     }
 }
 
-/** Gluon's list row: tinted source avatar with a severity dot, title, time (orange while unread), preview. */
+/** Gluon's list row: tinted source avatar with a severity dot, title, time (blue while unread), preview. */
 @Composable
 private fun InboxRow(n: Notification, onClick: () -> Unit) {
     val c = Oyee.colors

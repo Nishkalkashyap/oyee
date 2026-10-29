@@ -176,7 +176,7 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
     }
 }
 
-/** The agent's card as a bubble, quiet update lines, and your answers as peach bubbles on the right. */
+/** The agent's card as a bubble, quiet update lines, and your answers as light-blue bubbles on the right. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Conversation(n: Notification, state: DetailUiState, vm: DetailViewModel) {

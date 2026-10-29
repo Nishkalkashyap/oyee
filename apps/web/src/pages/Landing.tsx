@@ -200,7 +200,7 @@ function TerminalLine({ children, tone = "plain", show = true }: { children: Rea
       className={cx(
         "rise-in flex gap-2 whitespace-pre-wrap",
         tone === "dim" && "text-white/45",
-        tone === "in" && "text-[#fdba8c]",
+        tone === "in" && "text-[#a9c9f7]",
       )}
     >
       {children}
@@ -255,13 +255,13 @@ function HeroDemo() {
         <div key={cycle} className="min-h-[8.2rem]">
           <TerminalLine tone="dim">{"> migrate users to users_v2, ask me before dropping anything"}</TerminalLine>
           <TerminalLine tone="tool">
-            <span className="text-[#ff6b1a]">●</span>
+            <span className="text-[#58a6ff]">●</span>
             <span>
               oyee.send_notification <span className="text-white/45">"Migrating users"</span>
             </span>
           </TerminalLine>
           <TerminalLine tone="tool" show={value > 0}>
-            <span className="text-[#ff6b1a]">●</span>
+            <span className="text-[#58a6ff]">●</span>
             <span>
               oyee.update_notification{" "}
               <span className="text-white/45 tabular-nums">
@@ -270,7 +270,7 @@ function HeroDemo() {
             </span>
           </TerminalLine>
           <TerminalLine tone="tool" show={stage !== "progress"}>
-            <span className="text-[#ff6b1a]">●</span>
+            <span className="text-[#58a6ff]">●</span>
             <span>
               oyee.ask <span className="text-white/45">"Drop the old table?"</span>
             </span>
@@ -354,7 +354,7 @@ function SectionTitle({ eyebrow, title, children }: { eyebrow: string; title: Re
   );
 }
 
-/** A peach highlighter stroke behind the lower part of a phrase; the text stays ink. */
+/** A light-blue highlighter stroke behind the lower part of a phrase; the text stays ink. */
 function Marker({ children }: { children: ReactNode }) {
   return (
     <span className="relative isolate whitespace-nowrap">

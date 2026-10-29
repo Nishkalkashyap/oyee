@@ -73,7 +73,7 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severit
   return [filters, update, params];
 }
 
-/** Gluon's list row: the source's tinted avatar with a severity dot, title, time (orange while unread) and preview. */
+/** Gluon's list row: the source's tinted avatar with a severity dot, title, time (blue while unread) and preview. */
 function InboxRow({ n, selected, search, indent }: { n: Notification; selected: boolean; search: string; indent?: boolean }) {
   const unread = !n.readAt && n.status === "active";
   const preview = markdownToPlainText(n.body).replace(/\s+/g, " ").trim();
@@ -291,7 +291,7 @@ function NotificationDetail({
         <Button size="sm" variant="ghost" icon={<TrashIcon size={14} />} loading={del.isPending} onClick={onDelete} aria-label="Delete" title="Delete" />
       </header>
 
-      {/* Conversation: the agent's card, quiet updates, your answers as peach bubbles. */}
+      {/* Conversation: the agent's card, quiet updates, your answers as light-blue bubbles. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-2xl flex-col gap-2.5 px-3 py-5 sm:px-5">
           <SystemLine>{formatDateTime(n.createdAt)}</SystemLine>

@@ -305,7 +305,7 @@ export function Layout({ user }: { user: User }) {
         </div>
       </main>
 
-      {/* Bottom tabs (mobile): a peach pill marks the active icon. */}
+      {/* Bottom tabs (mobile): a light-blue pill marks the active icon. */}
       <nav className="grid shrink-0 grid-cols-5 border-t border-zinc-200 bg-background pt-2 pb-[max(env(safe-area-inset-bottom),10px)] md:hidden dark:border-zinc-800">
         {NAV.map((item) => (
           <NavLink

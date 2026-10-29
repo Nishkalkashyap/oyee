@@ -13,10 +13,10 @@ public enum Theme {
     public static let background = dynamic(light: 0xFFFFFF, dark: 0x1E1C1A)
     public static let foreground = dynamic(light: 0x1C1B19, dark: 0xF1EDE6)
     public static let card = dynamic(light: 0xF7F6F3, dark: 0x262421)
-    public static let brand = dynamic(light: 0xD9480F, dark: 0xFF6B1A)
-    public static let brandForeground = dynamic(light: 0xFFFFFF, dark: 0x1C1B19)
-    public static let chip = dynamic(light: 0xFDE7D7, dark: 0x4A2713)
-    public static let chipForeground = dynamic(light: 0x9A3412, dark: 0xFDBA8C)
+    public static let brand = dynamic(light: 0x1F6FEB, dark: 0x58A6FF)
+    public static let brandForeground = dynamic(light: 0xFFFFFF, dark: 0x0D1B2E)
+    public static let chip = dynamic(light: 0xDDE9FB, dark: 0x16294A)
+    public static let chipForeground = dynamic(light: 0x1E4E9A, dark: 0xA9C9F7)
     public static let thread = dynamic(light: 0xF7F4EF, dark: 0x181614)
     public static let bubble = dynamic(light: 0xFFFFFF, dark: 0x2B2825)
     public static let secondary = dynamic(light: 0xF3F2EF, dark: 0x2B2825)
@@ -167,7 +167,7 @@ public struct OyeeMark: View {
     }
 }
 
-/// The brand tile: the mark in white on orange.
+/// The brand tile: the mark in white on blue.
 public struct BrandMark: View {
     var size: CGFloat
     public init(size: CGFloat = 28) { self.size = size }
@@ -253,7 +253,7 @@ public struct PillButtonStyle: ButtonStyle {
     }
 }
 
-/// A single-select filter pill: grey, peach when selected.
+/// A single-select filter pill: grey, light-blue when selected.
 public struct FilterChip: View {
     let title: String
     let isOn: Bool
@@ -279,7 +279,7 @@ public struct FilterChip: View {
     }
 }
 
-/// Orange unread count.
+/// Blue unread count.
 public struct CountBadge: View {
     let count: Int
     public init(_ count: Int) { self.count = count }
