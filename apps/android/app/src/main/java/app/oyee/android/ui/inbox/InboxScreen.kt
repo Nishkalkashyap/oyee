@@ -155,13 +155,9 @@ private fun FilterBar(state: InboxUiState, onChange: (InboxFilters) -> Unit) {
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        FilterPill("All", selected = !f.isActive) { onChange(InboxFilters()) }
-        FilterPill("Active", selected = f.status == NotificationStatus.ACTIVE) {
-            onChange(f.copy(status = if (f.status == NotificationStatus.ACTIVE) null else NotificationStatus.ACTIVE))
-        }
-        FilterPill("Resolved", selected = f.status == NotificationStatus.RESOLVED) {
-            onChange(f.copy(status = if (f.status == NotificationStatus.RESOLVED) null else NotificationStatus.RESOLVED))
-        }
+        FilterPill("Active", selected = f.status == NotificationStatus.ACTIVE) { onChange(f.copy(status = NotificationStatus.ACTIVE)) }
+        FilterPill("Resolved", selected = f.status == NotificationStatus.RESOLVED) { onChange(f.copy(status = NotificationStatus.RESOLVED)) }
+        FilterPill("All", selected = f.status == null) { onChange(f.copy(status = null)) }
         state.sources.forEach { s ->
             FilterPill(s.source, selected = f.source == s.source) { onChange(f.copy(source = if (f.source == s.source) null else s.source)) }
         }
@@ -252,18 +248,20 @@ private fun EmptyState(state: InboxUiState) {
                     Icon(Icons.Filled.Done, contentDescription = null, tint = c.chipForeground)
                 }
                 Spacer(Modifier.height(14.dp))
-                Text(
-                    when {
-                        state.error != null -> "Couldn't load notifications"
-                        state.filters.isActive -> "Nothing matches these filters"
-                        else -> "No notifications yet"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = c.foreground,
-                )
+                val error = state.error
+                val (title, message) = when {
+                    error != null -> "Couldn't load notifications" to error
+                    state.filters.isNarrowed -> "Nothing matches these filters" to "Try another source or tab."
+                    state.filters.status == NotificationStatus.RESOLVED ->
+                        "Nothing resolved yet" to "Notifications you resolve move here, out of your inbox."
+                    state.filters.status == NotificationStatus.ACTIVE && state.sources.any { it.count > 0 } ->
+                        "All caught up" to "Nothing needs your attention. Resolved notifications are under Resolved."
+                    else -> "No notifications yet" to "Send one with a webhook or an MCP tool and it shows up here instantly."
+                }
+                Text(title, style = MaterialTheme.typography.titleLarge, color = c.foreground)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    state.error ?: "Send one with a webhook or an MCP tool and it shows up here instantly.",
+                    message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.muted,
                     textAlign = TextAlign.Center,

@@ -224,15 +224,25 @@ struct InboxStoreTests {
 
         store.filter = InboxFilter(status: .active)
         #expect(store.visibleNotifications.map(\.id) == ["crit"])
-        store.filter = InboxFilter(severity: .critical, source: "aws")
+        store.filter = InboxFilter(status: .resolved)
+        #expect(store.visibleNotifications.map(\.id) == ["done"])
+        store.filter = InboxFilter(status: nil, severity: .critical, source: "aws")
         #expect(store.visibleNotifications.map(\.id) == ["crit"])
-        store.filter = InboxFilter(query: "cpu")
+        store.filter = InboxFilter(status: nil, query: "cpu")
         #expect(store.visibleNotifications.map(\.id) == ["crit"])
-        store.filter = InboxFilter(unreadOnly: true)
+        store.filter = InboxFilter(status: nil, unreadOnly: true)
         #expect(store.visibleNotifications.map(\.id) == ["crit"])
-        store.filter = InboxFilter()
+        store.filter = InboxFilter(status: nil)
         #expect(store.visibleNotifications.count == 2)
-        #expect(store.activeOrUnread.map(\.id) == ["crit"])
+        #expect(store.filter.isUnnarrowed && !store.filter.isDefault)
+        // Default view: active only, so resolving clears it from the inbox and the menu bar.
+        store.filter = InboxFilter()
+        #expect(store.visibleNotifications.map(\.id) == ["crit"])
+        #expect(store.activeNotifications.map(\.id) == ["crit"])
+        store.apply(.notificationUpdated(make("crit", version: 2, minute: 2, status: .resolved), alert: false, reason: .resolved))
+        #expect(store.visibleNotifications.isEmpty)
+        #expect(store.activeNotifications.isEmpty)
+        #expect(store.hasAnyNotifications)
     }
 
     @Test func cacheRoundTrip() throws {

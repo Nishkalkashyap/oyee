@@ -610,7 +610,7 @@ export class InboxDO extends DurableObject<Env> {
       this.consume("read");
       return this.sql
         .exec<{ source: string; count: number; unread: number; lastAt: string }>(
-          `SELECT source, COUNT(*) AS count, SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
+          `SELECT source, COUNT(*) AS count, SUM(CASE WHEN read_at IS NULL AND status = 'active' THEN 1 ELSE 0 END) AS unread,
              MAX(created_at) AS lastAt FROM notifications GROUP BY source ORDER BY lastAt DESC`,
         )
         .toArray()

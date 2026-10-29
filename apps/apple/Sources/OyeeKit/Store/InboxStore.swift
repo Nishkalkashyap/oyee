@@ -12,7 +12,8 @@ public protocol NotificationSink: AnyObject {
     func remove(ids: [String])
 }
 
-/// Inbox filters (applied locally and sent to the server on refresh).
+/// Inbox filters (applied locally and sent to the server on refresh). The default view shows active notifications
+/// only: resolving one moves it to the Resolved tab. `status == nil` means all.
 public struct InboxFilter: Sendable, Hashable {
     public var status: NotificationStatus?
     public var severity: Severity?
@@ -21,7 +22,7 @@ public struct InboxFilter: Sendable, Hashable {
     public var unreadOnly = false
 
     public init(
-        status: NotificationStatus? = nil, severity: Severity? = nil, source: String? = nil, query: String = "",
+        status: NotificationStatus? = .active, severity: Severity? = nil, source: String? = nil, query: String = "",
         unreadOnly: Bool = false
     ) {
         self.status = status
@@ -32,6 +33,9 @@ public struct InboxFilter: Sendable, Hashable {
     }
 
     public var isDefault: Bool { self == InboxFilter() }
+
+    /// No severity, source, unread or search narrowing (only the status tab may differ from the default).
+    public var isUnnarrowed: Bool { InboxFilter(status: status) == self }
 
     public func matches(_ n: OyeeNotification) -> Bool {
         if let status, n.status != status { return false }
@@ -107,9 +111,14 @@ public final class InboxStore {
         notifications.reduce(0) { $0 + ($1.wantsSystemNotification ? 1 : 0) }
     }
 
-    /// Active or unread notifications for the menu bar list.
-    public var activeOrUnread: [OyeeNotification] {
-        notifications.filter { $0.status == .active || !$0.isRead }
+    /// Active notifications for the menu bar list (resolved ones are done, read or not).
+    public var activeNotifications: [OyeeNotification] {
+        notifications.filter { $0.status == .active }
+    }
+
+    /// Whether this inbox has ever had anything in it (drives "All caught up" vs. "No notifications yet").
+    public var hasAnyNotifications: Bool {
+        !notifications.isEmpty || sources.contains { $0.count > 0 }
     }
 
     public var knownSources: [String] {

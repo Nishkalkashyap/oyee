@@ -13,6 +13,13 @@
 - Install with an AI agent: copyable prompts (landing page below the downloads, Help dialog and README) that have Claude Code, Codex or another agent
   download, checksum and install the macOS app, or the Android app over `adb`. The Gatekeeper workaround is now
   `xattr -cr`, which also clears flags other than quarantine.
+- Inbox: resolved notifications leave the default view. The web inbox opens on **Active**, with **Resolved** and
+  **All** tabs (`?status=resolved` / `?status=all`), and an "All caught up" state once everything is resolved.
+  Unread counts (`GET /api/sources`, badges) count only active notifications.
+
+## Next app release
+- macOS and Android: the inbox opens on **Active**. Resolved notifications leave the default list and the macOS
+  menu bar and move to a **Resolved** tab (**All** shows both); resolving everything leaves "All caught up".
 
 ## 0.2.5
 - Update check demo: from 0.2.4, Android downloads this release in the app (download manager) instead of the browser.

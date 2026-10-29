@@ -40,12 +40,19 @@ import { useDevices } from "../lib/queries";
 
 const GROUP_KEY = "oyee:inbox:group";
 
+/** The inbox shows active notifications by default; `?status=resolved` and `?status=all` open the other tabs. */
+function statusFromParam(v: string | null): NotificationStatus | undefined {
+  if (v === "resolved") return "resolved";
+  if (v === "all") return undefined;
+  return "active";
+}
+
 function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severity" | "status" | "thread" | "q", string | null>>) => void, URLSearchParams] {
   const [params, setParams] = useSearchParams();
   const filters: InboxFilters = {
     source: params.get("source") ?? undefined,
     severity: (SEVERITIES as string[]).includes(params.get("severity") ?? "") ? (params.get("severity") as Severity) : undefined,
-    status: params.get("status") === "active" || params.get("status") === "resolved" ? (params.get("status") as NotificationStatus) : undefined,
+    status: statusFromParam(params.get("status")),
     threadId: params.get("thread") ?? undefined,
     q: params.get("q") ?? undefined,
   };
@@ -68,7 +75,7 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severit
 
 /** Gluon's list row: the source's tinted avatar with a severity dot, title, time (orange while unread) and preview. */
 function InboxRow({ n, selected, search, indent }: { n: Notification; selected: boolean; search: string; indent?: boolean }) {
-  const unread = !n.readAt;
+  const unread = !n.readAt && n.status === "active";
   const preview = markdownToPlainText(n.body).replace(/\s+/g, " ").trim();
   return (
     <Link
@@ -140,7 +147,7 @@ function ThreadGroupRows({
   onFilter: () => void;
 }) {
   const [open, setOpen] = useState(true);
-  const unread = items.filter((n) => !n.readAt).length;
+  const unread = items.filter((n) => !n.readAt && n.status === "active").length;
   return (
     <div>
       <div className="flex items-center gap-2 px-3 pt-3 pb-1 text-[13px]">
@@ -385,7 +392,8 @@ export function InboxPage() {
   const search = listParams.toString() ? `?${listParams.toString()}` : "";
   const items = useMemo(() => flattenPages(list.data), [list.data]);
   const groups = useMemo(() => (grouped ? groupByThread(items) : null), [grouped, items]);
-  const hasFilters = !!(filters.source || filters.severity || filters.status || filters.threadId || filters.q);
+  const narrowed = !!(filters.source || filters.severity || filters.threadId || filters.q);
+  const hasFilters = narrowed || filters.status !== "active";
 
   // Debounced search → URL.
   useEffect(() => {
@@ -496,11 +504,11 @@ export function InboxPage() {
             <Segmented<"all" | NotificationStatus>
               size="sm"
               value={filters.status ?? "all"}
-              onChange={(v) => setFilter({ status: v === "all" ? null : v })}
+              onChange={(v) => setFilter({ status: v === "active" ? null : v })}
               options={[
-                { value: "all", label: "All" },
                 { value: "active", label: "Active" },
                 { value: "resolved", label: "Resolved" },
+                { value: "all", label: "All" },
               ]}
             />
             <Select
@@ -549,9 +557,25 @@ export function InboxPage() {
               <ErrorBanner onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorBanner>
             </div>
           ) : items.length === 0 ? (
-            hasFilters ? (
+            narrowed ? (
               <EmptyState icon={<SearchIcon size={20} />} title="Nothing matches these filters">
                 Try a different source, severity or search.
+              </EmptyState>
+            ) : filters.status === "resolved" ? (
+              <EmptyState icon={<CheckIcon size={20} />} title="Nothing resolved yet">
+                Notifications you resolve move here, out of your inbox.
+              </EmptyState>
+            ) : filters.status === "active" && sourceItems.some((s) => s.count > 0) ? (
+              <EmptyState
+                icon={<CheckIcon size={20} />}
+                title="All caught up"
+                actions={
+                  <Button variant="secondary" onClick={() => setFilter({ status: "resolved" })}>
+                    View resolved
+                  </Button>
+                }
+              >
+                Nothing needs your attention. Resolved notifications are in the Resolved tab.
               </EmptyState>
             ) : (
               <EmptyState

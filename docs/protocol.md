@@ -170,6 +170,7 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `POST /api/notifications/:id/resolve` → `Notification`
 - `DELETE /api/notifications/:id` → `204`
 - `GET /api/sources` → `{ "items": [{ "source": "aws-monitor", "count": 12, "unread": 3, "lastAt": "…" }] }`
+  (`unread` counts only unread **active** notifications: resolved ones never need attention, so they don't badge.)
 
 ### Templates
 - `GET /api/templates` → `{ items: Template[] }`

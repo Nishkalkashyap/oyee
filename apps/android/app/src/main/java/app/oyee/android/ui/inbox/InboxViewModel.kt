@@ -17,17 +17,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** The inbox shows active notifications by default: resolving one moves it to the Resolved tab. `status = null` = all. */
 data class InboxFilters(
     val source: String? = null,
     val severity: Severity? = null,
-    val status: NotificationStatus? = null,
+    val status: NotificationStatus? = NotificationStatus.ACTIVE,
 ) {
     fun matches(n: Notification) =
         (source == null || n.source == source) &&
             (severity == null || n.severity == severity) &&
             (status == null || n.status == status)
 
-    val isActive get() = source != null || severity != null || status != null
+    /** Narrowed beyond the status tab (by source or severity). */
+    val isNarrowed get() = source != null || severity != null
 }
 
 data class InboxUiState(

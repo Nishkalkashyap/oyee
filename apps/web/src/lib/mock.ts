@@ -444,7 +444,7 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
     for (const n of db.notifications) {
       const s = map.get(n.source) ?? { source: n.source, count: 0, unread: 0, lastAt: n.createdAt };
       s.count++;
-      if (!n.readAt) s.unread++;
+      if (!n.readAt && n.status === "active") s.unread++;
       if (n.createdAt > s.lastAt) s.lastAt = n.createdAt;
       map.set(n.source, s);
     }

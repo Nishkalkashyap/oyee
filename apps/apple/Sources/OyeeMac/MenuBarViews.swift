@@ -87,7 +87,7 @@ struct MenuBarContentView: View {
                 PairingView(model: model, compact: true)
             }
             .padding(12)
-        } else if store.activeOrUnread.isEmpty {
+        } else if store.activeNotifications.isEmpty {
             VStack(spacing: 6) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 18, weight: .bold))
@@ -95,7 +95,7 @@ struct MenuBarContentView: View {
                     .frame(width: 44, height: 44)
                     .background(Theme.chip, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 Text("All caught up").font(.oyee(15, .bold))
-                Text("Active and unread notifications appear here.")
+                Text("Active notifications appear here.")
                     .font(.oyee(12.5))
                     .foregroundStyle(Theme.muted)
             }
@@ -104,7 +104,7 @@ struct MenuBarContentView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(store.activeOrUnread.prefix(40)) { notification in
+                    ForEach(store.activeNotifications.prefix(40)) { notification in
                         NotificationCardView(notification: notification, store: store, compact: true)
                             .background(Theme.background)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

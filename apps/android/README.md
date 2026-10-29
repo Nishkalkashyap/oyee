@@ -177,6 +177,8 @@ If you rely on the **WebSocket service** (no Play services, a self-hosted server
   not distributed through Play.
 - Some manufacturers (Xiaomi, Huawei, Samsung, OnePlus, …) kill background apps aggressively despite this. Follow
   the per-vendor steps at <https://dontkillmyapp.com>. These usually involve "autostart" or "unrestricted battery".
+- The inbox opens on **Active**: resolved notifications move to the Resolved pill (All shows both), so resolving
+  everything leaves an "All caught up" screen. Source pills narrow within the selected tab.
 - The connection status ("Live", "Reconnecting…", "Offline") is shown in the inbox header and on the Settings
   screen.
 

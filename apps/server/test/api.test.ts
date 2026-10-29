@@ -231,6 +231,10 @@ describe("notifications", () => {
     const sources = await call("GET", "/api/sources", { cookie });
     const even = sources.body.items.find((s: { source: string }) => s.source === "even");
     expect(even).toMatchObject({ count: 3, unread: 2 });
+    // Resolved notifications don't count as unread (they're out of the default view)
+    await call("POST", `/api/notifications/${ids[1]}/resolve`, { cookie });
+    const after = await call("GET", "/api/sources", { cookie });
+    expect(after.body.items.find((s: { source: string }) => s.source === "odd")).toMatchObject({ count: 2, unread: 1 });
 
     const ra = await call("POST", "/api/notifications/read-all", { cookie }, { source: "odd" });
     expect(ra.body).toEqual({ updated: 2 });

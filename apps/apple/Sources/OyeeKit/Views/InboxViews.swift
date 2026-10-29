@@ -8,9 +8,9 @@ public struct InboxFilterControls: View {
 
     public var body: some View {
         Picker("Status", selection: $store.filter.status) {
-            Text("All").tag(NotificationStatus?.none)
             Text("Active").tag(NotificationStatus?.some(.active))
             Text("Resolved").tag(NotificationStatus?.some(.resolved))
+            Text("All").tag(NotificationStatus?.none)
         }
         Picker("Severity", selection: $store.filter.severity) {
             Text("Any severity").tag(Severity?.none)
@@ -84,19 +84,22 @@ public struct InboxListView: View {
                 if store.isLoading && !store.hasLoaded {
                     ProgressView()
                 } else {
+                    let empty = emptyState
                     VStack(spacing: 8) {
-                        Image(systemName: store.filter.isDefault ? "tray" : "magnifyingglass")
+                        Image(systemName: empty.symbol)
                             .font(.system(size: 20))
                             .foregroundStyle(Theme.chipForeground)
                             .frame(width: 48, height: 48)
                             .background(Theme.chip, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Text(store.filter.isDefault ? "No notifications yet" : "Nothing matches")
+                        Text(empty.title)
                             .font(.oyee(15, .bold))
-                        Text(store.filter.isDefault ? "Notifications sent to Oyee show up here." : "Try another filter.")
+                        Text(empty.message)
                             .font(.oyee(13))
                             .foregroundStyle(Theme.muted)
+                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, 120)
+                    .padding(.horizontal, 24)
                 }
             }
         }
@@ -108,6 +111,18 @@ public struct InboxListView: View {
                 guard !Task.isCancelled else { return }
                 await store.refresh()
             }
+        }
+    }
+
+    private var emptyState: (symbol: String, title: String, message: String) {
+        if !store.filter.isUnnarrowed { return ("magnifyingglass", "Nothing matches", "Try another filter.") }
+        switch store.filter.status {
+        case .resolved:
+            return ("checkmark", "Nothing resolved yet", "Notifications you resolve move here, out of your inbox.")
+        case .active where store.hasAnyNotifications:
+            return ("checkmark", "All caught up", "Nothing needs your attention. Resolved notifications are under Resolved.")
+        default:
+            return ("tray", "No notifications yet", "Notifications sent to Oyee show up here.")
         }
     }
 
@@ -143,15 +158,10 @@ public struct InboxListView: View {
     private var chips: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                FilterChip("All", isOn: store.filter.isDefault || (store.filter.source == nil && !store.filter.unreadOnly && store.filter.status == nil)) {
-                    store.filter.unreadOnly = false
-                    store.filter.status = nil
-                    store.filter.source = nil
-                }
+                FilterChip("Active", isOn: store.filter.status == .active) { store.filter.status = .active }
+                FilterChip("Resolved", isOn: store.filter.status == .resolved) { store.filter.status = .resolved }
+                FilterChip("All", isOn: store.filter.status == nil) { store.filter.status = nil }
                 FilterChip("Unread", isOn: store.filter.unreadOnly) { store.filter.unreadOnly.toggle() }
-                FilterChip("Active", isOn: store.filter.status == .active) {
-                    store.filter.status = store.filter.status == .active ? nil : .active
-                }
                 ForEach(store.knownSources, id: \.self) { source in
                     FilterChip(source, isOn: store.filter.source == source) {
                         store.filter.source = store.filter.source == source ? nil : source
