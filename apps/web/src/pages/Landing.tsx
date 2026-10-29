@@ -242,7 +242,7 @@ function HeroDemo() {
         );
 
   return (
-    <div className="relative mx-auto min-h-[580px] w-full max-w-[520px] sm:min-h-[540px]" aria-label="Demo: an AI agent sends a live notification and asks a question">
+    <div className="relative mx-auto min-h-[620px] w-full max-w-[520px] min-[360px]:min-h-[540px]" aria-label="Demo: an AI agent sends a live notification and asks a question">
       {/* The agent's terminal */}
       <div className="rounded-[22px] bg-[#1c1b19] p-4 pb-12 font-mono text-[12px] leading-[1.7] text-[#f1ede6] shadow-[0_30px_60px_-30px_rgba(28,27,25,0.55)] ring-1 ring-black/5 sm:text-[12.5px] dark:bg-[#0c0b0a] dark:ring-white/8">
         <div className="mb-3 flex items-center gap-1.5">
@@ -546,15 +546,17 @@ function PlatformColumn({
   meta,
   preview,
   action,
+  className,
 }: {
   icon: ComponentType<IconProps>;
   name: string;
   meta: string;
   preview: ReactNode;
   action: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col rounded-[22px] bg-background p-5 sm:p-6">
+    <div className={cx("flex flex-col rounded-[22px] bg-background p-5 sm:p-6", className)}>
       <div className="flex items-center gap-3">
         <span className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-secondary-label dark:bg-zinc-800">
           <Icon size={20} />
@@ -565,7 +567,7 @@ function PlatformColumn({
         </div>
       </div>
       <div className="landing-dots my-5 flex flex-1 items-center rounded-2xl bg-zinc-100 p-3 sm:p-4 dark:bg-zinc-900 [&_p]:hidden">
-        <div className="w-full">{preview}</div>
+        <div className="mx-auto w-full max-w-sm">{preview}</div>
       </div>
       {action}
     </div>
@@ -587,7 +589,7 @@ function Platforms() {
     </a>
   );
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <PlatformColumn
         icon={SmartphoneIcon}
         name="Android"
@@ -604,6 +606,7 @@ function Platforms() {
       />
       <PlatformColumn
         icon={GlobeIcon}
+        className="sm:col-span-2 lg:col-span-1"
         name="Web"
         meta="Push in any modern browser"
         preview={<WebPushPreview n={PLATFORM_CARD} />}
@@ -759,7 +762,7 @@ export function LandingPage() {
       <Nav />
 
       {/* Hero */}
-      <Section className="grid items-center gap-14 pt-10 pb-12 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-10 lg:pt-16 lg:pb-16">
+      <Section className="grid grid-cols-1 items-center gap-14 pt-10 pb-12 sm:pt-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-10 lg:pt-16 lg:pb-16">
         <div className="rise-in">
           <a
             href={REPO}
@@ -807,21 +810,21 @@ export function LandingPage() {
           Push services stop at "something happened". Oyee cards keep going: they update, ask, take answers and close themselves when
           the job is done.
         </SectionTitle>
-        <div className="mt-12 grid gap-4 md:grid-cols-6">
-          <Tile className="md:col-span-3" title="Updated in place" visual={<LoopingProgress />}>
+        <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
+          <Tile className="lg:col-span-3" title="Updated in place" visual={<LoopingProgress />}>
             Send once, then patch progress, fields and status. Every device redraws the same card instead of stacking twelve.
           </Tile>
-          <Tile className="md:col-span-3" title="Buttons that call back" visual={<ButtonsVisual />}>
+          <Tile className="lg:col-span-3" title="Buttons that call back" visual={<ButtonsVisual />}>
             Agents call <code className="font-mono text-[13px]">ask</code> and{" "}
             <code className="font-mono text-[13px]">wait_for_response</code>. You tap on your lock screen; the agent carries on.
           </Tile>
-          <Tile className="md:col-span-2" title="Answer in words" visual={<ReplyVisual />}>
+          <Tile className="lg:col-span-2" title="Answer in words" visual={<ReplyVisual />}>
             Add a reply box and type the answer from your notification shade.
           </Tile>
-          <Tile className="md:col-span-2" title="Webhooks, understood" visual={<WebhookVisual />}>
+          <Tile className="lg:col-span-2" title="Webhooks, understood" visual={<WebhookVisual />}>
             Alertmanager, Grafana and AWS SNS work as-is. Anything else: JSON, plain text or ntfy-style headers.
           </Tile>
-          <Tile className="md:col-span-2" title="Loud when it matters" visual={<SeverityVisual />}>
+          <Tile className="md:col-span-2 lg:col-span-2" title="Loud when it matters" visual={<SeverityVisual />}>
             Critical alerts stay until dismissed, debug stays silent, and threads group a deploy into one conversation.
           </Tile>
         </div>
@@ -839,7 +842,7 @@ export function LandingPage() {
       </Section>
 
       {/* Setup */}
-      <Section id="setup" className="grid gap-10 pb-28 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+      <Section id="setup" className="grid grid-cols-1 gap-10 pb-28 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
         <div className="lg:sticky lg:top-24">
           <SectionTitle eyebrow="Setup" title="One line to hook it up.">
             Sign in, create a token, paste it. Your agent gets MCP tools; everything else gets a webhook URL.
@@ -867,7 +870,7 @@ export function LandingPage() {
 
       {/* Open source */}
       <Section className="pb-28">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {[
             { icon: <CodeIcon size={19} />, title: "MIT licensed", text: "Every line of the server, web app and native apps is on GitHub." },
             { icon: <LayersIcon size={19} />, title: "Self-host it", text: "One Cloudflare Worker with a Durable Object per user. Bring it up in an afternoon." },
