@@ -60,7 +60,8 @@ The app has no Dock icon. Look for the bell in the menu bar. On first launch it 
    it under *System Settings → General → Login Items*.
 
 **Gatekeeper.** A Mac you built the app on runs it without complaint. If you copy or download the app to another Mac,
-it's quarantined and unnotarized, so either right-click → **Open** the first time, or run:
+it's quarantined and unnotarized. If macOS blocks the first launch, open *System Settings → Privacy & Security →
+Open Anyway*, or run:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Oyee.app

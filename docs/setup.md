@@ -9,6 +9,7 @@ your own instance, or to redeploy from a new machine. iOS is not covered yet (se
 
 > **Deploying from a new laptop?** You only need steps 0, 1 and 4.6. Worker secrets live in Cloudflare and
 > persist across deploys, so no secrets files are required. You need them only to *rotate* secrets (see §4.4).
+> Running the hosted oyee.app instance (extra domains, releases, rollback)? See [operations.md](operations.md).
 
 ---
 
@@ -111,6 +112,8 @@ pnpm --filter @oyee/web build && cd apps/server && pnpm exec wrangler d1 migrati
 # every later deploy, from the repo root:
 pnpm deploy
 ```
+Extra custom domains that shouldn't appear in the repo go in the git-ignored `apps/server/.extra-domains`, one per
+line. `pnpm deploy` passes them to wrangler each time, because wrangler replaces the domain list on every deploy.
 Verify: `curl https://<your-host>/api/config` → `fcmEnabled: true`, `vapidPublicKey` set, `devLogin: false`.
 
 ## 5. Web
@@ -196,5 +199,8 @@ Sign in at `http://localhost:8787/auth/dev-login?email=you@example.com&redirect=
    -keyalg RSA -keysize 4096 -validity 36500`. **Back it up**; every APK must be signed with it.
 2. Repo secrets (once): `ANDROID_KEYSTORE_BASE64` (`base64 -i oyee-release.jks`), `ANDROID_KEYSTORE_PASSWORD`,
    `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
-3. Release: `git tag v0.2.0 && git push origin v0.2.0`. The workflow runs the Android and Swift tests, builds the signed
-   APK and the universal macOS app, and publishes the GitHub Release with checksums.
+3. Release: `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow runs the Android and Swift tests, builds the
+   signed APK and the universal macOS app, and publishes the GitHub Release with checksums.
+
+The full checklist (changelog, watching the run, verifying signatures, withdrawing a release) is in
+[operations.md §3](operations.md#3-publish-an-app-release-android--macos).

@@ -38,8 +38,11 @@ The server URL pre-filled on the pairing screen comes from `BuildConfig.DEFAULT_
 
 (or put `oyeeServerUrl=…` in `~/.gradle/gradle.properties`).
 
-The debug build is the one you distribute. A release build (`assembleRelease`) produces an unsigned APK that
-only allows HTTPS. Sign it yourself if you want it.
+Debug builds are for development. Published APKs are release builds (HTTPS-only), signed by the release workflow
+with the key from GitHub Actions secrets; to sign one locally set `OYEE_KEYSTORE_FILE`, `OYEE_KEYSTORE_PASSWORD`,
+`OYEE_KEY_ALIAS` and `OYEE_KEY_PASSWORD` (see [docs/operations.md §3](../../docs/operations.md)). Without them
+`assembleRelease` produces an unsigned APK. Release builds check GitHub Releases for updates
+(`update/AppUpdater.kt`); debug builds don't.
 
 ## Install
 

@@ -62,6 +62,8 @@ claude mcp add --transport http oyee https://oyee.app/mcp/<mcp-token>
 | [docs/setup.md](docs/setup.md) | Run your own instance: Cloudflare, Google sign-in, Firebase, web, Android, macOS |
 | [docs/protocol.md](docs/protocol.md) | The API contract: REST, WebSocket, webhooks, MCP tools, push payloads |
 | [docs/design.md](docs/design.md) | Design language (shared by web, macOS and Android) |
+| [docs/operations.md](docs/operations.md) | Maintainer runbook: deploys, releases, secrets, rollback, gotchas |
+| [AGENTS.md](AGENTS.md) | Start here if you're an AI agent or new maintainer: map, rules, commands |
 | [PLAN.md](PLAN.md) | Product plan, decisions and status |
 
 ## Repository
@@ -84,5 +86,5 @@ pnpm android:build
 pnpm macos:build
 ```
 
-**Releasing:** `git tag v0.2.0 && git push origin v0.2.0` builds the signed APK and the universal macOS app and
-publishes them on GitHub Releases.
+**Releasing:** `git tag vX.Y.Z && git push origin vX.Y.Z` builds the signed APK and the universal macOS app and
+publishes them on GitHub Releases. Checklist: [docs/operations.md §3](docs/operations.md#3-publish-an-app-release-android--macos).
