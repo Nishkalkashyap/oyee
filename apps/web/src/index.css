@@ -143,20 +143,9 @@ dialog[open] {
   animation: toast-in 160ms var(--ease-emphasized);
 }
 
-/* Landing page: the integrations strip scrolls sideways; previews sit on a faint dot grid. */
-@keyframes marquee {
-  to {
-    translate: -50% 0;
-  }
-}
-.marquee {
-  width: max-content;
-}
+/* Landing page: smooth in-page anchors; platform previews sit on a faint dot grid. */
 @media (prefers-reduced-motion: no-preference) {
-  .marquee {
-    animation: marquee 40s linear infinite;
-  }
-  html:has(.marquee) {
+  html:has(.landing) {
     scroll-behavior: smooth;
   }
 }

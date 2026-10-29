@@ -11,10 +11,10 @@ import { loginErrorMessage, safeRedirect } from "../lib/login";
 import { qk, useConfig, useMe } from "../lib/queries";
 import { mcpSnippets, webhookSnippets } from "../lib/snippets";
 import { useTheme } from "../lib/theme";
+import { BRAND_ICONS, BrandIcon, isInk, type BrandIconName } from "../components/BrandIcons";
 import { CopyButton } from "../components/Code";
 import { LATEST, REPO, useLatestRelease } from "../components/HelpDialog";
 import {
-  BotIcon,
   CheckIcon,
   CodeIcon,
   DownloadIcon,
@@ -25,13 +25,12 @@ import {
   SendIcon,
   SmartphoneIcon,
   SunIcon,
-  WebhookIcon,
   type IconProps,
 } from "../components/Icons";
 import { NotificationCard } from "../components/NotificationCard";
 import { ProgressBar, SeverityBadge } from "../components/NotificationParts";
 import { AndroidPreview, ApplePreview, WebPushPreview } from "../components/PlatformPreviews";
-import { Avatar, BrandMark, Button, Input, OyeeMark, Segmented, avatarTint, buttonClasses, cx } from "../components/ui";
+import { Avatar, BrandMark, Button, Input, OyeeMark, Segmented, buttonClasses, cx } from "../components/ui";
 
 // ─── Sign in ────────────────────────────────────────────────────────────────
 
@@ -243,7 +242,7 @@ function HeroDemo() {
         );
 
   return (
-    <div className="relative mx-auto min-h-[600px] w-full max-w-[520px] sm:min-h-[560px]" aria-label="Demo: an AI agent sends a live notification and asks a question">
+    <div className="relative mx-auto min-h-[580px] w-full max-w-[520px] sm:min-h-[540px]" aria-label="Demo: an AI agent sends a live notification and asks a question">
       {/* The agent's terminal */}
       <div className="rounded-[22px] bg-[#1c1b19] p-4 pb-12 font-mono text-[12px] leading-[1.7] text-[#f1ede6] shadow-[0_30px_60px_-30px_rgba(28,27,25,0.55)] ring-1 ring-black/5 sm:text-[12.5px] dark:bg-[#0c0b0a] dark:ring-white/8">
         <div className="mb-3 flex items-center gap-1.5">
@@ -252,7 +251,7 @@ function HeroDemo() {
           <span className="size-2.5 rounded-full bg-white/15" />
           <span className="ml-2 font-sans text-[11px] font-medium text-white/40">claude · ~/api</span>
         </div>
-        <div key={cycle} className="min-h-[9.6rem]">
+        <div key={cycle} className="min-h-[8.2rem]">
           <TerminalLine tone="dim">{"> migrate users to users_v2, ask me before dropping anything"}</TerminalLine>
           <TerminalLine tone="tool">
             <span className="text-[#ff6b1a]">●</span>
@@ -348,16 +347,19 @@ function SectionTitle({ eyebrow, title, children }: { eyebrow: string; title: Re
   return (
     <div className="max-w-2xl">
       <Eyebrow>{eyebrow}</Eyebrow>
-      <h2 className="mt-3 text-[34px] leading-[1.05] font-extrabold tracking-[-0.04em] text-balance sm:text-[44px]">{title}</h2>
+      <h2 className="mt-3 text-[32px] leading-[1.1] font-extrabold tracking-[-0.03em] text-balance sm:text-[42px]">{title}</h2>
       {children && <p className="mt-4 text-[16px] leading-relaxed text-pretty text-zinc-500 sm:text-[17px] dark:text-zinc-400">{children}</p>}
     </div>
   );
 }
 
-/** Highlights a phrase with the peach selection colour. */
-function Peach({ children }: { children: ReactNode }) {
+/** A peach highlighter stroke behind the lower part of a phrase; the text stays ink. */
+function Marker({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-[0.18em] bg-chip box-decoration-clone px-[0.12em] text-chip-foreground">{children}</span>
+    <span className="relative isolate whitespace-nowrap">
+      <span aria-hidden className="absolute inset-x-[-0.08em] bottom-[0.06em] -z-10 h-[0.4em] rounded-[0.1em] bg-chip" />
+      {children}
+    </span>
   );
 }
 
@@ -381,45 +383,43 @@ function Tile({
   );
 }
 
-// ─── Integrations strip ───────────────────────────────────────────────────────
+// ─── Integrations ─────────────────────────────────────────────────────────────
 
-const SOURCES: { name: string; icon: ComponentType<IconProps> }[] = [
-  { name: "Claude Code", icon: BotIcon },
-  { name: "Codex", icon: BotIcon },
-  { name: "Cursor", icon: BotIcon },
-  { name: "Home Assistant", icon: WebhookIcon },
-  { name: "Alertmanager", icon: WebhookIcon },
-  { name: "Grafana", icon: WebhookIcon },
-  { name: "GitHub Actions", icon: CodeIcon },
-  { name: "AWS SNS", icon: WebhookIcon },
-  { name: "cron", icon: CodeIcon },
-  { name: "curl", icon: CodeIcon },
-  { name: "Any MCP client", icon: BotIcon },
+const INTEGRATIONS: { icon: BrandIconName; name: string; how: string }[] = [
+  { icon: "claude", name: "Claude Code", how: "MCP server, one command" },
+  { icon: "cursor", name: "Cursor", how: "MCP server" },
+  { icon: "mcp", name: "Any MCP client", how: "Send, ask, wait for answers" },
+  { icon: "homeassistant", name: "Home Assistant", how: "REST notify platform" },
+  { icon: "prometheus", name: "Alertmanager", how: "Webhook, understood natively" },
+  { icon: "grafana", name: "Grafana", how: "Contact point, understood natively" },
+  { icon: "githubactions", name: "GitHub Actions", how: "One curl step" },
+  { icon: "n8n", name: "n8n", how: "HTTP Request node" },
+  { icon: "nodered", name: "Node-RED", how: "HTTP request node" },
+  { icon: "curl", name: "curl & scripts", how: "Plain text, JSON or headers" },
 ];
 
-function SourceMarquee() {
-  const row = (hidden?: boolean) => (
-    <ul className="flex shrink-0 gap-3 pr-3" aria-hidden={hidden || undefined}>
-      {SOURCES.map((s) => (
-        <li
-          key={s.name}
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-background px-4 text-[14px] font-semibold whitespace-nowrap text-secondary-label"
-        >
-          <span className="flex size-6 items-center justify-center rounded-full" style={avatarTint(s.name)}>
-            <s.icon size={13} />
-          </span>
-          {s.name}
-        </li>
-      ))}
-    </ul>
-  );
+function Integrations() {
   return (
-    <div className="group relative flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
-      <div className="marquee flex group-hover:[animation-play-state:paused]">
-        {row()}
-        {row(true)}
-      </div>
-    </div>
+    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {INTEGRATIONS.map((i) => {
+        const { hex } = BRAND_ICONS[i.icon];
+        return (
+          <li
+            key={i.name}
+            className="group flex flex-col rounded-[20px] bg-background p-4 transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-20px_rgba(28,27,25,0.35)] sm:p-5"
+          >
+            <span
+              className="flex size-11 items-center justify-center rounded-[14px] bg-zinc-100 dark:bg-zinc-800"
+              style={isInk(hex) ? undefined : { backgroundColor: `color-mix(in oklab, ${hex} 13%, transparent)` }}
+            >
+              <BrandIcon name={i.icon} size={22} />
+            </span>
+            <span className="mt-4 text-[15px] font-bold tracking-[-0.01em]">{i.name}</span>
+            <span className="mt-0.5 text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">{i.how}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -755,11 +755,11 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div id="top" className="min-h-dvh overflow-x-clip">
+    <div id="top" className="landing min-h-dvh overflow-x-clip">
       <Nav />
 
       {/* Hero */}
-      <Section className="grid items-center gap-14 pt-10 pb-20 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-10 lg:pt-20 lg:pb-28">
+      <Section className="grid items-center gap-14 pt-10 pb-12 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-10 lg:pt-16 lg:pb-16">
         <div className="rise-in">
           <a
             href={REPO}
@@ -770,14 +770,16 @@ export function LandingPage() {
             <span className="rounded-full bg-chip px-2 py-0.5 text-[11.5px] font-bold text-chip-foreground">MIT</span>
             Free and open source, no paid tier
           </a>
-          <h1 className="mt-6 text-[46px] leading-[0.98] font-extrabold tracking-[-0.05em] text-balance sm:text-[64px] lg:text-[76px]">
-            Notifications that <Peach>talk back.</Peach>
+          <h1 className="mt-8 text-[44px] leading-[1.06] font-extrabold tracking-[-0.035em] sm:text-[58px] lg:text-[64px]">
+            Notifications
+            <br />
+            that <Marker>talk back.</Marker>
           </h1>
-          <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-pretty text-zinc-500 sm:text-[19px] dark:text-zinc-400">
+          <p className="mt-7 max-w-[34rem] text-[17px] leading-relaxed text-pretty text-zinc-500 sm:text-[18px] dark:text-zinc-400">
             One inbox for your AI agents, webhooks and scripts. Send live cards with progress, buttons and replies to your
             phone, Mac and browser. Update them in place, or wait for an answer.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
+          <div className="mt-10 flex flex-wrap items-center gap-3">
             <SignInButton />
             <a href="#setup" className={buttonClasses("ghost", "lg", "bg-background! text-foreground hover:opacity-80")}>
               <CodeIcon size={16} />
@@ -785,27 +787,19 @@ export function LandingPage() {
             </a>
           </div>
           <SignInExtras />
-          <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] font-medium text-zinc-500 dark:text-zinc-400">
-            {["MCP for any agent", "Webhooks, no glue code", "Android, macOS, web"].map((t) => (
-              <li key={t} className="inline-flex items-center gap-1.5">
-                <CheckIcon size={14} className="text-foreground" />
-                {t}
-              </li>
-            ))}
-          </ul>
         </div>
         <div className="rise-in [animation-delay:120ms] lg:pl-6">
           <HeroDemo />
         </div>
       </Section>
 
-      {/* Sources */}
-      <div className="pb-24">
-        <p className="mb-5 text-center text-[13px] font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+      {/* Integrations */}
+      <Section className="pb-28">
+        <p className="mb-6 text-center text-[13px] font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
           Plugs into what you already run
         </p>
-        <SourceMarquee />
-      </div>
+        <Integrations />
+      </Section>
 
       {/* Features */}
       <Section id="features" className="pb-28">

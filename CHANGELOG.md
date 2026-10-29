@@ -8,7 +8,7 @@
 - Per-IP limits on new accounts and failed token attempts.
 - Web: Help button in the sidebar with downloads for every platform and links to the docs.
 - Web: a landing page replaces the bare sign-in card for signed-out visitors (at `/` and `/login`): a live demo of an
-  agent updating a card and asking a question, integrations, feature tiles, platform previews with downloads and
+  agent updating a card and asking a question, integration cards with official logos, feature tiles, platform previews with downloads and
   copy-paste setup snippets. Sign-in errors and the dev-login form are shown in the hero.
 
 ## 0.2.5
