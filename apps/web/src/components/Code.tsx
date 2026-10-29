@@ -56,7 +56,18 @@ export function CopyButton({
   );
 }
 
-export function CodeBlock({ code, className, title }: { code: string; className?: string; title?: string }) {
+export function CodeBlock({
+  code,
+  className,
+  title,
+  wrap,
+}: {
+  code: string;
+  className?: string;
+  title?: string;
+  /** Wrap long lines instead of scrolling (for prose such as agent prompts). */
+  wrap?: boolean;
+}) {
   return (
     <div
       className={cx(
@@ -71,7 +82,12 @@ export function CodeBlock({ code, className, title }: { code: string; className?
         </div>
       )}
       {!title && <CopyButton text={code} compact className="absolute top-1.5 right-1.5 bg-zinc-50 dark:bg-zinc-900" />}
-      <pre className="overflow-x-auto p-3 pr-10 font-mono text-[12.5px] leading-relaxed text-zinc-800 dark:text-zinc-200">
+      <pre
+        className={cx(
+          "p-3 pr-10 font-mono text-[12.5px] leading-relaxed text-zinc-800 dark:text-zinc-200",
+          wrap ? "break-words whitespace-pre-wrap" : "overflow-x-auto",
+        )}
+      >
         <code>{code}</code>
       </pre>
     </div>

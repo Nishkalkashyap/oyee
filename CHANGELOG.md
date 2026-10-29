@@ -10,6 +10,9 @@
 - Web: a landing page replaces the bare sign-in card for signed-out visitors (at `/` and `/login`): a live demo of an
   agent updating a card and asking a question, integration cards with official logos, feature tiles, platform previews with downloads and
   copy-paste setup snippets. Sign-in errors and the dev-login form are shown in the hero.
+- Install with an AI agent: copyable prompts (landing page below the downloads, Help dialog and README) that have Claude Code, Codex or another agent
+  download, checksum and install the macOS app, or the Android app over `adb`. The Gatekeeper workaround is now
+  `xattr -cr`, which also clears flags other than quarantine.
 
 ## 0.2.5
 - Update check demo: from 0.2.4, Android downloads this release in the app (download manager) instead of the browser.

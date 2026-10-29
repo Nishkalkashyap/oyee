@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,7 +13,9 @@ import {
   TemplateIcon,
   type IconProps,
 } from "./Icons";
-import { Dialog, buttonClasses, cx } from "./ui";
+import { CodeBlock } from "./Code";
+import { Dialog, Segmented, buttonClasses, cx } from "./ui";
+import { INSTALL_PROMPTS, type InstallPrompt } from "../lib/installPrompts";
 
 export const REPO = "https://github.com/Nishkalkashyap/oyee";
 export const LATEST = `${REPO}/releases/latest`;
@@ -90,6 +92,23 @@ const Heading = ({ children }: { children: ReactNode }) => (
   <h3 className="mb-1 text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{children}</h3>
 );
 
+/** Copyable prompts that let a coding agent on the user's computer do the install. */
+function AgentInstall() {
+  const [id, setId] = useState<InstallPrompt["id"]>("macos");
+  const p = INSTALL_PROMPTS.find((x) => x.id === id)!;
+  return (
+    <div className="mt-5">
+      <Heading>Install with an AI agent</Heading>
+      <p className="mb-2.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+        Let Claude Code, Codex or another coding agent download, verify and install the app for you.
+      </p>
+      <Segmented size="sm" value={id} onChange={setId} options={INSTALL_PROMPTS.map((x) => ({ value: x.id, label: x.title }))} />
+      <p className="mt-2.5 mb-2 text-xs text-zinc-500 dark:text-zinc-400">{p.description}</p>
+      <CodeBlock title="Prompt" code={p.prompt} wrap />
+    </div>
+  );
+}
+
 /** Downloads for every platform plus docs and support links. Opened from the help button in the sidebar. */
 export function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const latest = useLatestRelease(open).data;
@@ -156,6 +175,8 @@ export function HelpDialog({ open, onClose }: { open: boolean; onClose: () => vo
       >
         All downloads and checksums <ExternalLinkIcon size={12} />
       </a>
+
+      <AgentInstall />
 
       <div className="mt-5">
         <Heading>Help</Heading>

@@ -31,8 +31,10 @@ Free and open source (MIT).
 |---|---|
 | **Web** | <https://oyee.app>: sign in with Google, nothing to install |
 | **Android** (8.0+) | `Oyee-x.y.z.apk` from [Releases](../../releases/latest). Allow *Install unknown apps* when asked |
-| **macOS** (14+, Apple Silicon and Intel) | `Oyee-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: if macOS blocks the first launch, open **System Settings → Privacy & Security → Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Oyee.app`) |
+| **macOS** (14+, Apple Silicon and Intel) | `Oyee-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: if macOS blocks the first launch, open **System Settings → Privacy & Security → Open Anyway** (or run `xattr -cr /Applications/Oyee.app`) |
 | **iOS** | Build from source ([docs/setup.md](docs/setup.md)). iOS can't be distributed without a paid Apple account |
+
+Or let a coding agent on your computer do it: see [Install with an AI agent](#install-with-an-ai-agent).
 
 Then pair the device: on the web, **Devices → Pair a device**, and enter the code in the app.
 
@@ -40,6 +42,35 @@ Then pair the device: on the web, **Devices → Pair a device**, and enter the c
 can be turned off in Settings). The Android app notifies you about a new release; **Update** downloads the APK with
 Android's download manager, and you tap the "Download complete" notification to install. (The app doesn't install
 APKs itself: Play Protect blocks sideloaded apps that can.) Releases are built and signed by GitHub Actions ([release.yml](.github/workflows/release.yml)); each one includes `SHA256SUMS.txt`.
+
+### Install with an AI agent
+
+A coding agent running on your computer (Claude Code, Codex…) can do the install for you: paste one of these prompts.
+The same prompts are on <https://oyee.app> below the downloads, and in the web app under **Help**.
+
+**macOS**, from an agent on your Mac:
+
+```text
+Install the Oyee macOS app on this Mac from its latest GitHub release (https://github.com/Nishkalkashyap/oyee/releases/latest):
+1. Find the Oyee-<version>-macOS.zip and SHA256SUMS.txt assets via https://api.github.com/repos/Nishkalkashyap/oyee/releases/latest and download both to a new temporary directory.
+2. Check the zip's SHA-256 against SHA256SUMS.txt. Stop and tell me if it doesn't match.
+3. Unzip it, quit Oyee if it's running, and move Oyee.app to /Applications, replacing any older copy.
+4. The app is ad-hoc signed and not notarized, so clear its download flags so Gatekeeper doesn't block it: xattr -cr /Applications/Oyee.app
+5. Open it with: open /Applications/Oyee.app (it lives in the menu bar).
+Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.
+```
+
+**Android**, from an agent on a computer with `adb`, with your phone plugged in and USB debugging on:
+
+```text
+Install the Oyee Android app on my phone over USB from its latest GitHub release (https://github.com/Nishkalkashyap/oyee/releases/latest):
+1. Check that adb is installed and that adb devices lists exactly one authorized phone. If not, explain how to turn on USB debugging and stop.
+2. Find the Oyee-<version>.apk and SHA256SUMS.txt assets via https://api.github.com/repos/Nishkalkashyap/oyee/releases/latest and download both to a new temporary directory.
+3. Check the APK's SHA-256 against SHA256SUMS.txt. Stop and tell me if it doesn't match.
+4. Install it with: adb install -r <apk>. If that fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, a build signed with a different key is installed: ask me before uninstalling it (that deletes its data).
+5. Start it with: adb shell monkey -p app.oyee.android 1
+Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.
+```
 
 ## Quick start
 

@@ -7,6 +7,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Action, Notification } from "@oyee/schema";
 import { isMockMode } from "../lib/env";
+import { INSTALL_PROMPTS, type InstallPrompt } from "../lib/installPrompts";
 import { loginErrorMessage, safeRedirect } from "../lib/login";
 import { qk, useConfig, useMe } from "../lib/queries";
 import { mcpSnippets, webhookSnippets } from "../lib/snippets";
@@ -618,6 +619,37 @@ function Platforms() {
   );
 }
 
+/** Below the download buttons: prompts that let a coding agent on the visitor's computer do the install. */
+function AgentInstall() {
+  const [id, setId] = useState<InstallPrompt["id"]>("macos");
+  const p = INSTALL_PROMPTS.find((x) => x.id === id)!;
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-2 overflow-hidden rounded-[22px] bg-background lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+      <div className="px-5 pt-5 sm:px-6 lg:pb-6">
+        <div className="text-[16px] font-bold tracking-[-0.01em]">Or let your agent install it</div>
+        <p className="mt-1 text-[14px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+          Paste this into Claude Code, Codex or another coding agent. It downloads the latest release, checks it against
+          the published checksums, installs the app and opens it.
+        </p>
+        <div className="mt-4">
+          <Segmented size="sm" value={id} onChange={setId} options={INSTALL_PROMPTS.map((x) => ({ value: x.id, label: x.title }))} />
+        </div>
+        <p className="mt-3 text-[13px] text-zinc-500 dark:text-zinc-400">{p.description}</p>
+      </div>
+      <div className="relative m-3 rounded-[18px] bg-[#1c1b19] dark:bg-[#0c0b0a]">
+        <CopyButton
+          text={p.prompt}
+          compact
+          className="absolute top-2.5 right-2.5 text-white/50 hover:bg-white/10 hover:text-white dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+        />
+        <pre className="p-5 pr-12 font-mono text-[12.5px] leading-relaxed break-words whitespace-pre-wrap text-[#f1ede6]">
+          <code>{p.prompt}</code>
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ─── Setup snippets ───────────────────────────────────────────────────────────
 
 type SnippetTab = "mcp" | "curl" | "home-assistant" | "alertmanager" | "github-actions";
@@ -840,6 +872,7 @@ export function LandingPage() {
         </SectionTitle>
         <div className="mt-12">
           <Platforms />
+          <AgentInstall />
         </div>
       </Section>
 

@@ -130,7 +130,7 @@ jobs:
 
           **macOS** (14+, Apple Silicon and Intel): download \`Oyee-$v-macOS.zip\`, unzip, move \`Oyee.app\` to
           *Applications*. The app isn't notarized: if macOS blocks the first launch, open *System Settings → Privacy &
-          Security → Open Anyway* (or run \`xattr -dr com.apple.quarantine /Applications/Oyee.app\`). It lives in the
+          Security → Open Anyway* (or run \`xattr -cr /Applications/Oyee.app\`). It lives in the
           menu bar and updates itself.
 
           **iOS:** build from source ([docs/setup.md](https://github.com/${{ github.repository }}/blob/main/docs/setup.md)).

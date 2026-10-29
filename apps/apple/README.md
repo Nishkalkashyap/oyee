@@ -64,7 +64,7 @@ it's quarantined and unnotarized. If macOS blocks the first launch, open *System
 Open Anyway*, or run:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/Oyee.app
+xattr -cr /Applications/Oyee.app
 ```
 
 Notes:
