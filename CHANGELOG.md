@@ -19,7 +19,7 @@
 - New accent colour: Ocean blue replaces orange across the web app (brand mark, unread counts, send buttons,
   selected chips, your reply bubbles), the favicon and the installable web-app icons.
 
-## Next app release
+## 0.2.7
 - New accent colour: Ocean blue replaces orange in the macOS and Android apps, including the app icon, the Android
   launcher icon and the tint of Android system notifications.
 
