@@ -50,11 +50,7 @@ struct SettingsView: View {
                     }
                 }
                 SettingRow("System settings", description: "Banner style, sound and Focus for Oyee.") {
-                    Button("Open") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
+                    Button("Open") { openNotificationSettings() }
                     .buttonStyle(PillButtonStyle(.secondary, size: .small))
                 }
                 SettingRow(

@@ -52,3 +52,20 @@ public enum Rendering {
         return String(value)
     }
 }
+
+/// Relative times that never point into the future. A brand-new notification can be stamped a moment "after" this
+/// device's clock (server and local clocks drift), which the system formatters render as "in 0 sec".
+public enum RelativeTime {
+    /// Compact list time: "now" for the last 45 seconds (or anything slightly in the future), else "3 min ago".
+    /// Same "now" window as the web and Android clients.
+    public static func short(_ date: Date, now: Date = Date()) -> String {
+        if now.timeIntervalSince(date) < 45 { return "now" }
+        return date.formatted(.relative(presentation: .numeric, unitsStyle: .narrow))
+    }
+
+    /// Spelled-out time for system lines ("2 minutes ago", "yesterday"), clamped to now.
+    public static func named(_ date: Date, now: Date = Date()) -> String {
+        if now.timeIntervalSince(date) < 45 { return "just now" }
+        return date.formatted(.relative(presentation: .named))
+    }
+}

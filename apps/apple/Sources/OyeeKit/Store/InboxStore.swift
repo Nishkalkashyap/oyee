@@ -405,10 +405,19 @@ public final class InboxStore {
 
     public func resolve(_ id: String) async {
         guard let api else { return }
+        // Optimistic: the row leaves the menu bar / Active list right away; restored if the request fails.
+        let backup = byId[id]
+        if var local = backup, local.status == .active {
+            local.status = .resolved
+            local.resolvedAt = Date()
+            byId[id] = local
+            rebuild()
+        }
         sink?.remove(ids: [id])
         do {
             accept(try await api.resolve(id: id))
         } catch {
+            if let backup, byId[id]?.version == backup.version { byId[id] = backup; rebuild() }
             handle(error)
         }
     }

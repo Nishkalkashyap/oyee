@@ -80,7 +80,9 @@ Notes:
 ### What the Mac app does
 
 - **Menu bar**: a bell with the unread count, a connection status dot, and a live list of active
-  notifications (resolving one removes it; resolve everything and it reads "All caught up"). Progress bars update in place, and you can use the action buttons right there. It also has
+  notifications with a ✓ on each row to resolve it in one tap (it disappears at once; resolve everything and it reads
+  "All caught up"). If macOS blocks Oyee's notifications, a "Notifications are off · Turn on" notice appears at the
+  top of the menu bar and the inbox; it opens Oyee's page in System Settings and clears when you come back. Progress bars update in place, and you can use the action buttons right there. It also has
   **Open Inbox**, **Settings…** and **Quit**.
 - **Inbox window**: list + detail (`NavigationSplitView`) with search, status tabs (**Active** by default, Resolved,
   All), filters (severity, source, unread),

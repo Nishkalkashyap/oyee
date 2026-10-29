@@ -217,11 +217,12 @@ class NotificationRenderer(private val context: Context, private val images: Ima
             b.setProgress(max, value, progress.indeterminate)
         }
 
-        // Up to 3 buttons. A reply box takes one slot (Android shows at most 3 actions).
+        // Up to 3 buttons (Android's limit): the card's actions, its reply box, then "✓ Resolve" if a slot is left.
         val reply = n.reply
-        val maxActions = if (reply != null) 2 else 3
-        n.actions.take(maxActions).forEach { a -> b.addAction(Intents.action(context, n, a)) }
+        val slots = NotificationButtons.plan(actionCount = n.actions.size, hasReply = reply != null)
+        n.actions.take(slots.actions).forEach { a -> b.addAction(Intents.action(context, n, a)) }
         if (reply != null) b.addAction(Intents.replyAction(context, n, reply))
+        if (slots.resolve) b.addAction(Intents.resolveAction(context, n))
         if (replyHistory != null) {
             @Suppress("DEPRECATION")
             b.setRemoteInputHistory(arrayOf(replyHistory))

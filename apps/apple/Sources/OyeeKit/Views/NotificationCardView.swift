@@ -97,7 +97,7 @@ public struct NotificationCardView: View {
                         .foregroundStyle(Theme.foreground)
                         .lineLimit(2)
                     Spacer(minLength: 4)
-                    Text(n.createdAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                    RelativeTimeText(n.createdAt)
                         .font(.oyee(11.5, n.isRead ? .regular : .semibold))
                         .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
                 }
@@ -111,6 +111,22 @@ public struct NotificationCardView: View {
                 if !n.actions.isEmpty, n.status == .active {
                     actionButtons(size: .small).padding(.top, 5)
                 }
+            }
+            if n.status == .active {
+                // One tap to resolve: it leaves the menu bar (and the default inbox view) on every device.
+                Button {
+                    Task { await store.resolve(n.id) }
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .background(Theme.secondary, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondaryLabel)
+                .help("Resolve")
+                .accessibilityLabel("Resolve")
             }
         }
         .padding(.horizontal, 10)
@@ -211,7 +227,7 @@ public struct NotificationRowView: View {
                         .foregroundStyle(n.isResolved && n.isRead ? Theme.muted : Theme.foreground)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(n.createdAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                    RelativeTimeText(n.createdAt)
                         .font(.oyee(12, n.isRead ? .regular : .semibold))
                         .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
                         .monospacedDigit()

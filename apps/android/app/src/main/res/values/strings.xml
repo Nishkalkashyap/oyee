@@ -20,6 +20,7 @@
     <string name="reply_default_label">Reply</string>
     <string name="reply_sent">Reply sent</string>
     <string name="action_sent">Sent: %1$s</string>
+    <string name="action_resolve">✓ Resolve</string>
     <string name="action_failed">Couldn\'t send. Will retry when online.</string>
     <plurals name="group_summary_title">
         <item quantity="one">%1$d notification</item>

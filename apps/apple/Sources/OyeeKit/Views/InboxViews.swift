@@ -212,13 +212,13 @@ public struct NotificationDetailView: View {
                     NotificationCardView(notification: n, store: store)
                         .padding(.trailing, 40)
                     if n.version > 1, n.updatedAt != n.createdAt {
-                        Text("Updated \(n.updatedAt.formatted(.relative(presentation: .named))) · v\(n.version)").systemLine()
+                        Text("Updated \(RelativeTime.named(n.updatedAt)) · v\(n.version)").systemLine()
                     }
                     ForEach(Array(n.responses.enumerated()), id: \.offset) { _, response in
                         responseBubble(response)
                     }
                     if n.isResolved, let at = n.resolvedAt {
-                        Label("Resolved \(at.formatted(.relative(presentation: .named)))", systemImage: "checkmark").systemLine()
+                        Label("Resolved \(RelativeTime.named(at))", systemImage: "checkmark").systemLine()
                     }
                 }
                 .padding(16)
@@ -301,7 +301,7 @@ public struct NotificationDetailView: View {
                     .fill(Theme.chip)
                 )
                 .textSelection(.enabled)
-            Text("\(r.deviceName ?? "Unknown device") · \(r.at.formatted(.relative(presentation: .named)))")
+            Text("\(r.deviceName ?? "Unknown device") · \(RelativeTime.named(r.at))")
                 .font(.oyee(12))
                 .foregroundStyle(Theme.muted)
         }

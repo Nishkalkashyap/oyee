@@ -245,6 +245,24 @@ struct InboxStoreTests {
         #expect(store.hasAnyNotifications)
     }
 
+    @Test func resolveIsOptimisticAndRollsBackOnFailure() async throws {
+        store.apply(.notificationCreated(make("a")))
+        let resolved = String(
+            decoding: try OyeeJSON.makeEncoder().encode(make("a", version: 2, status: .resolved)), as: UTF8.self)
+        let (ok, _) = StubURLProtocol.makeSession { _ in (200, resolved) }
+        store.api = OyeeAPI(baseURL: URL(string: "https://oyee.test")!, token: "t", session: ok)
+        await store.resolve("a")
+        #expect(store.activeNotifications.isEmpty)
+        #expect(store.notification(id: "a")?.version == 2)
+
+        store.apply(.notificationCreated(make("b")))
+        let (failing, _) = StubURLProtocol.makeSession { _ in (500, "") }
+        store.api = OyeeAPI(baseURL: URL(string: "https://oyee.test")!, token: "t", session: failing)
+        await store.resolve("b")
+        #expect(store.activeNotifications.map(\.id) == ["b"])
+        #expect(store.lastError != nil)
+    }
+
     @Test func cacheRoundTrip() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("oyee-test-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

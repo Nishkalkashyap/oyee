@@ -28,6 +28,7 @@ class OyeeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         return try {
             when (inputData.getString(KEY_OP)) {
                 OP_READ -> c.processor.onLocal(c.api.markRead(session, id!!))
+                OP_RESOLVE -> c.processor.onLocal(c.api.resolve(session, id!!))
                 OP_RESPOND -> {
                     val text = inputData.getString(KEY_TEXT)
                     val actionId = inputData.getString(KEY_ACTION_ID)
@@ -66,6 +67,7 @@ class OyeeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         private const val KEY_LABEL = "label"
         private const val OP_READ = "read"
         private const val OP_RESPOND = "respond"
+        private const val OP_RESOLVE = "resolve"
         private const val OP_SYNC = "sync"
         private const val OP_REFRESH_TRANSPORT = "refresh_transport"
 
@@ -82,6 +84,9 @@ class OyeeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         fun enqueueRead(context: Context, id: String) =
             enqueue(context, "read:$id", ExistingWorkPolicy.KEEP, KEY_OP to OP_READ, KEY_ID to id)
+
+        fun enqueueResolve(context: Context, id: String) =
+            enqueue(context, "resolve:$id", ExistingWorkPolicy.KEEP, KEY_OP to OP_RESOLVE, KEY_ID to id)
 
         fun enqueueRespond(context: Context, id: String, actionId: String?, text: String?, label: String? = null) =
             enqueue(

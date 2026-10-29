@@ -142,7 +142,8 @@ Notes:
   - **Metadata:** `setWhen(createdAt)` and `setSubText(source)`.
 - **Grouping:** notifications are grouped by `source`, with a group summary.
 - **Taps:** tapping the body opens `url` (or the in-app detail) and calls `POST …/read`.
-  - **Buttons:** up to 3. A reply box takes one slot.
+  - **Buttons:** up to 3. The card's actions come first, a reply box takes one slot, and a **✓ Resolve** button
+    fills a free slot so you can dismiss a notification everywhere without opening it (retried offline via WorkManager).
   - **`url` actions:** open the browser and mark the notification read.
   - **Other actions:** call `POST …/respond {actionId}`. The notification shows "Sent: …", or disappears if the
     action resolves it.

@@ -27,6 +27,7 @@ object Intents {
     const val ACTION_RESPOND = "app.oyee.android.RESPOND"
     const val ACTION_REPLY = "app.oyee.android.REPLY"
     const val ACTION_DISMISSED = "app.oyee.android.DISMISSED"
+    const val ACTION_RESOLVE = "app.oyee.android.RESOLVE"
 
     private const val IMMUTABLE = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
@@ -101,6 +102,23 @@ object Intents {
             .addRemoteInput(remoteInput)
             .setAllowGeneratedReplies(false)
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+            .setShowsUserInterface(false)
+            .build()
+    }
+
+    /** "✓ Resolve" button: resolves the notification everywhere without opening the app. */
+    fun resolveAction(context: Context, n: Notification): NotificationCompat.Action {
+        val pi = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(context, NotificationActionReceiver::class.java)
+                .setAction(ACTION_RESOLVE)
+                .setData(uri(n.id, "resolve"))
+                .putExtra(EXTRA_ID, n.id),
+            IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_oyee, context.getString(R.string.action_resolve), pi)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
             .setShowsUserInterface(false)
             .build()
     }

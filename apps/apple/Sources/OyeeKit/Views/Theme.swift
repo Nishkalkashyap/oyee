@@ -279,6 +279,17 @@ public struct FilterChip: View {
     }
 }
 
+/// A list time ("now", "3 min ago") that keeps itself current while it's on screen.
+public struct RelativeTimeText: View {
+    let date: Date
+    public init(_ date: Date) { self.date = date }
+    public var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            Text(RelativeTime.short(date, now: context.date))
+        }
+    }
+}
+
 /// Blue unread count.
 public struct CountBadge: View {
     let count: Int

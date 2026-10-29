@@ -27,6 +27,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         Intents.ACTION_RESPOND -> respond(app, id, intent)
                         Intents.ACTION_REPLY -> reply(app, id, intent)
                         Intents.ACTION_DISMISSED -> dismissed(app, id)
+                        Intents.ACTION_RESOLVE -> resolve(app, id)
                     }
                 }
             } catch (e: Exception) {
@@ -79,6 +80,19 @@ class NotificationActionReceiver : BroadcastReceiver() {
             last?.let {
                 c.renderer.apply(it, alert = false, postIfAbsent = false, note = app.getString(R.string.action_failed), replyHistory = text)
             }
+        }
+    }
+
+    /** "✓ Resolve": the notification goes away at once; the server call is retried later if it fails. */
+    private suspend fun resolve(app: OyeeApp, id: String) {
+        val c = app.container
+        c.renderer.cancel(id)
+        val session = c.settings.session() ?: return
+        try {
+            c.processor.onLocal(c.api.resolve(session, id))
+        } catch (e: Exception) {
+            Log.w(TAG, "resolve failed, queueing", e)
+            OyeeWorker.enqueueResolve(app, id)
         }
     }
 

@@ -267,3 +267,17 @@ struct BackoffTests {
         #expect(try OyeeJSON.makeDecoder().decode(SyncState.self, from: data) == state)
     }
 }
+
+@Suite("Relative time")
+struct RelativeTimeTests {
+    @Test func recentAndSlightlyFutureTimesReadNow() {
+        let now = Date()
+        #expect(RelativeTime.short(now, now: now) == "now")
+        #expect(RelativeTime.short(now.addingTimeInterval(-30), now: now) == "now")
+        // Server clock a little ahead of this Mac: never "in 0 sec".
+        #expect(RelativeTime.short(now.addingTimeInterval(5), now: now) == "now")
+        #expect(RelativeTime.named(now.addingTimeInterval(3), now: now) == "just now")
+        #expect(RelativeTime.short(now.addingTimeInterval(-600), now: now) != "now")
+        #expect(!RelativeTime.named(now.addingTimeInterval(-600), now: now).hasPrefix("in "))
+    }
+}

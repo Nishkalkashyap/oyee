@@ -50,11 +50,13 @@ struct MenuBarContentView: View {
         VStack(spacing: 0) {
             header
             UpdateBanner(updater: updater)
+            NotificationsOffBanner(model: model)
             content
             footer
         }
         .frame(width: 360)
         .background(Theme.background)
+        .onAppear { Task { await model.refreshNotificationAuthorization() } }
     }
 
     private var header: some View {
@@ -161,6 +163,56 @@ enum MenuBarIcon {
         image.isTemplate = true
         return image
     }()
+}
+
+/// Opens System Settings → Notifications, on Oyee's own page where macOS supports it.
+@MainActor
+func openNotificationSettings() {
+    let base = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    let id = Bundle.main.bundleIdentifier.map { "?id=\($0)" } ?? ""
+    if let url = URL(string: base + id) { NSWorkspace.shared.open(url) }
+}
+
+/// Shown while macOS won't let Oyee show notifications: everything still arrives in the inbox and the menu bar,
+/// but no banners appear, which otherwise fails silently. "Turn on" opens System Settings (or asks, if macOS
+/// hasn't asked yet); the permission is re-checked when Oyee comes back to the front.
+struct NotificationsOffBanner: View {
+    let model: OyeeModel
+    var horizontalPadding: CGFloat = 10
+    var topPadding: CGFloat = 0
+
+    var body: some View {
+        let status = model.notificationAuthorization
+        if model.isPaired, model.presenter != nil, status == .denied || status == .notDetermined {
+            HStack(spacing: 8) {
+                Image(systemName: "bell.slash.fill")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color(hex: 0xB45309))
+                Text("Notifications are off")
+                    .font(.oyee(12.5, .semibold))
+                    .foregroundStyle(Theme.foreground)
+                Spacer(minLength: 0)
+                Button("Turn on") {
+                    if status == .notDetermined {
+                        Task { await model.requestNotificationPermission() }
+                    } else {
+                        openNotificationSettings()
+                    }
+                }
+                .buttonStyle(PillButtonStyle(.brand, size: .small))
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(Color(hex: 0xD97706).opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, horizontalPadding)
+            .padding(.top, topPadding)
+            .padding(.bottom, 6)
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                Task { await model.refreshNotificationAuthorization() }
+            }
+        }
+    }
 }
 
 /// Light-blue banner while an update is available, downloading or failed.

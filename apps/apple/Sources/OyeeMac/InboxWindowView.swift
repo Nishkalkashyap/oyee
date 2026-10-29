@@ -30,6 +30,7 @@ struct InboxWindowView: View {
             } else {
                 HStack(spacing: 8) {
                     VStack(spacing: 0) {
+                        NotificationsOffBanner(model: model, horizontalPadding: 12, topPadding: 12)
                         InboxListView(store: model.store, selection: $model.selectedNotificationID)
                         statusBar
                     }
