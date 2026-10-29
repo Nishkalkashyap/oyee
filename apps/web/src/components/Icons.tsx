@@ -263,3 +263,19 @@ export const CodeIcon = make(
   </>,
   "CodeIcon",
 );
+export const HelpIcon = make(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </>,
+  "HelpIcon",
+);
+export const DownloadIcon = make(
+  <>
+    <path d="M12 15V3" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  </>,
+  "DownloadIcon",
+);

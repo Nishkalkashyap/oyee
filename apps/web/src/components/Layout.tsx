@@ -6,8 +6,10 @@ import { api } from "../lib/api";
 import { isMockMode } from "../lib/env";
 import { useUnreadCount } from "../lib/queries";
 import { useTheme, type ThemePref } from "../lib/theme";
+import { HelpDialog } from "./HelpDialog";
 import {
   DevicesIcon,
+  HelpIcon,
   InboxIcon,
   LogOutIcon,
   MonitorIcon,
@@ -141,6 +143,29 @@ function UserMenu({ user }: { user: User }) {
   );
 }
 
+/** Help button: downloads for every platform, docs and support links. */
+function HelpButton({ rail }: { rail?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Help and downloads"
+        title="Help and downloads"
+        className={cx(
+          "flex items-center justify-center text-secondary-label transition-[background-color,scale] duration-150 active:scale-95",
+          rail ? "size-[54px] flex-col gap-0.5 rounded-2xl text-[11px] font-medium hover:bg-foreground/5" : "size-9 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800",
+        )}
+      >
+        <HelpIcon size={20} />
+        {rail && "Help"}
+      </button>
+      <HelpDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
 /** Toasts for notifications created while the tab is open, + routes requested by the service worker. */
 function LiveSideEffects() {
   const toast = useToast();
@@ -203,6 +228,7 @@ export function Layout({ user }: { user: User }) {
         ))}
         <div className="mt-auto flex flex-col items-center gap-3">
           <ConnectionIndicator compact />
+          <HelpButton rail />
           <UserMenu user={user} />
         </div>
       </nav>
@@ -212,6 +238,7 @@ export function Layout({ user }: { user: User }) {
         <Logo />
         <div className="flex items-center gap-1">
           <ConnectionIndicator compact />
+          <HelpButton />
           <UserMenu user={user} />
         </div>
       </header>

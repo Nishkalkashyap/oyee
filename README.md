@@ -31,7 +31,7 @@ Free and open source (MIT).
 |---|---|
 | **Web** | <https://oyee.app>: sign in with Google, nothing to install |
 | **Android** (8.0+) | `Oyee-x.y.z.apk` from [Releases](../../releases/latest). Allow *Install unknown apps* when asked |
-| **macOS** (14+, Apple Silicon and Intel) | `Oyee-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: the first time, **right-click → Open** (or `xattr -dr com.apple.quarantine /Applications/Oyee.app`) |
+| **macOS** (14+, Apple Silicon and Intel) | `Oyee-x.y.z-macOS.zip` from [Releases](../../releases/latest). Not notarized: if macOS blocks the first launch, open **System Settings → Privacy & Security → Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Oyee.app`) |
 | **iOS** | Build from source ([docs/setup.md](docs/setup.md)). iOS can't be distributed without a paid Apple account |
 
 Then pair the device: on the web, **Devices → Pair a device**, and enter the code in the app.
