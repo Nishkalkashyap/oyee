@@ -21,3 +21,5 @@ From 01: `icon` exists both top-level and in the inform block; pick one. The old
 ## Comments
 
 From 07: ProgressInput duplicates the shared fields InformInput has; fold them into one shared base.
+
+From 10: `progressResultText` in the inbox progress module builds the result shape inline; route it through the MCP text helper.
