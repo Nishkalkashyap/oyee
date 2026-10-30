@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Action, Notification } from "@oyee/schema";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon } from "./Icons";
+import { InformCard } from "./InformCard";
 import { Markdown } from "./Markdown";
 import { ProgressBar, SeverityBadge } from "./NotificationParts";
 import { ProgressCard } from "./ProgressCard";
@@ -59,6 +60,9 @@ export function NotificationCard({
   footer,
   className,
 }: NotificationCardProps) {
+  if (n.intent === "inform") {
+    return <InformCard notification={n} preview={preview} inThread={inThread} onSourceClick={onSourceClick} footer={footer} className={className} />;
+  }
   if (usesProgressCard(n)) {
     return <ProgressCard notification={n} preview={preview} inThread={inThread} onSourceClick={onSourceClick} footer={footer} className={className} />;
   }

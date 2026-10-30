@@ -9,6 +9,7 @@ import {
   LIMITS,
   QUOTAS,
   type FlatNotification,
+  type InformInput,
   type ListNotificationsQuery,
   type McpWaitResult,
   type Notification,
@@ -48,6 +49,7 @@ import {
 } from "./model";
 import { isLiveProgress, reportProgress, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
+import { applyInform, buildInform, type InformResult } from "./inform";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -456,6 +458,44 @@ export class InboxDO extends DurableObject<Env> {
     this.emit(actor.userId, [{ type: "notification.created", notification: fresh }]);
     this.ensurePrune();
     return fresh;
+  }
+
+  /** Inform (inbox/inform.ts): creates the notification, or updates and re-alerts the active one with its key. */
+  async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
+    return guard(async () => {
+      if (actor.tokenId) this.checkRate(actor.tokenId);
+      this.consume("send", actor.userId);
+      const targets =
+        input.devices?.length || input.platforms?.length
+          ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
+          : null;
+      const now = new Date().toISOString();
+      const fresh = buildInform(newId("ntf"), input, actor, now, targets);
+      const latest = fresh.key ? this.latestByKey(fresh.source, fresh.key) : null;
+      const result = applyInform(latest?.n ?? null, fresh, now);
+      const n = result.notification;
+      if (n.id === fresh.id) {
+        this.save(n, null, actor.tokenId);
+        this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
+        this.ensurePrune();
+      } else {
+        this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+      }
+      return result;
+    });
+  }
+
+  /** The latest notification a sender named with this key (keys are unique per `(source, key)`). */
+  private latestByKey(source: string, key: string): Loaded | null {
+    const r = this.sql
+      .exec<StoredRow>(
+        "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
+        source,
+        key,
+      )
+      .toArray()[0];
+    return r ? { n: JSON.parse(r.data) as Notification, replaceKey: r.replace_key, tokenId: r.token_id } : null;
   }
 
   async update(actor: Actor, id: string, patch: UpdateNotificationInput): Promise<RpcResult<Notification>> {

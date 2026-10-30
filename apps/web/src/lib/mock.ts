@@ -141,6 +141,27 @@ function fixtures(): Notification[] {
       },
       3 * HOUR,
     ),
+    // An inform with everything: icon, markdown body, rows and link buttons.
+    base(
+      {
+        title: "Disk 95% full on db-1",
+        body: "Free space is **below 5%**. The `/var/lib/postgresql` volume grew 12 GB overnight.",
+        source: "disk-watch",
+        severity: "warning",
+        icon: "💾",
+        url: "https://grafana.example.com/d/disk",
+        fields: [
+          { label: "Host", value: "db-1" },
+          { label: "Used", value: "95% of 500 GB" },
+          { label: "Growth", value: "+12 GB / 24h" },
+        ],
+        actions: [
+          { id: "link_1", label: "Dashboard", style: "default", url: "https://grafana.example.com/d/disk", resolves: false },
+          { id: "link_2", label: "Runbook", style: "default", url: "https://wiki.example.com/runbooks/disk", resolves: false },
+        ],
+      },
+      35 * MIN,
+    ),
     base(
       {
         title: "Front door camera",

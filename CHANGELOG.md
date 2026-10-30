@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased (server and web)
+- MCP: new `inform` tool for one-way notifications (title, markdown body, severity, url, up to 3 link buttons, up to
+  10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
+  and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
+  in plain text. The older tools keep working for now.
+- Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
+  image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without
   sound, later reports update it silently, and `done` or `failed` alerts once; a finished progress stays in the inbox
   until read. The tool answers in plain text with the outcome and the next step. The web inbox draws progress with
