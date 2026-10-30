@@ -255,9 +255,9 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `send_notification` | `SendNotificationInput` | `Notification` |
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
-| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | Text: `Asked the user (id ntf_…). Call wait_for_response with id "ntf_…" to get the answer.`, or for an open ask with the same `(source, key)`: `Already asked 12m ago, still waiting (id ntf_…)…` (no new alert) |
+| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, expiresIn?: duration (default "1h", max "24h"), url?, key?, source?, devices?, platforms? }` | Text: `Asked the user (id ntf_…, expires in 1h). Call wait_for_response with id "ntf_…" to get the answer.`, or for an open ask with the same `(source, key)`: `Already asked 12m ago, still waiting (id ntf_…, expires in 48m)…` (no new alert) |
 | `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: `outcome:` (`created` / `updated_silently` / `alerted`) and `id:` lines, then the next step (as `inform`) |
-| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | Text: `The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`, or `No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.` |
+| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | Text: `The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`, `No answer yet: asked 3m ago, expires in 57m. Call wait_for_response again with id "ntf_…" to keep waiting.`, `The ask expired without an answer…` or `The ask was withdrawn without an answer…` |
 | `get_notification` | `{ id }` | `Notification` |
 | `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |
 | `list_templates` | `{}` | `{ items }` |
@@ -266,8 +266,13 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `list_devices` | `{}` | `{ items: Device[] }` |
 
 `wait_for_response` returns the answer immediately if there is one. An ask always alerts at `warning`; with neither
-options nor `allowText` it gets a reply box. Its `ask.expiresAt` is one hour after it was sent (expiry itself comes
-with ticket 06: until then an ask stays open).
+options nor `allowText` it gets a reply box. Its `ask.expiresAt` is `expiresIn` (default one hour, at most 24 hours)
+after it was sent. **Expiry**: when that time is up the inbox's alarm sets `ask.state: "expired"` and
+`status: "resolved"` and broadcasts `notification.updated` (`reason: "resolved"`, `alert: false`), so every device
+takes it out of the tray; a held `wait_for_response` returns at once with the expiry. Not charged to quotas.
+**Withdrawing**: resolving an open ask (`resolve_notification` or `POST /api/notifications/:id/resolve`) sets
+`ask.state: "withdrawn"`, the same way. Answering an answered, expired or withdrawn ask (or one past `expiresAt`)
+returns `409 conflict`.
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
 For app builds that predate intents, `ask` options also become flat actions with ids `option_1..3` (first `primary`,

@@ -17,7 +17,6 @@ import {
   type Page,
   type ProgressInput,
   type QuotaKind,
-  type Response as OyeeResponse,
   type RespondInput,
   type SendNotificationInput,
   type ServerMessage,
@@ -50,7 +49,7 @@ import {
 } from "./model";
 import { isLiveProgress, reportProgress, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
-import { answerAsk, answerOf, buildAsk, isOpenAsk, type AskResult } from "./ask";
+import { answerAsk, buildAsk, expireAsk, expiryDue, isOpenAsk, waitResult, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
@@ -97,6 +96,8 @@ const MAX_BULK_PUSH = 100;
 /** Deadline kind for the daily retention prune (one per inbox). */
 const PRUNE = "prune";
 const PRUNE_REF = "daily";
+/** Deadline kind for an open ask's expiry (ref = notification id). */
+const ASK_EXPIRY = "ask.expiry";
 const SYNC_PAGE = 200;
 
 /**
@@ -114,7 +115,8 @@ async function guard<T>(fn: () => T | Promise<T>): Promise<RpcResult<T>> {
 
 export class InboxDO extends DurableObject<Env> {
   private sql: SqlStorage;
-  private waiters = new Map<string, Set<(r: OyeeResponse) => void>>();
+  private waiters = new Map<string, Set<() => void>>();
+  private ownerKnown = false;
   /** The inbox's single alarm: fires at the earliest deadline (the daily prune, plus kinds added by later features). */
   readonly scheduler: Scheduler;
   private pruneEnsured = false;
@@ -128,8 +130,10 @@ export class InboxDO extends DurableObject<Env> {
     this.scheduler = new Scheduler(ctx.storage);
     this.scheduler.handle(PRUNE, (_refs, now) => {
       this.prune(now);
+      this.expireAsks([], now); // also catches asks whose expiry deadline was lost
       this.scheduler.set(PRUNE, PRUNE_REF, now + DAY);
     });
+    this.scheduler.handle(ASK_EXPIRY, (refs, now) => this.expireAsks(refs, now));
     // Pings are answered without waking the object from hibernation.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
   }
@@ -255,6 +259,34 @@ export class InboxDO extends DurableObject<Env> {
       n.intent,
       n.key,
     );
+    if (n.intent === "ask") this.trackExpiry(n);
+  }
+
+  /** Keeps an ask's expiry deadline in step with the ask: armed while it is open, dropped once it is closed. */
+  private trackExpiry(n: Notification) {
+    const due = expiryDue(n);
+    if (due === null) this.scheduler.clear(ASK_EXPIRY, n.id);
+    else if (this.scheduler.dueAt(ASK_EXPIRY, n.id) !== due) this.scheduler.set(ASK_EXPIRY, n.id, due);
+  }
+
+  /** The user this inbox belongs to, for pushes the alarm sends (it has no caller to ask). */
+  private owner(): string | null {
+    if (this.ctx.id.name) return this.ctx.id.name;
+    return this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'owner'").toArray()[0]?.value ?? null;
+  }
+
+  private rememberOwner(userId: string) {
+    if (this.ownerKnown) return;
+    this.ownerKnown = true;
+    this.sql.exec("INSERT INTO meta (key, value) VALUES ('owner', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", userId);
+  }
+
+  /** Wakes every wait_for_response held on this notification so it reports the notification's current state. */
+  private wake(id: string) {
+    const waiters = this.waiters.get(id);
+    if (!waiters) return;
+    this.waiters.delete(id);
+    for (const w of waiters) w();
   }
 
   private deleteRow(id: string, now: string) {
@@ -382,6 +414,7 @@ export class InboxDO extends DurableObject<Env> {
       );
     }
     this.ensurePrune();
+    if (userId) this.rememberOwner(userId);
     if (userId && WARN_KINDS.includes(kind) && (used === Math.ceil(q.perDay * 0.8) || used === q.perDay)) {
       this.ctx.waitUntil(this.postQuotaNotice(userId, kind, used));
     }
@@ -520,12 +553,7 @@ export class InboxDO extends DurableObject<Env> {
         rec.n.intent === "ask" ? answerAsk(rec.n, input, actor, now) : respondToCard(rec.n, input, actor, now);
       this.save(n, rec.replaceKey, rec.tokenId);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "responded" }]);
-
-      const waiters = this.waiters.get(id);
-      if (waiters) {
-        this.waiters.delete(id);
-        for (const w of waiters) w(response);
-      }
+      this.wake(id);
       if (action?.callback) {
         this.ctx.waitUntil(sendActionCallback(this.env, actor.userId, rec.tokenId, action.callback, n, response));
       }
@@ -587,6 +615,7 @@ export class InboxDO extends DurableObject<Env> {
     const n = inferIntent({ ...base, status: "resolved", resolvedAt: rec.n.resolvedAt ?? now });
     this.save(n, rec.replaceKey, rec.tokenId);
     this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
+    this.wake(n.id); // a withdrawn ask ends its waits
     return n;
   }
 
@@ -693,22 +722,15 @@ export class InboxDO extends DurableObject<Env> {
     });
   }
 
-  /** Long-poll for the answer (at most LIMITS.askWaitSeconds). Resolves immediately if it was already answered. */
+  /**
+   * Long-poll for the answer (at most LIMITS.askWaitSeconds). Returns at once if the ask was already answered, expired
+   * or withdrawn; a held wait is woken by the answer, the expiry or the withdrawal.
+   */
   async waitForResponse(id: string, timeoutSeconds: number): Promise<RpcResult<McpWaitResult>> {
     return guard(() => {
       this.consume("read");
-      const asked = this.mustLoad(id).n;
-      const answered = (n: Notification): McpWaitResult | null => {
-        const answer = answerOf(n);
-        return answer ? { status: "answered", answer, askedAt: n.createdAt } : null;
-      };
-      const now = answered(asked);
-      if (now) return now;
-      const pending: McpWaitResult = {
-        status: "pending",
-        askedAt: asked.createdAt,
-        expiresAt: asked.intent === "ask" ? asked.ask.expiresAt : null,
-      };
+      const current = waitResult(this.mustLoad(id).n, Date.now());
+      if (current.status !== "pending") return current;
       const ms = Math.max(1, Math.min(LIMITS.askWaitSeconds, timeoutSeconds)) * 1000;
       return new Promise<McpWaitResult>((resolve) => {
         const set = this.waiters.get(id) ?? new Set();
@@ -716,12 +738,13 @@ export class InboxDO extends DurableObject<Env> {
         const timer = setTimeout(() => {
           set.delete(fn);
           if (set.size === 0 && this.waiters.get(id) === set) this.waiters.delete(id);
-          resolve(pending);
+          const latest = this.load(id)?.n;
+          resolve(latest ? waitResult(latest, Date.now()) : current);
         }, ms);
         const fn = () => {
           clearTimeout(timer);
           const latest = this.load(id)?.n;
-          resolve((latest && answered(latest)) || pending);
+          resolve(latest ? waitResult(latest, Date.now()) : current);
         };
         set.add(fn);
       });
@@ -1007,6 +1030,38 @@ export class InboxDO extends DurableObject<Env> {
     // Inboxes whose alarm predates the scheduler have no prune deadline yet; their alarm meant "prune now".
     this.scheduler.ensure(PRUNE, PRUNE_REF, Date.now());
     await this.scheduler.run();
+  }
+
+  /**
+   * Expires open asks whose time is up (Expiry): the given deadline refs plus any open ask past its `expiresAt`, so an
+   * ask whose deadline was lost still expires at the next alarm. A ref that isn't due yet (the alarm fired a moment
+   * early) is re-armed. Not charged to the user's quota.
+   */
+  private expireAsks(refs: string[], now: number) {
+    const overdue = this.sql
+      .exec<{ id: string }>(
+        "SELECT id FROM notifications WHERE intent = 'ask' AND status = 'active' AND json_extract(data, '$.ask.expiresAt') <= ?",
+        new Date(now).toISOString(),
+      )
+      .toArray()
+      .map((r) => r.id);
+    const events: InboxEvent[] = [];
+    for (const id of new Set([...refs, ...overdue])) {
+      const rec = this.load(id);
+      if (!rec) continue;
+      const n = expireAsk(rec.n, now);
+      if (!n) {
+        this.trackExpiry(rec.n);
+        continue;
+      }
+      this.save(n, rec.replaceKey, rec.tokenId);
+      events.push({ type: "notification.updated", notification: n, alert: false, reason: "resolved" });
+      this.wake(id);
+    }
+    if (!events.length) return;
+    const owner = this.owner();
+    if (owner) this.emit(owner, events, events.slice(0, MAX_BULK_PUSH));
+    else for (const ev of events) this.broadcast(ev);
   }
 
   /** Deletes notifications older than the retention window and beyond the per-user cap. Returns deleted ids. */

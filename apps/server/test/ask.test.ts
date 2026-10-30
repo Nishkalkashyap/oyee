@@ -101,7 +101,7 @@ describe("ask", () => {
     const tools = ((await res.json()) as any).result.tools as { name: string; inputSchema: any }[];
     const schema = tools.find((t) => t.name === "ask")!.inputSchema;
     expect(Object.keys(schema.properties).sort()).toEqual(
-      ["allowText", "body", "devices", "key", "options", "platforms", "source", "title", "url"].sort(),
+      ["allowText", "body", "devices", "expiresIn", "key", "options", "platforms", "source", "title", "url"].sort(),
     );
     for (const [name, prop] of Object.entries<any>(schema.properties)) expect(prop.description, name).toBeTruthy();
   });

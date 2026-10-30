@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Asks expire: `ask` takes `expiresIn` (default 1h, at most 24h). When it runs out the ask leaves every device's
+  tray, shows "Expired" in the inbox with its buttons disabled, and `wait_for_response` reports it expired (a pending
+  result now also says when the ask expires). Resolving an open ask withdraws it ("Withdrawn"). Answers to an
+  expired or withdrawn ask get `409`. The web ask card shows when an open ask expires and explains why a closed one
+  can't be answered.
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says

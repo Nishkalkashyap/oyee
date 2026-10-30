@@ -3,7 +3,7 @@ import type { Notification } from "@oyee/schema";
 import { askView } from "../lib/ask";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { SEVERITY_STYLES } from "../lib/severity";
-import { CheckIcon, ExternalLinkIcon } from "./Icons";
+import { CheckIcon, ClockIcon, ExternalLinkIcon, UndoIcon } from "./Icons";
 import { Markdown } from "./Markdown";
 import { ReplyComposer, TargetBadge } from "./NotificationCard";
 import { Badge, Button, cx } from "./ui";
@@ -14,7 +14,8 @@ const warning = SEVERITY_STYLES.warning;
 
 /**
  * The ask as a message bubble: the question, its answer buttons and reply box, and a status pill that says how long
- * it has been waiting or who answered it ("Answered: Approve · Pixel 9"). Once answered nothing is pressable.
+ * it has been waiting (and when it expires) or who answered it ("Answered: Approve · Pixel 9"). Once answered, expired
+ * or withdrawn nothing is pressable; a closed, unanswered ask is muted and says why it can't be answered.
  */
 export function AskCard({
   notification: n,
@@ -39,6 +40,7 @@ export function AskCard({
   className?: string;
 }) {
   const view = askView(n);
+  const closed = view.state === "expired" || view.state === "withdrawn";
   return (
     <article
       className={cx(
@@ -69,14 +71,24 @@ export function AskCard({
             {view.status}
           </span>
         ) : (
-          <Badge>{view.status}</Badge>
+          <Badge>
+            {view.state === "withdrawn" ? <UndoIcon size={11} /> : <ClockIcon size={11} />} {view.status}
+          </Badge>
+        )}
+        {view.expiry && (
+          <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500 dark:text-zinc-400" title={formatDateTime(n.ask.expiresAt)}>
+            <ClockIcon size={12} /> {view.expiry}
+          </span>
         )}
         {n.targetDeviceIds && <TargetBadge ids={n.targetDeviceIds} />}
       </div>
 
-      <h2 className="mt-2.5 text-[18px] leading-snug font-bold tracking-[-0.02em] break-words">{n.title}</h2>
+      {/* Closed unanswered: the question reads as history, not as something waiting on the user. */}
+      <div className={cx(closed && "text-zinc-500 dark:text-zinc-400")}>
+        <h2 className="mt-2.5 text-[18px] leading-snug font-bold tracking-[-0.02em] break-words">{n.title}</h2>
 
-      {n.body && <Markdown text={n.body} className="mt-1.5 text-[14.5px] leading-relaxed break-words text-secondary-label" />}
+        {n.body && <Markdown text={n.body} className="mt-1.5 text-[14.5px] leading-relaxed break-words text-secondary-label" />}
+      </div>
 
       {n.url && (
         <a
@@ -107,6 +119,8 @@ export function AskCard({
           ))}
         </div>
       )}
+
+      {view.note && <p className="mt-3 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">{view.note}</p>}
 
       {!inThread && view.reply && (
         <ReplyComposer className="mt-4" placeholder={view.reply.placeholder} busy={replyBusy} onSend={onReply} focus={focusReply} />
