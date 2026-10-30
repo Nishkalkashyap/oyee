@@ -31,6 +31,13 @@ class NotificationPlanTest {
     }
 
     @Test
+    fun `an ask without a reply placeholder gets the app's own`() {
+        val n = Fixtures.notification("ask-open-text-no-placeholder")
+        assertNull(n.ask!!.replyPlaceholder)
+        assertEquals(listOf(Reply("Reply…")), NotificationPlan.buttons(n, nine12))
+    }
+
+    @Test
     fun `a closed or expired ask offers nothing and leaves the tray`() {
         for (name in listOf("ask-answered-option", "ask-answered-text", "ask-expired", "ask-withdrawn")) {
             val n = Fixtures.notification(name)

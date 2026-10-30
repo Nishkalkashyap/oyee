@@ -15,7 +15,7 @@ class InboxSectionsTest {
     fun `open asks need you, running or stopped progress is in progress, everything else is an update`() {
         val s = inboxSections(Fixtures.names.sorted().map { f(it) })
         assertEquals(listOf(InboxSectionId.NEEDS_YOU, InboxSectionId.IN_PROGRESS, InboxSectionId.UPDATES), s.map { it.id })
-        assertEquals(listOf("ask-open"), s[0].stacks.map { it.head.id })
+        assertEquals(listOf("ask-open", "ask-open-text-no-placeholder"), s[0].stacks.map { it.head.id })
         assertEquals(setOf("progress-running", "progress-running-percent", "progress-stopped"), s[1].stacks.map { it.head.id }.toSet())
         val updates = s[2].stacks.flatMap { st -> st.items.map { it.id } }.toSet()
         assertEquals(

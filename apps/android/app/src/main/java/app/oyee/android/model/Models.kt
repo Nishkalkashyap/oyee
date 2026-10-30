@@ -6,8 +6,7 @@ import kotlinx.serialization.Serializable
 /*
  * Kotlin mirror of packages/schema/src/index.ts (Oyee protocol v2: notifications are intents, docs/protocol.md §1).
  * JSON names are camelCase (identical to the property names). Unknown keys are ignored and unknown enum values
- * fall back to the property default (see OyeeJson), so newer servers don't break older clients. The v1 flat card
- * fields the server still sends alongside the intent blocks (actions, reply, tags, threadId, silent…) aren't read.
+ * fall back to the property default (see OyeeJson), so newer servers don't break older clients.
  */
 
 /** Every severity alerts (`debug` is gone: an old `debug` value decodes as the default, info). */
@@ -105,16 +104,12 @@ data class AskBlock(
     val state: AskState = AskState.OPEN,
 )
 
-/**
- * The progress block. On the wire `progress` is both this block and (until the flat card is removed) the v1 bar,
- * which is where `indeterminate` comes from.
- */
+/** The progress block. */
 @Serializable
 data class Progress(
     val value: Double = 0.0,
     val max: Double = 100.0,
     val label: String? = null,
-    val indeterminate: Boolean = false,
     val state: ProgressState = ProgressState.RUNNING,
     /** How long the progress may go quiet before it counts as stopped, e.g. "30m". */
     val staleAfter: String? = null,

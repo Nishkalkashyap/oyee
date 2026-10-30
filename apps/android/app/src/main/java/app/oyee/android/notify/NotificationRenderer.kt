@@ -216,7 +216,6 @@ class NotificationRenderer(private val context: Context, private val images: Ima
                     NotificationCompat.ProgressStyle()
                         .setProgressSegments(listOf(NotificationCompat.ProgressStyle.Segment(max.coerceAtLeast(1)).setColor(color)))
                         .setProgress(value)
-                        .setProgressIndeterminate(styledProgress.indeterminate)
                         .setStyledByProgress(true),
                 )
             }
@@ -224,7 +223,7 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         }
         if (progress != null && running && styledProgress == null) {
             val (value, max) = Formatting.progressInts(progress)
-            b.setProgress(max, value, progress.indeterminate)
+            b.setProgress(max, value, false)
         }
 
         // Up to 3 buttons (Android's limit), per intent: answers + inline reply, links + Resolve, or Resolve.

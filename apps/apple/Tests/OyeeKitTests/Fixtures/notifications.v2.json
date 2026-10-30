@@ -106,6 +106,30 @@
       "state": "open"
     }
   },
+  "ask-open-text-no-placeholder": {
+    "id": "ntf_01JBXA0000000000000000ASK6",
+    "intent": "ask",
+    "source": "claude-code",
+    "key": null,
+    "title": "What should the release be called?",
+    "body": null,
+    "severity": "warning",
+    "status": "active",
+    "url": null,
+    "version": 1,
+    "createdAt": "2026-10-30T09:00:00.000Z",
+    "updatedAt": "2026-10-30T09:00:00.000Z",
+    "readAt": null,
+    "resolvedAt": null,
+    "ask": {
+      "options": [],
+      "allowText": true,
+      "replyPlaceholder": null,
+      "expiresAt": "2026-10-30T10:00:00.000Z",
+      "answer": null,
+      "state": "open"
+    }
+  },
   "ask-answered-option": {
     "id": "ntf_01JBXA0000000000000000ASK2",
     "intent": "ask",

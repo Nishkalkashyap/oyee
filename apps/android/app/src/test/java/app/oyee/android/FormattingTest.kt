@@ -30,13 +30,6 @@ class FormattingTest {
     }
 
     @Test
-    fun `indeterminate progress`() {
-        assertEquals("In progress…", Formatting.progressText(Progress(value = 0.0, indeterminate = true)))
-        assertEquals("Deploying", Formatting.progressText(Progress(value = 0.0, indeterminate = true, label = "Deploying")))
-        assertEquals("Deploying", Formatting.progressLabel(Progress(value = 0.0, indeterminate = true, label = "Deploying")))
-    }
-
-    @Test
     fun `progress label without bar`() {
         assertEquals("3/7", Formatting.progressLabel(Progress(value = 3.0, max = 7.0)))
         assertEquals("42%", Formatting.progressLabel(Progress(value = 42.0)))

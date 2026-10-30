@@ -15,11 +15,9 @@ object Formatting {
         if (n.isFinite() && n == Math.floor(n) && kotlin.math.abs(n) < 1e15) n.toLong().toString() else n.toString()
 
     /**
-     * Port of `progressText` from @oyee/schema: "▓▓▓░░░░░░░ 3/7", "▓▓▓▓▓░░░░░ 50%", or the label / "In progress…"
-     * when indeterminate.
+     * Port of `progressText` from @oyee/schema: "▓▓▓░░░░░░░ 3/7", "▓▓▓▓▓░░░░░ 50%" or "▓▓▓▓░░░░░░ 3/7 checks".
      */
     fun progressText(p: Progress): String {
-        if (p.indeterminate) return p.label ?: "In progress…"
         val max = p.max
         val ratio = if (max > 0) (p.value / max).coerceIn(0.0, 1.0) else 0.0
         val filled = Math.round(ratio * 10).toInt()
@@ -30,7 +28,6 @@ object Formatting {
 
     /** Short progress description without the bar, e.g. "3/7 checks" / "42%". */
     fun progressLabel(p: Progress): String {
-        if (p.indeterminate) return p.label ?: "In progress…"
         p.label?.let { return it }
         val ratio = if (p.max > 0) (p.value / p.max).coerceIn(0.0, 1.0) else 0.0
         return if (p.max == 100.0) "${Math.round(ratio * 100)}%" else "${number(p.value)}/${number(p.max)}"

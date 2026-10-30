@@ -37,6 +37,14 @@ class CardViewsTest {
     }
 
     @Test
+    fun `an ask that takes text without a placeholder shows the app's own`() {
+        val v = askView(Fixtures.notification("ask-open-text-no-placeholder"), nine12)
+        assertTrue(v.open)
+        assertTrue(v.options.isEmpty())
+        assertEquals("Reply…", v.replyPlaceholder)
+    }
+
+    @Test
     fun `waiting and expiry read naturally at the edges`() {
         val n = Fixtures.notification("ask-open")
         assertEquals("Just asked", askView(n, Instant.parse("2026-10-30T09:00:30Z")).status)

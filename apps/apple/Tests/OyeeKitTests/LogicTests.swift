@@ -79,6 +79,15 @@ struct CategoryTests {
         #expect(reply.textInput == "Branch name")
     }
 
+    @Test func askWithoutAPlaceholderGetsTheAppsOwn() throws {
+        let n = try v2("ask-open-text-no-placeholder")
+        guard case .ask(let ask) = n.content else { Issue.record("not an ask"); return }
+        #expect(ask.replyPlaceholder == nil)
+        let plan = try #require(NotificationCategories.plan(for: n))
+        #expect(plan.buttons.isEmpty)
+        #expect(plan.textInput == "Reply…")
+    }
+
     @Test func informGetsItsLinkButtons() throws {
         let plan = try #require(NotificationCategories.plan(for: try v2("inform-full")))
         #expect(plan.buttons == [

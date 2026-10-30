@@ -34,7 +34,7 @@ struct ModelDecodingTests {
 
     @Test func everySharedFixtureDecodesAsItsIntent() throws {
         let all = try OyeeJSON.makeDecoder().decode([String: OyeeNotification].self, from: fixture("notifications.v2"))
-        #expect(all.count == 14)
+        #expect(all.count == 15)
         for (name, n) in all {
             #expect(name.hasPrefix(n.intent.rawValue + "-"), "\(name) decoded as \(n.intent)")
         }

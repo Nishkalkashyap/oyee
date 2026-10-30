@@ -1,11 +1,5 @@
 package app.oyee.android.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -198,19 +192,13 @@ fun SeverityPill(severity: Severity) {
     }
 }
 
-/** Ink progress bar (or [color] once a progress ended); indeterminate slides. */
+/** Ink progress bar (or [color] once a progress ended). */
 @Composable
 fun InkProgress(p: Progress, modifier: Modifier = Modifier, height: Dp = 6.dp, color: Color = Oyee.colors.foreground) {
     val c = Oyee.colors
     BoxWithConstraints(modifier.fillMaxWidth().height(height).clip(CircleShape).background(c.accent)) {
-        if (p.indeterminate) {
-            val t = rememberInfiniteTransition(label = "progress")
-            val x by t.animateFloat(-0.35f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Restart), label = "x")
-            Box(Modifier.offset(x = maxWidth * x).width(maxWidth * 0.35f).fillMaxHeight().clip(CircleShape).background(color))
-        } else {
-            val frac = if (p.max > 0) (p.value / p.max).toFloat().coerceIn(0f, 1f) else 0f
-            Box(Modifier.width(maxWidth * frac).fillMaxHeight().clip(CircleShape).background(color))
-        }
+        val frac = if (p.max > 0) (p.value / p.max).toFloat().coerceIn(0f, 1f) else 0f
+        Box(Modifier.width(maxWidth * frac).fillMaxHeight().clip(CircleShape).background(color))
     }
 }
 

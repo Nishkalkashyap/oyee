@@ -338,8 +338,7 @@ public enum IntentContent: Sendable, Hashable {
 // MARK: - Notification
 
 /// An Oyee notification (protocol v2): shared fields plus one intent block. Named `OyeeNotification` to avoid
-/// clashing with `Foundation.Notification`. While the server still sends the v1 flat card fields next to the blocks,
-/// they are ignored here.
+/// clashing with `Foundation.Notification`.
 public struct OyeeNotification: Codable, Sendable, Hashable, Identifiable {
     public var id: String
     public var source: String
