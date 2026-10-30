@@ -8,15 +8,15 @@ import { BASE, call, createToken, devLogin, eventually, pairDevice } from "./hel
 describe("intent of flat sends", () => {
   it("a plain card from the web composer is an inform", async () => {
     const cookie = await devLogin();
-    const r = await call<Notification>("POST", "/api/notifications", { cookie }, { title: "Backup done" });
+    const r = await call<{ notification: Notification }>("POST", "/api/notifications", { cookie }, { title: "Backup done" });
     expect(r.status).toBe(201);
-    expect(r.body).toMatchObject({
+    expect(r.body.notification).toMatchObject({
       intent: "inform",
       key: null,
       title: "Backup done",
       inform: { links: [], fields: [], image: null, icon: null, cooldown: null },
     });
-    expect(Notification.safeParse(r.body).error).toBeUndefined();
+    expect(Notification.safeParse(r.body.notification).error).toBeUndefined();
   });
 });
 

@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 03, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Webhook JSON bodies are intent inputs with `intent` defaulting to inform; `key` and `cooldown` work as for agents
 - [ ] `intent: "ask"` on a webhook returns 400 explaining ask is for agents over MCP
@@ -22,3 +22,5 @@ From 09: add a webhook test for the cross-intent key 409.
 ## Comments
 
 From 08: progress sent via webhooks/REST must also register the stale deadline (same progress operation as MCP).
+
+Resolved: merged into `notification-intents` (branch head c7417e4). Shared send path for webhook/REST; adapters produce informs; Send page composes inform/progress.

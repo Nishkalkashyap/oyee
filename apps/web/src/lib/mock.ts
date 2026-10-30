@@ -11,7 +11,7 @@ import {
   type FlatNotification,
   type Notification,
   type PairingCode,
-  type SendNotificationInput,
+  type IntentSendBody,
   type ServerMessage,
   type Template,
   type TokenInfo,
@@ -19,6 +19,7 @@ import {
 } from "@oyee/schema";
 import type { HttpMethod, Transport, TransportResponse } from "./api";
 import { matchesFilters, type InboxFilters } from "./cache";
+import { previewNotification } from "./composer";
 import type { LiveSocket } from "./live";
 
 const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://oyee.example.com";
@@ -464,43 +465,6 @@ const err = (status: number, code: string, message: string): TransportResponse =
   data: { error: { code, message } },
 });
 
-function createNotification(input: SendNotificationInput, source = "web"): Notification {
-  let card: Partial<SendNotificationInput> = {};
-  if (input.template) {
-    const t = db.templates.find((x) => x.name === input.template);
-    if (t) card = renderTemplateValue(t.card, input.vars ?? {});
-  }
-  const { template, vars: _vars, replaceKey: _rk, ...explicit } = input;
-  const merged = { ...card, ...Object.fromEntries(Object.entries(explicit).filter(([, v]) => v !== undefined)) };
-  return base(
-    {
-      title: merged.title ?? "Notification",
-      body: merged.body ?? null,
-      severity: merged.severity ?? "info",
-      source: merged.source ?? source,
-      threadId: merged.threadId ?? null,
-      icon: merged.icon ?? null,
-      image: merged.image ?? null,
-      url: merged.url ?? null,
-      fields: merged.fields ?? [],
-      progress: merged.progress
-        ? {
-            value: merged.progress.value,
-            max: merged.progress.max ?? 100,
-            label: merged.progress.label,
-            indeterminate: merged.progress.indeterminate ?? false,
-          }
-        : null,
-      actions: (merged.actions ?? []).map((a) => ({ ...a, style: a.style ?? "default", resolves: a.resolves ?? false })),
-      reply: merged.reply ?? null,
-      tags: merged.tags ?? [],
-      silent: merged.silent ?? false,
-      template: template ?? null,
-    },
-    0,
-  );
-}
-
 function handle(method: HttpMethod, path: string, body: unknown): TransportResponse {
   const url = new URL(path, ORIGIN);
   const p = url.pathname;
@@ -600,10 +564,11 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
     return ok({ items, nextCursor: offset + limit < all.length ? String(offset + limit) : null });
   }
   if (p === "/api/notifications" && method === "POST") {
-    const n = createNotification(body as SendNotificationInput);
+    // Every send creates a new notification here: key and cooldown rules live on the server.
+    const n: Notification = { ...previewNotification(body as IntentSendBody), id: `ntf_${ulid()}` };
     db.notifications = [n, ...db.notifications];
     emit({ type: "notification.created", notification: n });
-    return ok(n, 201);
+    return ok({ id: n.id, version: n.version, outcome: "created", reason: "Created (mock mode).", notification: n }, 201);
   }
   if (p === "/api/notifications/read-all" && method === "POST") {
     const src = (body as { source?: string } | undefined)?.source;

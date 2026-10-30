@@ -10,7 +10,7 @@ import type {
   Notification,
   RegisterWebDeviceInput,
   RespondInput,
-  SendNotificationInput,
+  IntentSendBody,
   UpsertTemplateInput,
 } from "@oyee/schema";
 import { api } from "./api";
@@ -204,8 +204,8 @@ export function useUnreadCount(): number {
 export function useSendNotification() {
   const apply = useApplyNotification();
   return useMutation({
-    mutationFn: (input: SendNotificationInput) => api.notifications.send(input),
-    onSuccess: apply,
+    mutationFn: (input: IntentSendBody) => api.notifications.send(input),
+    onSuccess: (sent) => apply(sent.notification),
   });
 }
 
