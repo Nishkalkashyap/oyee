@@ -188,6 +188,15 @@ export const ProgressInput = z.object({
   status: ProgressStatus.default("running").describe(
     "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
   ),
+  staleAfter: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minStaleAfter) && durationMs(d) <= durationMs(LIMITS.maxStaleAfter),
+    { error: () => `staleAfter must be between ${LIMITS.minStaleAfter} and ${LIMITS.maxStaleAfter}` },
+  )
+    .optional()
+    .describe(
+      'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
+        'silent step (default "30m", from "1m" to "24h"). A later report revives it.',
+    ),
   body: z.string().max(4000).optional().describe("Detail under the title. Markdown: **bold**, _italic_, `code`, links."),
   url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
   source: z.string().min(1).max(64).optional().describe("Who is reporting (defaults to this connection's name)."),
@@ -696,6 +705,9 @@ export const LIMITS = {
   defaultAskExpiry: "1h",
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
+  /** Bounds of a progress's `staleAfter`. */
+  minStaleAfter: "1m",
+  maxStaleAfter: "24h",
   /** wait_for_response holds for an answer at most this long. */
   askWaitSeconds: ASK_WAIT_SECONDS,
   /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
@@ -805,17 +817,18 @@ export function inferIntent(
   if (n.progress) {
     const p = n.progress;
     const atMax = !p.indeterminate && p.value >= p.max;
-    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it.
-    const prior = (p as Partial<ProgressBlock>).state;
-    const finished = prior === "done" || prior === "failed" ? prior : null;
+    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it, whether it stopped reporting,
+    // and when it last reported.
+    const prior = p as Partial<ProgressBlock>;
+    const kept = prior.state === "done" || prior.state === "failed" || prior.state === "stopped" ? prior.state : null;
     return {
       ...flat,
       intent: "progress",
       progress: {
         ...p,
-        state: finished ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
-        staleAfter: (p as Partial<ProgressBlock>).staleAfter ?? LIMITS.defaultStaleAfter,
-        lastReportAt: n.updatedAt,
+        state: kept ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
+        staleAfter: prior.staleAfter ?? LIMITS.defaultStaleAfter,
+        lastReportAt: prior.lastReportAt ?? n.updatedAt,
       },
     };
   }
@@ -830,6 +843,15 @@ export function inferIntent(
       cooldown: null,
     },
   };
+}
+
+/**
+ * What every client shows for a progress that stopped reporting: "Stopped reporting after <last label or percent>",
+ * e.g. "Stopped reporting after 3/7 checks" or "Stopped reporting after 40%". The stored `label` stays the sender's.
+ */
+export function stoppedReportingLabel(p: { value: number; max: number; label?: string }): string {
+  const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
+  return `Stopped reporting after ${p.label ?? `${Math.round(ratio * 100)}%`}`;
 }
 
 /** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */

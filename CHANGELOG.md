@@ -26,6 +26,9 @@
   until read. The tool answers in plain text with the outcome and the next step. The web inbox draws progress with
   its own card (state pill, a real bar with its label, last report), and a failed progress is no longer listed under
   In progress. Silent notifications no longer go out as alerting, high-priority FCM messages.
+- Stopped reporting: a running progress that gets no report for `staleAfter` (default 30m, `progress` tool input, 1m
+  to 24h) alerts once at warning and shows "Stopped reporting after 40%" (its last label or percent). The next report
+  brings it back as running, silently. The web progress card says how long it went quiet and that a report revives it.
 - Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
   `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
   sends get the intent they most resemble and existing notifications are converted once; the flat card fields are

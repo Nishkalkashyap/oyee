@@ -309,6 +309,16 @@ finish it with one alert (`updated`, `alert: true`, `silent: false`, unread agai
 (not resolved) so its alert isn't cancelled; the next report with the key starts a fresh progress. New progress counts
 as `send` (and the per-token rate limit), reports to a live one as `update`.
 
+**Stopped reporting.** `staleAfter` (duration `"1m"`…`"24h"`, default `"30m"`; kept across reports until a report
+changes it) is how long a running progress may go without a report. When `lastReportAt + staleAfter` passes, the
+inbox's alarm marks it `state: "stopped"` with one alert (`updated`, `alert: true`, `reason: "update"`, severity
+`warning`, flat `silent: false`, unread again); not charged to quotas. `value`, `max`, `label` and `lastReportAt` stay
+what the sender last reported; every client shows "Stopped reporting after <label, else the rounded percent>"
+(`stoppedReportingLabel` in `@oyee/schema`), e.g. "Stopped reporting after 3/7 checks" or "… after 40%". The next
+report with the key revives it as `running` silently (`outcome: updated_silently`, and the tool text says it had
+stopped reporting). A finished (`done`/`failed`) or resolved progress never stops; resolving a stopped one keeps
+`stopped`.
+
 **Keys across intents.** While the latest notification under a `(source, key)` is live (a running or stopped
 progress, or an open, unexpired ask), the key belongs to that intent: `inform`, `ask` or `progress` with the key and
 another intent fails with `conflict` (`409` over REST/webhooks once they send intents), and the message names the key,

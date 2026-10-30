@@ -1,4 +1,4 @@
-import type { IntentNotification, Notification, ProgressState } from "@oyee/schema";
+import { stoppedReportingLabel, type IntentNotification, type Notification, type ProgressState } from "@oyee/schema";
 import { progressLabel, progressPercent } from "./format";
 
 /** What the progress card and rows show for a progress notification. */
@@ -19,7 +19,7 @@ const TONE: Record<ProgressState, ProgressView["tone"]> = { running: "ink", done
 export function progressView(n: Pick<Extract<IntentNotification, { intent: "progress" }>, "progress">): ProgressView {
   const p = n.progress;
   const amount = progressLabel(p);
-  const stateLabel = { running: "Running", done: "Done", failed: "Failed", stopped: `Stopped reporting after ${amount}` }[p.state];
+  const stateLabel = { running: "Running", done: "Done", failed: "Failed", stopped: stoppedReportingLabel(p) }[p.state];
   return { state: p.state, stateLabel, amount, percent: progressPercent(p), tone: TONE[p.state] };
 }
 

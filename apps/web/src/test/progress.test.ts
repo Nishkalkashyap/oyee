@@ -44,6 +44,15 @@ describe("progressView (shared v2 fixtures)", () => {
     });
   });
 
+  it("stopped reporting names the sender's last label, else the percent", () => {
+    const n = fx("progress-stopped");
+    expect(progressView({ ...n, progress: { ...n.progress, value: 3, max: 7, label: "3/7 checks" } })).toMatchObject({
+      stateLabel: "Stopped reporting after 3/7 checks",
+      amount: "3/7 checks",
+    });
+    expect(progressView({ ...n, progress: { ...n.progress, value: 3, max: 7 } }).stateLabel).toBe("Stopped reporting after 43%");
+  });
+
   it("a value past max is clamped to a full bar", () => {
     const n = fx("progress-running-percent");
     expect(progressView({ ...n, progress: { ...n.progress, value: 250 } }).percent).toBe(100);
