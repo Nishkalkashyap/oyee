@@ -79,6 +79,10 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // The protocol v2 wire fixtures shared with web and macOS (packages/schema/fixtures): every client's decoding tests
+    // read the same file, so they can't drift apart.
+    sourceSets["test"].resources.srcDir("../../../packages/schema/fixtures")
+
     lint {
         // Sideloaded app: Play-policy checks (e.g. battery-optimization exemption request) are informational.
         disable += setOf("BatteryLife")

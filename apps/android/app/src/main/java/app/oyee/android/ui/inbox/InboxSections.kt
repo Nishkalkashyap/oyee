@@ -1,48 +1,49 @@
 package app.oyee.android.ui.inbox
 
+import app.oyee.android.model.AskState
+import app.oyee.android.model.Intent
 import app.oyee.android.model.Notification
-import app.oyee.android.model.NotificationStatus
+import app.oyee.android.model.ProgressState
 
 /*
- * How the active inbox is laid out (same rules as the web, apps/web/src/lib/inbox.ts): live progress first, then
- * what's waiting on you, then everything else with repeats stacked into one row.
+ * How the active inbox is laid out, by intent (GLOSSARY.md; same rules as the web, apps/web/src/lib/inbox.ts): open
+ * asks first (Needs you), then running or stopped progress (In progress), then everything else (Updates) with repeats
+ * stacked into one row.
  */
 
-/** An unanswered question: buttons that call back (not links) or a reply box, with no response yet. */
-fun Notification.needsAnswer(): Boolean {
-    if (status != NotificationStatus.ACTIVE || responses.isNotEmpty()) return false
-    return reply != null || actions.any { it.url == null }
+enum class InboxSectionId(val title: String) { NEEDS_YOU("Needs you"), IN_PROGRESS("In progress"), UPDATES("Updates") }
+
+/** Which section a notification belongs in: decided by its intent and state only. */
+fun Notification.section(): InboxSectionId = when {
+    intent == Intent.ASK && ask?.state == AskState.OPEN -> InboxSectionId.NEEDS_YOU
+    intent == Intent.PROGRESS && (progress?.state == ProgressState.RUNNING || progress?.state == ProgressState.STOPPED) ->
+        InboxSectionId.IN_PROGRESS
+    else -> InboxSectionId.UPDATES
 }
 
-/** A job that's still running (progress below its max, or an indeterminate bar). */
-fun Notification.inProgress(): Boolean {
-    val p = progress ?: return false
-    return status == NotificationStatus.ACTIVE && (p.indeterminate || p.value < p.max)
-}
-
-/** Repeats collapse by thread, otherwise by source + title. */
-fun Notification.stackKey(): String = threadId?.let { "thread:$it" } ?: "title:$source\u0000$title"
+/** Repeats collapse by `(source, key)` when there is a key, otherwise by source + title ("Front door left open" ×4). */
+fun Notification.stackKey(): String = key?.let { "key:$source\u0000$it" } ?: "title:$source\u0000$title"
 
 /** Newest first; the first item is the row that's shown. */
 data class InboxStack(val key: String, val items: List<Notification>) {
     val head: Notification get() = items.first()
 }
 
-enum class InboxSectionId(val title: String) { NEEDS_YOU("Needs you"), IN_PROGRESS("In progress"), UPDATES("Updates") }
-
 data class InboxSection(val id: InboxSectionId, val stacks: List<InboxStack>)
 
-/** Splits a createdAt-desc list into sections, dropping empty ones. Only Updates stacks repeats. */
+/**
+ * Splits a createdAt-desc list into sections, in the order Needs you, In progress, Updates; empty sections are dropped.
+ * Only Updates stacks repeats: an open ask or a live progress is always its own row.
+ */
 fun inboxSections(items: List<Notification>): List<InboxSection> {
     val needs = mutableListOf<InboxStack>()
     val live = mutableListOf<InboxStack>()
     val updates = LinkedHashMap<String, MutableList<Notification>>()
     for (n in items) {
-        when {
-            // A running job's buttons (Pause, Roll back) are controls, not questions.
-            n.inProgress() -> live += InboxStack(n.id, listOf(n))
-            n.needsAnswer() -> needs += InboxStack(n.id, listOf(n))
-            else -> updates.getOrPut(n.stackKey()) { mutableListOf() } += n
+        when (n.section()) {
+            InboxSectionId.NEEDS_YOU -> needs += InboxStack(n.id, listOf(n))
+            InboxSectionId.IN_PROGRESS -> live += InboxStack(n.id, listOf(n))
+            InboxSectionId.UPDATES -> updates.getOrPut(n.stackKey()) { mutableListOf() } += n
         }
     }
     return listOf(

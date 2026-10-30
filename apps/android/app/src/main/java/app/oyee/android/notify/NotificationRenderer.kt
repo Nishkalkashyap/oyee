@@ -15,9 +15,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.oyee.android.R
+import app.oyee.android.model.Intent
 import app.oyee.android.model.OyeeJson
 import app.oyee.android.model.Notification
+import app.oyee.android.model.ProgressState
 import app.oyee.android.model.Severity
+import app.oyee.android.ui.cards.InformIcon
+import app.oyee.android.ui.cards.informView
 import app.oyee.android.util.Formatting
 import app.oyee.android.util.Markdown
 import app.oyee.android.util.NotificationIds
@@ -62,7 +66,7 @@ class NotificationRenderer(private val context: Context, private val images: Ima
 
     /**
      * Applies an event to the system tray.
-     * @param alert make sound/vibration (still suppressed by `silent`); otherwise updates are silent.
+     * @param alert make sound/vibration (never for a running progress, see [NotificationPlan.alerts]); otherwise silent.
      * @param postIfAbsent post even if nothing is currently showing (true for `created` and alerting updates).
      * @param postIfNeverPosted post if nothing is showing *and* this device has never posted this id (an active,
      *   unread notification whose `created` push was collapsed away).
@@ -79,7 +83,8 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         replyHistory: CharSequence? = null,
         force: Boolean = false,
     ) = mutex.withLock {
-        if (n.shouldDismissSystemNotification) {
+        // Read or resolved anywhere (answered, expired and withdrawn asks are resolved), or an ask past its expiry.
+        if (NotificationPlan.dismiss(n)) {
             cancelLocked(n.id)
             return@withLock
         }
@@ -88,7 +93,7 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         val forced = force || note != null || replyHistory != null
         if (current != null && !forced && current.notification.extras.getInt(EXTRA_VERSION, 0) >= n.version) return@withLock
         try {
-            postLocked(n, alert = alert && !n.silent, note = note, replyHistory = replyHistory)
+            postLocked(n, alert = NotificationPlan.alerts(n, alert), note = note, replyHistory = replyHistory)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to post notification ${n.id}", e)
         }
@@ -119,22 +124,25 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         // The shade tints Oyee's icon, progress and buttons with the brand blue (severity shows in the app).
         val color = context.getColor(R.color.brand)
         val body = n.body?.takeIf { it.isNotBlank() }
-        val progress = n.progress
-        val fieldLines = n.fields
-        // Native Notification.ProgressStyle (via NotificationCompat.ProgressStyle) on API 36+; setProgress below.
-        val styledProgress = progress?.takeIf { Build.VERSION.SDK_INT >= 36 && n.image == null }
-        val useProgressStyle = styledProgress != null
+        // Each intent draws from its own block: an inform's rows, image and icon; a progress's bar or outcome.
+        val inform = if (n.intent == Intent.INFORM) informView(n) else null
+        val progress = n.progress?.takeIf { n.intent == Intent.PROGRESS }
+        val running = progress?.state == ProgressState.RUNNING
+        val fieldLines = inform?.rows.orEmpty()
+        // While running: native Notification.ProgressStyle (via NotificationCompat.ProgressStyle) on API 36+,
+        // setProgress below that. Once done, failed or stopped the outcome is a line of text ("Done · 7/7 checks").
+        val styledProgress = progress?.takeIf { running && Build.VERSION.SDK_INT >= 36 }
+        val progressSummary = progress?.let { if (running) Formatting.progressLabel(it) else NotificationPlan.progressLine(it) }
 
         // Collapsed one-liner.
         val collapsed: CharSequence? = listOfNotNull(
             note,
-            progress?.takeIf { useProgressStyle }?.let { Formatting.progressLabel(it) },
+            progressSummary,
             body?.let { firstLine(Markdown.toPlainText(it)) }
-                ?: progress?.takeIf { !useProgressStyle }?.let { Formatting.progressLabel(it) }
                 ?: fieldLines.firstOrNull()?.let { "${it.label}: ${it.value}" },
         ).joinToString(" · ").ifBlank { null }
 
-        // Expanded text: note, markdown body, `Label: value` lines, progress label.
+        // Expanded text: note, markdown body, `Label: value` lines, progress label or outcome.
         val big = SpannableStringBuilder()
         note?.let { big.append(Spans.bold(it)) }
         body?.let { if (big.isNotEmpty()) big.append("\n"); big.append(Spans.fromMarkdown(it)) }
@@ -145,9 +153,9 @@ class NotificationRenderer(private val context: Context, private val images: Ima
                 big.append(Spans.bold("${f.label}: ")).append(f.value)
             }
         }
-        if (progress != null && !useProgressStyle) {
+        if (progressSummary != null && styledProgress == null) {
             if (big.isNotEmpty()) big.append("\n")
-            big.append(Formatting.progressLabel(progress))
+            big.append(if (running) progressSummary else Spans.bold(progressSummary))
         }
 
         val b = NotificationCompat.Builder(context, n.severity.channelId)
@@ -176,20 +184,22 @@ class NotificationRenderer(private val context: Context, private val images: Ima
                 },
             )
         category(n)?.let { b.setCategory(it) }
-        // `silent` and non-alerting posts: no sound/vibration regardless of channel settings.
+        // Non-alerting posts (updates, a running progress): no sound/vibration regardless of channel settings.
         if (!alert) b.setSilent(true)
+        // An ask leaves the tray by itself when it expires, even if the server's broadcast never reaches this device.
+        if (n.intent == Intent.ASK) {
+            Formatting.epochMillis(n.ask?.expiresAt)?.let { at -> (at - System.currentTimeMillis()).takeIf { it > 0 }?.let(b::setTimeoutAfter) }
+        }
 
-        // Large icon: emoji rendered to a bitmap, or a downloaded https icon.
-        val icon = n.icon?.takeIf { it.isNotBlank() }
-        val largeIcon: Bitmap? = when {
-            icon == null -> null
-            Formatting.isUrlIcon(icon) -> images.download(icon, 256)
-            icon.length <= 8 -> images.emojiBitmap(icon)
-            else -> null
+        // Large icon: an inform's emoji rendered to a bitmap, or its downloaded https icon.
+        val largeIcon: Bitmap? = when (val icon = inform?.icon) {
+            null -> null
+            is InformIcon.Image -> images.download(icon.url, 256)
+            is InformIcon.Emoji -> images.emojiBitmap(icon.text)
         }
         largeIcon?.let { b.setLargeIcon(it) }
 
-        val picture = n.image?.let { images.download(it, 1440) }
+        val picture = inform?.image?.let { images.download(it, 1440) }
         when {
             picture != null -> {
                 val style = NotificationCompat.BigPictureStyle()
@@ -212,17 +222,22 @@ class NotificationRenderer(private val context: Context, private val images: Ima
             }
             big.isNotEmpty() -> b.setStyle(NotificationCompat.BigTextStyle().bigText(big).setBigContentTitle(n.title))
         }
-        if (progress != null && !useProgressStyle) {
+        if (progress != null && running && styledProgress == null) {
             val (value, max) = Formatting.progressInts(progress)
             b.setProgress(max, value, progress.indeterminate)
         }
 
-        // Up to 3 buttons (Android's limit): the card's actions, its reply box, then "✓ Resolve" if a slot is left.
-        val reply = n.reply
-        val slots = NotificationButtons.plan(actionCount = n.actions.size, hasReply = reply != null)
-        n.actions.take(slots.actions).forEach { a -> b.addAction(Intents.action(context, n, a)) }
-        if (reply != null) b.addAction(Intents.replyAction(context, n, reply))
-        if (slots.resolve) b.addAction(Intents.resolveAction(context, n))
+        // Up to 3 buttons (Android's limit), per intent: answers + inline reply, links + Resolve, or Resolve.
+        NotificationPlan.buttons(n).forEachIndexed { i, button ->
+            b.addAction(
+                when (button) {
+                    is NotificationPlan.Button.Answer -> Intents.answerAction(context, n, i, button.option)
+                    is NotificationPlan.Button.Reply -> Intents.replyAction(context, n, button.placeholder)
+                    is NotificationPlan.Button.Link -> Intents.linkAction(context, n, i, button.label, button.url)
+                    NotificationPlan.Button.Resolve -> Intents.resolveAction(context, n)
+                },
+            )
+        }
         if (replyHistory != null) {
             @Suppress("DEPRECATION")
             b.setRemoteInputHistory(arrayOf(replyHistory))
@@ -292,7 +307,6 @@ class NotificationRenderer(private val context: Context, private val images: Ima
             Severity.WARNING -> R.color.severity_warning
             Severity.INFO -> R.color.severity_info
             Severity.SUCCESS -> R.color.severity_success
-            Severity.DEBUG -> R.color.severity_debug
         },
     )
 
@@ -300,11 +314,11 @@ class NotificationRenderer(private val context: Context, private val images: Ima
         Severity.CRITICAL -> NotificationCompat.PRIORITY_MAX
         Severity.WARNING -> NotificationCompat.PRIORITY_HIGH
         Severity.INFO, Severity.SUCCESS -> NotificationCompat.PRIORITY_DEFAULT
-        Severity.DEBUG -> NotificationCompat.PRIORITY_LOW
     }
 
     private fun category(n: Notification): String? = when {
-        n.progress != null -> NotificationCompat.CATEGORY_PROGRESS
+        n.intent == Intent.PROGRESS && n.progress?.state == ProgressState.RUNNING -> NotificationCompat.CATEGORY_PROGRESS
+        n.intent == Intent.ASK -> NotificationCompat.CATEGORY_REMINDER
         n.severity == Severity.CRITICAL -> NotificationCompat.CATEGORY_ERROR
         else -> null
     }

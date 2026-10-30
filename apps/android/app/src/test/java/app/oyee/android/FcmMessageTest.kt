@@ -11,14 +11,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FcmMessageTest {
-    private val inline = Json.parseToJsonElement(Fixtures.FULL_NOTIFICATION).toString() // compact JSON string
+    private val inline = Fixtures.json("inform-full") // compact JSON string
 
     @Test
     fun `created with inline notification`() {
         val m = FcmMessage.parse(
             mapOf(
                 "type" to "notification.created",
-                "id" to "ntf_01JBX0000000000000000000",
+                "id" to "ntf_01JBXA0000000000000000INF2",
                 "version" to "3",
                 "alert" to "true",
                 "notification" to inline,
@@ -28,7 +28,7 @@ class FcmMessageTest {
         assertEquals(3, m.version)
         assertTrue(m.alert)
         assertNotNull(m.notification)
-        assertEquals("prod-api CPU high", m.notification!!.title)
+        assertEquals("Disk 95% full on db-1", m.notification!!.title)
     }
 
     @Test
@@ -58,7 +58,7 @@ class FcmMessageTest {
     @Test
     fun `inline notification with unknown fields still parses`() {
         val withExtra = Json.parseToJsonElement(inline).let { JsonObject(it as JsonObject + ("brandNew" to Json.parseToJsonElement("[1]"))) }.toString()
-        val m = FcmMessage.parse(mapOf("type" to "notification.updated", "id" to "ntf_01JBX0000000000000000000", "version" to "3", "alert" to "false", "notification" to withExtra, "unknownKey" to "x"))!!
+        val m = FcmMessage.parse(mapOf("type" to "notification.updated", "id" to "ntf_01JBXA0000000000000000INF2", "version" to "3", "alert" to "false", "notification" to withExtra, "unknownKey" to "x"))!!
         assertNotNull(m.notification)
     }
 

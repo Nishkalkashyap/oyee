@@ -7,9 +7,7 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import app.oyee.android.R
-import app.oyee.android.model.Action
 import app.oyee.android.model.Notification
-import app.oyee.android.model.Reply
 import app.oyee.android.ui.MainActivity
 
 /**
@@ -19,12 +17,10 @@ import app.oyee.android.ui.MainActivity
 object Intents {
     const val EXTRA_ID = "oyee.id"
     const val EXTRA_URL = "oyee.url"
-    const val EXTRA_ACTION_ID = "oyee.actionId"
-    const val EXTRA_ACTION_LABEL = "oyee.actionLabel"
-    const val EXTRA_RESOLVES = "oyee.resolves"
+    const val EXTRA_OPTION = "oyee.option"
     const val KEY_REPLY = "oyee.reply"
 
-    const val ACTION_RESPOND = "app.oyee.android.RESPOND"
+    const val ACTION_ANSWER = "app.oyee.android.ANSWER"
     const val ACTION_REPLY = "app.oyee.android.REPLY"
     const val ACTION_DISMISSED = "app.oyee.android.DISMISSED"
     const val ACTION_RESOLVE = "app.oyee.android.RESOLVE"
@@ -51,42 +47,41 @@ object Intents {
         IMMUTABLE,
     )
 
-    /** `url` actions open the browser (through the trampoline, which also marks read); others POST /respond. */
-    fun action(context: Context, n: Notification, a: Action): NotificationCompat.Action {
-        val pi = if (a.url != null) {
-            PendingIntent.getActivity(
-                context,
-                0,
-                Intent(context, NotificationOpenActivity::class.java)
-                    .setData(uri(n.id, "action", a.id))
-                    .putExtra(EXTRA_ID, n.id)
-                    .putExtra(EXTRA_URL, a.url)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                IMMUTABLE,
-            )
-        } else {
-            PendingIntent.getBroadcast(
-                context,
-                0,
-                Intent(context, NotificationActionReceiver::class.java)
-                    .setAction(ACTION_RESPOND)
-                    .setData(uri(n.id, "respond", a.id))
-                    .putExtra(EXTRA_ID, n.id)
-                    .putExtra(EXTRA_ACTION_ID, a.id)
-                    .putExtra(EXTRA_ACTION_LABEL, a.label)
-                    .putExtra(EXTRA_RESOLVES, a.resolves),
-                IMMUTABLE,
-            )
-        }
-        return NotificationCompat.Action.Builder(R.drawable.ic_stat_oyee, a.label, pi)
-            .setShowsUserInterface(a.url != null)
-            .build()
+    /** An inform's link button: opens the browser through the trampoline, which also marks the notification read. */
+    fun linkAction(context: Context, n: Notification, index: Int, label: String, url: String): NotificationCompat.Action {
+        val pi = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, NotificationOpenActivity::class.java)
+                .setData(uri(n.id, "link", index.toString()))
+                .putExtra(EXTRA_ID, n.id)
+                .putExtra(EXTRA_URL, url)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_oyee, label, pi).setShowsUserInterface(true).build()
     }
 
-    fun replyAction(context: Context, n: Notification, reply: Reply): NotificationCompat.Action {
-        val label = reply.buttonLabel?.takeIf { it.isNotBlank() } ?: context.getString(R.string.reply_default_label)
+    /** An ask's answer button: `POST …/respond { option }` from the background, without opening the app. */
+    fun answerAction(context: Context, n: Notification, index: Int, option: String): NotificationCompat.Action {
+        val pi = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(context, NotificationActionReceiver::class.java)
+                .setAction(ACTION_ANSWER)
+                .setData(uri(n.id, "answer", index.toString()))
+                .putExtra(EXTRA_ID, n.id)
+                .putExtra(EXTRA_OPTION, option),
+            IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_oyee, option, pi).setShowsUserInterface(false).build()
+    }
+
+    /** An ask's inline reply (RemoteInput): `POST …/respond { text }`. */
+    fun replyAction(context: Context, n: Notification, placeholder: String): NotificationCompat.Action {
+        val label = context.getString(R.string.reply_default_label)
         val remoteInput = RemoteInput.Builder(KEY_REPLY)
-            .setLabel(reply.placeholder?.takeIf { it.isNotBlank() } ?: label)
+            .setLabel(placeholder.takeIf { it.isNotBlank() } ?: label)
             .build()
         // RemoteInput requires a mutable PendingIntent (the system fills in the typed text). The intent is explicit.
         val pi = PendingIntent.getBroadcast(

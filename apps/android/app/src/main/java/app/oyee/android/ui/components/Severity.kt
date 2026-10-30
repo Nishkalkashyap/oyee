@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import app.oyee.android.model.Severity
+import app.oyee.android.ui.cards.severityLabel
 import app.oyee.android.util.Formatting
 
 fun severityColor(s: Severity): Color = when (s) {
@@ -29,17 +29,14 @@ fun severityColor(s: Severity): Color = when (s) {
     Severity.WARNING -> Color(0xFFD97706)
     Severity.INFO -> Color(0xFF3B82F6)
     Severity.SUCCESS -> Color(0xFF16A34A)
-    Severity.DEBUG -> Color(0xFFA8A39A)
 }
 
 fun severityIcon(s: Severity): ImageVector = when (s) {
     Severity.CRITICAL, Severity.WARNING -> Icons.Filled.Warning
     Severity.INFO -> Icons.Filled.Info
     Severity.SUCCESS -> Icons.Filled.CheckCircle
-    Severity.DEBUG -> Icons.Filled.Build
 }
 
-fun severityLabel(s: Severity): String = s.wire.replaceFirstChar { it.uppercase() }
 
 /** Round badge: the notification's emoji/URL icon if set, otherwise the severity icon, tinted by severity. */
 @Composable

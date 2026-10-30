@@ -83,6 +83,19 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
+## Unreleased (apps, next release)
+- Android on intents: the app reads the `intent` and its `inform` / `ask` / `progress` block and draws one card per
+  intent in the conversation view. Inform: icon and severity, body, rows, image, link buttons. Ask: "Waiting 12m" and
+  "Expires in 48m" while open, answer buttons and the reply box, then "Answered: Approve · Pixel 9", "Expired" or
+  "Withdrawn" with the buttons disabled. Progress: a state pill and a real bar ("Running", "Done", "Failed", "Stopped
+  reporting after 40%"). The inbox sections are the intents (Needs you = open asks, In progress = running or stopped
+  progress, Updates = the rest) and repeats stack by source and key.
+- Android system notifications per intent: an inform alerts on its severity's channel with its link buttons; an open
+  ask shows its answer buttons and an inline reply, answers with `{ "option" }` / `{ "text" }`, and leaves the tray
+  once answered (from any device), expired or withdrawn (an answer that arrives too late is dropped, not retried); a
+  running progress updates silently with native progress, and done, failed and stopped alert once. The Debug
+  notification channel is deleted on upgrade; tags, threads and `silent` are gone.
+
 ## 0.2.11
 - Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;
   repeats of the same thread, or source + title, stack into one row with a count. The filter chips and status tabs

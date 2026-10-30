@@ -1,51 +1,40 @@
 package app.oyee.android.ui.detail
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,35 +44,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
-import app.oyee.android.model.Action
-import app.oyee.android.model.ActionStyle
+import app.oyee.android.model.Intent as NotificationIntent
 import app.oyee.android.model.Notification
+import app.oyee.android.ui.cards.AskCard
+import app.oyee.android.ui.cards.InformCard
+import app.oyee.android.ui.cards.ProgressCard
+import app.oyee.android.ui.cards.askView
 import app.oyee.android.ui.components.Composer
-import app.oyee.android.ui.components.InkProgress
-import app.oyee.android.ui.components.MarkdownText
 import app.oyee.android.ui.components.PillButton
 import app.oyee.android.ui.components.PillVariant
-import app.oyee.android.ui.components.SeverityPill
 import app.oyee.android.ui.components.SourceAvatar
 import app.oyee.android.ui.components.SystemLine
 import app.oyee.android.ui.theme.Oyee
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextDecoration
 import app.oyee.android.util.Formatting
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,10 +94,7 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text(n.source, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1)
                             Text(
-                                listOfNotNull(
-                                    n.targetDeviceIds?.let { if (it.size == 1) "Sent to 1 device" else "Sent to ${it.size} devices" } ?: "All devices",
-                                    n.threadId,
-                                ).joinToString(" · "),
+                                n.targetDeviceIds?.let { if (it.size == 1) "Sent to 1 device" else "Sent to ${it.size} devices" } ?: "All devices",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.muted,
                                 maxLines = 1,
@@ -136,11 +111,12 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
             }
         },
         bottomBar = {
-            n?.reply?.takeIf { !n.isResolved }?.let { reply ->
+            // An open ask that takes text: the reply box is the conversation's composer.
+            n?.takeIf { it.intent == NotificationIntent.ASK }?.let { askView(it).replyPlaceholder }?.let { placeholder ->
                 Composer(
                     value = state.replyText,
                     onValueChange = vm::onReplyText,
-                    placeholder = reply.placeholder ?: "Reply to ${n.source}…",
+                    placeholder = placeholder,
                     onSend = vm::sendReply,
                     enabled = !state.busy,
                     modifier = Modifier.navigationBarsPadding().imePadding().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -172,114 +148,43 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
     }
 }
 
-/** The agent's card as a bubble, quiet update lines, and your answers as light-blue bubbles on the right. */
-@OptIn(ExperimentalLayoutApi::class)
+/** The sender's card for its intent as a bubble, quiet update lines, and an ask's answer as a light-blue bubble. */
 @Composable
 private fun Conversation(n: Notification, state: DetailUiState, vm: DetailViewModel) {
     val context = LocalContext.current
     val c = Oyee.colors
-    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+    fun open(url: String) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+        if (!n.isRead) vm.markRead()
+    }
+    val footer: (@Composable () -> Unit)? = if (n.isResolved) {
+        null
+    } else {
+        {
+            PillButton(onClick = vm::resolve, variant = PillVariant.Primary, enabled = !state.busy, height = 34.dp) {
+                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text("Resolve")
+            }
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SystemLine(Formatting.absolute(n.createdAt))
-        Column(
-            Modifier.padding(end = 28.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 22.dp, bottomStart = 6.dp))
-                .background(c.bubble).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SeverityPill(n.severity)
-                if (n.isResolved) {
-                    Box(Modifier.height(24.dp).clip(CircleShape).background(c.foreground).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                        Text("✓ Resolved", color = c.background, style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-                n.tags.forEach { tag ->
-                    Box(Modifier.height(24.dp).clip(CircleShape).background(c.secondary).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                        Text("#$tag", color = c.secondaryLabel, style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-            }
-            Text(n.title, style = MaterialTheme.typography.titleLarge, color = c.foreground)
-            n.body?.takeIf { it.isNotBlank() }?.let {
-                MarkdownText(it, style = MaterialTheme.typography.bodyLarge.copy(color = c.secondaryLabel))
-            }
-            n.image?.let { img ->
-                AsyncImage(
-                    model = img,
-                    contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(RoundedCornerShape(16.dp)),
-                )
-            }
-            if (n.fields.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    n.fields.forEach { f ->
-                        Row {
-                            Text(f.label, style = MaterialTheme.typography.bodyMedium, color = c.muted, modifier = Modifier.weight(0.38f))
-                            Text(f.value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.foreground, modifier = Modifier.weight(0.62f))
-                        }
-                    }
-                }
-            }
-            n.progress?.let { p ->
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    InkProgress(p)
-                    Text(Formatting.progressLabel(p), style = MaterialTheme.typography.bodySmall, color = c.muted)
-                }
-            }
-            n.url?.let { url ->
-                Text(
-                    "↗ ${url.toUri().host ?: url}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = c.foreground,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable { open(url) },
-                )
-            }
-            if (n.actions.isNotEmpty() && !n.isResolved) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    n.actions.forEach { a ->
-                        PillButton(
-                            onClick = {
-                                if (a.url != null) {
-                                    open(a.url)
-                                    if (!n.isRead) vm.markRead()
-                                } else {
-                                    vm.respond(a.id, a.label)
-                                }
-                            },
-                            variant = when (a.style) {
-                                ActionStyle.PRIMARY -> PillVariant.Primary
-                                ActionStyle.DESTRUCTIVE -> PillVariant.Destructive
-                                ActionStyle.DEFAULT -> PillVariant.Secondary
-                            },
-                            enabled = !state.busy,
-                        ) { Text(if (a.url != null) "${a.label} ↗" else a.label) }
-                    }
-                }
-            }
-            if (!n.isResolved) {
-                // The card's own control, under a hairline so it doesn't read as one of the agent's buttons.
-                HorizontalDivider(color = c.border, modifier = Modifier.padding(top = 4.dp))
-                PillButton(onClick = vm::resolve, variant = PillVariant.Primary, enabled = !state.busy, height = 34.dp) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("Resolve")
-                }
-            }
+        when (n.intent) {
+            NotificationIntent.INFORM -> InformCard(n, onOpenUrl = ::open, footer = footer)
+            NotificationIntent.ASK -> AskCard(n, onAnswer = vm::answer, onOpenUrl = ::open, busy = state.busy, footer = footer)
+            NotificationIntent.PROGRESS -> ProgressCard(n, onOpenUrl = ::open, footer = footer)
         }
         if (n.version > 1 && n.updatedAt != n.createdAt) SystemLine("Updated ${Formatting.relative(n.updatedAt)} · v${n.version}")
-        n.responses.forEach { r ->
-            val label = r.actionId?.let { aid -> n.actions.firstOrNull { it.id == aid }?.label ?: aid }
+        n.ask?.answer?.takeIf { n.intent == NotificationIntent.ASK }?.let { a ->
             Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End) {
                 Text(
-                    listOfNotNull(label, r.text).joinToString(" · "),
+                    listOfNotNull(a.option, a.text).joinToString(" · "),
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (r.text == null) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (a.text == null) FontWeight.SemiBold else FontWeight.Normal,
                     color = c.foreground,
                     modifier = Modifier
                         .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomEnd = 6.dp, bottomStart = 22.dp))
@@ -287,7 +192,7 @@ private fun Conversation(n: Notification, state: DetailUiState, vm: DetailViewMo
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    listOfNotNull(r.deviceName, Formatting.relative(r.at)).joinToString(" · "),
+                    listOfNotNull(a.deviceName, Formatting.relative(a.at)).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.muted,
                 )
