@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 10, 11, 12, 13, 14
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Flat card fields, Template types and UpdateNotificationInput are deleted from the schema package; the wire notification is shared fields + one intent block
 - [ ] Template storage and `/api/templates` routes are deleted; `callbackSecret` is dropped from token creation and from the D1 tokens table via a Drizzle-generated migration; callback and signing code is deleted
@@ -33,3 +33,5 @@ From 11: remove the flat fallback for JSON bodies without `intent` that use v1-o
 From 13: web sw.js builds the stopped label from `progressAmount`, which differs from `stoppedReportingLabel` when max != 100 and there is no label ("3/7" vs "43%"); make sw.js/webpush.ts match it. docs/protocol.md §9 still lists `oyee.debug`.
 
 From 14: rewrite protocol §9 (Apple threadIdentifier is now the source; no debug or silent). Add a fixture for an ask without a reply placeholder. The Swift fixture copy is guarded by a drift test, so update it when the fixtures change.
+
+Resolved: merged into `notification-intents` (branch head 52465f4). All earlier follow-ups handled; D1 migration 0002 drops callback_secret; old inbox rows converted in code.
