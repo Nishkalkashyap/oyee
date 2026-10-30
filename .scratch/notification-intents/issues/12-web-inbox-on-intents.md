@@ -12,3 +12,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Stacking groups by `(source, key)` when a key exists, otherwise source and title
 - [ ] Tag chips, tag search, thread filter and the Templates page/route/nav item are removed
 - [ ] Web inbox tests on the shared fixtures
+
+## Comments
+
+From 02: the web service worker (sw.js, mirrored by webpush.ts) still drops link buttons from the browser popup; show inform links there (first two buttons).

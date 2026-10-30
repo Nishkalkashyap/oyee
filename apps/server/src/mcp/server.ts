@@ -20,6 +20,7 @@ import { ApiError, rpc } from "../lib/errors";
 import type { Actor } from "../inbox/model";
 import { inbox } from "../routes/api";
 import { askResultText, waitResultText } from "./ask";
+import { registerInformTool } from "./inform";
 
 const IdInput = z.object({ id: z.string().describe("Notification id (ntf_…)") });
 
@@ -27,7 +28,7 @@ function ok(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
-function fail(err: unknown): CallToolResult {
+export function fail(err: unknown): CallToolResult {
   const api = ApiError.fromUnknown(err);
   const message = api ? `${api.code}: ${api.message}` : err instanceof Error ? err.message : String(err);
   if (!api) console.error("MCP tool error", err);
@@ -190,6 +191,8 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     },
     () => run(async () => ({ items: (await listDevices(env.DB, token.userId)).map(toDevice) })),
   );
+
+  registerInformTool(server, stub, actor);
 
   return server;
 }
