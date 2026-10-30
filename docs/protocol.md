@@ -59,6 +59,26 @@ General rules:
 }
 ```
 
+**Intent (protocol v2, being introduced).** Every notification also carries `intent` (`"inform" | "ask" |
+"progress"`), `key` (string ≤ 128 | null; today the send's `replaceKey`) and one block named after its intent, next
+to the flat fields above (which stay until every client reads intents):
+
+```jsonc
+"inform":   { "links": [{ "label": "Open PR", "url": "https://…" }], "fields": [], "image": null, "icon": "🚀", "cooldown": null },
+"ask":      { "options": ["Approve", "Reject"], "allowText": false, "replyPlaceholder": null,
+              "expiresAt": "…", "answer": { "option": "Approve", "text": null, "deviceId": "dev_…", "deviceName": "Pixel 9", "at": "…" } | null,
+              "state": "open" },          // "open" | "answered" | "expired" | "withdrawn"
+"progress": { "value": 3, "max": 7, "label": "3/7 checks", "indeterminate": false,
+              "state": "running",         // "running" | "done" | "failed" | "stopped" (Stopped reporting)
+              "staleAfter": "30m", "lastReportAt": "…" }   // on a progress intent, `progress` is this block (a superset of the bar)
+```
+
+Flat sends get the intent they most resemble: non-link actions or a reply → ask (`answered` once it has a response,
+`withdrawn` if resolved unanswered, otherwise `open`, expiring 1 h after creation); progress → progress (`done` at
+max, otherwise `running`); anything else → inform (link actions become `links`). Notifications stored before intents
+were converted the same way, except that an unanswered ask became `expired` and an unfinished progress `stopped`.
+Example notifications for every intent and state: `packages/schema/fixtures/notifications.v2.json`.
+
 `Action`:
 - `id` — `[a-z0-9_-]{1,32}`, unique within the notification.
 - `label` — 1..32 chars.

@@ -2,6 +2,7 @@
 import {
   LIMITS,
   SendNotificationInput,
+  inferIntent,
   renderTemplateValue,
   type Notification,
   type Platform,
@@ -68,8 +69,9 @@ export function buildNotification(
   now: string,
   targetDeviceIds: string[] | null = null,
 ): Notification {
-  return {
+  return inferIntent({
     id,
+    key: input.replaceKey ?? null,
     source: input.source ?? actor.defaultSource,
     threadId: input.threadId ?? null,
     title: input.title,
@@ -93,7 +95,7 @@ export function buildNotification(
     resolvedAt: null,
     responses: [],
     targetDeviceIds,
-  };
+  });
 }
 
 // ─── Device targeting ───────────────────────────────────────────────────────
@@ -145,7 +147,7 @@ export function resolveTargets(
 
 /** replaceKey dedupe: the new send replaces the card content of the existing active notification. */
 export function replaceContent(existing: Notification, fresh: Notification, now: string): Notification {
-  return {
+  return inferIntent({
     ...fresh,
     id: existing.id,
     createdAt: existing.createdAt,
@@ -153,7 +155,7 @@ export function replaceContent(existing: Notification, fresh: Notification, now:
     version: existing.version + 1,
     updatedAt: now,
     readAt: null, // a re-send re-alerts, so it's unread again
-  };
+  });
 }
 
 const PATCHABLE = [
@@ -181,7 +183,7 @@ export function applyPatch(n: Notification, patch: UpdateNotificationInput, now:
   assertUniqueActionIds(next.actions);
   next.version = n.version + 1;
   next.updatedAt = now;
-  return next;
+  return inferIntent(next);
 }
 
 export function assertUniqueActionIds(actions: Notification["actions"]): void {

@@ -8,6 +8,7 @@ import {
   ClientMessage,
   LIMITS,
   QUOTAS,
+  type FlatNotification,
   type ListNotificationsQuery,
   type McpWaitResult,
   type Notification,
@@ -23,6 +24,7 @@ import {
   type UpdateNotificationInput,
   type UpsertTemplateInput,
   type Usage,
+  inferIntent,
   renderTemplateValue,
 } from "@oyee/schema";
 import type { Env } from "../env";
@@ -150,6 +152,41 @@ export class InboxDO extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS usage (kind TEXT NOT NULL, period TEXT NOT NULL, win INTEGER NOT NULL,
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
+    this.migrateToIntents();
+  }
+
+  /**
+   * Notifications carry their intent (protocol v2): adds the `intent` and `key` columns and converts rows stored
+   * before intents existed, once (recorded as `meta.schema = 1`; rows that already have an intent are left alone).
+   * Old rows' senders can no longer act on them, so an unanswered ask becomes expired and an unfinished progress
+   * stopped (see inferIntent). Converted rows get a new `seq` so clients that sync by cursor receive the new shape.
+   */
+  private migrateToIntents() {
+    const schema = this.sql.exec<{ value: number }>("SELECT value FROM meta WHERE key = 'schema'").toArray()[0]?.value ?? 0;
+    if (schema >= 1) return;
+    const columns = new Set(
+      this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray().map((c) => c.name),
+    );
+    if (!columns.has("intent")) this.sql.exec("ALTER TABLE notifications ADD COLUMN intent TEXT");
+    if (!columns.has("key")) this.sql.exec("ALTER TABLE notifications ADD COLUMN key TEXT");
+    this.sql.exec("CREATE INDEX IF NOT EXISTS ntf_key ON notifications(source, key)");
+    const legacy = this.sql
+      .exec<{ id: string; data: string; replace_key: string | null }>(
+        "SELECT id, data, replace_key FROM notifications WHERE intent IS NULL",
+      )
+      .toArray();
+    for (const r of legacy) {
+      const n = inferIntent({ ...(JSON.parse(r.data) as FlatNotification), key: r.replace_key }, { legacy: true });
+      this.sql.exec(
+        "UPDATE notifications SET intent = ?, key = ?, data = ?, seq = ? WHERE id = ?",
+        n.intent,
+        n.key,
+        JSON.stringify(n),
+        this.nextSeq(),
+        r.id,
+      );
+    }
+    this.sql.exec("INSERT INTO meta (key, value) VALUES ('schema', 1) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
   }
 
   // ─── Storage helpers ──────────────────────────────────────────────────────
@@ -179,12 +216,12 @@ export class InboxDO extends DurableObject<Env> {
   private save(n: Notification, replaceKey: string | null, tokenId: string | null) {
     this.sql.exec(
       `INSERT INTO notifications (id, seq, created_at, updated_at, source, severity, status, thread_id, replace_key,
-         read_at, token_id, search, data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         read_at, token_id, search, data, intent, key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET seq = excluded.seq, updated_at = excluded.updated_at, source = excluded.source,
          severity = excluded.severity, status = excluded.status, thread_id = excluded.thread_id,
          replace_key = excluded.replace_key, read_at = excluded.read_at, token_id = excluded.token_id,
-         search = excluded.search, data = excluded.data`,
+         search = excluded.search, data = excluded.data, intent = excluded.intent, key = excluded.key`,
       n.id,
       this.nextSeq(),
       n.createdAt,
@@ -198,6 +235,8 @@ export class InboxDO extends DurableObject<Env> {
       tokenId,
       searchText(n),
       JSON.stringify(n),
+      n.intent,
+      n.key,
     );
   }
 
@@ -432,7 +471,7 @@ export class InboxDO extends DurableObject<Env> {
         deviceName: actor.deviceName,
         at: now,
       };
-      const n: Notification = {
+      let n: Notification = {
         ...rec.n,
         responses: appendResponse(rec.n, response),
         version: rec.n.version + 1,
@@ -443,6 +482,7 @@ export class InboxDO extends DurableObject<Env> {
         n.status = "resolved";
         n.resolvedAt = now;
       }
+      n = inferIntent(n);
       this.save(n, rec.replaceKey, rec.tokenId);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "responded" }]);
 
@@ -509,7 +549,7 @@ export class InboxDO extends DurableObject<Env> {
     if (rec.n.status === "resolved" && !patch) return rec.n;
     const now = new Date().toISOString();
     const base = patch ? applyPatch(rec.n, patch, now) : { ...rec.n, version: rec.n.version + 1, updatedAt: now };
-    const n: Notification = { ...base, status: "resolved", resolvedAt: rec.n.resolvedAt ?? now };
+    const n = inferIntent({ ...base, status: "resolved", resolvedAt: rec.n.resolvedAt ?? now });
     this.save(n, rec.replaceKey, rec.tokenId);
     this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
     return n;

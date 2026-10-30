@@ -1,5 +1,7 @@
 import {
+  inferIntent,
   renderTemplateValue,
+  type FlatNotification,
   type Notification,
   type SendNotificationInput,
   type TemplateCard,
@@ -24,10 +26,10 @@ export function composeCard(
 /** Builds a full Notification from a (partial) card so it can be rendered by previews / NotificationCard. */
 export function toPreviewNotification(
   card: Partial<SendNotificationInput>,
-  extra: Partial<Notification> = {},
+  extra: Partial<FlatNotification> = {},
 ): Notification {
   const now = new Date().toISOString();
-  return {
+  return inferIntent({
     id: "ntf_preview",
     source: card.source ?? "web",
     threadId: card.threadId ?? null,
@@ -59,7 +61,7 @@ export function toPreviewNotification(
     resolvedAt: null,
     responses: [],
     ...extra,
-  };
+  });
 }
 
 /** Parses a JSON object of template vars; returns an error message instead of throwing. */

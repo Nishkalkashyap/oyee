@@ -168,7 +168,12 @@ describe("FCM fan-out", () => {
     expect(msg.android).toEqual({ priority: "HIGH", collapse_key: sent.body.id });
     expect(msg.data).toMatchObject({ type: "notification.created", id: sent.body.id, version: "1", alert: "true" });
     expect(Object.values(msg.data).every((v) => typeof v === "string")).toBe(true);
-    expect(JSON.parse(msg.data.notification).title).toBe("Disk full");
+    expect(JSON.parse(msg.data.notification)).toMatchObject({
+      title: "Disk full",
+      intent: "inform",
+      key: null,
+      inform: { links: [], fields: [] },
+    });
 
     // UNREGISTERED → token dropped
     unregistered = true;

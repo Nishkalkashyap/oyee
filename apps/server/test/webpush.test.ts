@@ -3,7 +3,7 @@ import { b64urlDecode, b64urlDecodeString, b64urlEncode, utf8 } from "../src/lib
 import { decryptPayload, encryptPayload, vapidAuthorization, vapidPrivateJwk } from "../src/push/webpush";
 import { buildFcmData } from "../src/push/fcm";
 import { shouldWebPush } from "../src/push/fanout";
-import type { Notification } from "@oyee/schema";
+import { inferIntent, type FlatNotification, type Notification } from "@oyee/schema";
 
 /** RFC 8291 Appendix A test vector. */
 const RFC = {
@@ -72,7 +72,7 @@ describe("VAPID", () => {
 });
 
 describe("push payload rules", () => {
-  const n = (over: Partial<Notification> = {}): Notification => ({
+  const n = (over: Partial<FlatNotification> = {}): Notification => inferIntent({
     id: "ntf_X",
     source: "s",
     threadId: null,

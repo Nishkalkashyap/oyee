@@ -94,9 +94,121 @@ export const CardContent = z.object({
 });
 export type CardContent = z.infer<typeof CardContent>;
 
+// ─── Intents (protocol v2; GLOSSARY.md, docs/adr/0001-senders-send-intents.md) ─
+
+/** What a sender means by a notification. Every notification is exactly one intent. */
+export const Intent = z.enum(["inform", "ask", "progress"]);
+export type Intent = z.infer<typeof Intent>;
+
+/** Protocol v2 severities: every one alerts (`debug` is gone; muting is the receiver's choice). */
+export const IntentSeverity = z.enum(["info", "success", "warning", "critical"]);
+export type IntentSeverity = z.infer<typeof IntentSeverity>;
+
+/** A duration such as "30s", "30m", "1h", "24h" (units s, m, h). */
+export const Duration = z.string().regex(/^[1-9][0-9]{0,5}[smh]$/, 'expected a duration such as "30m" or "1h"');
+export type Duration = z.infer<typeof Duration>;
+
+/** Names a notification per source so later sends refer to the same one. Unique per `(source, key)`. */
+export const Key = z.string().min(1).max(128);
+
+/** A button that opens a URL on the device; nothing is sent back. */
+export const LinkButton = z.object({
+  label: z.string().min(1).max(32),
+  url: httpsUrl,
+});
+export type LinkButton = z.infer<typeof LinkButton>;
+
+export const InformBlock = z.object({
+  links: z.array(LinkButton).max(3),
+  fields: z.array(Field).max(10),
+  image: httpsUrl.nullable(),
+  /** Emoji or https URL. */
+  icon: z.string().max(2048).nullable(),
+  /** Minimum time between two alerts for this notification's key. */
+  cooldown: Duration.nullable(),
+});
+export type InformBlock = z.infer<typeof InformBlock>;
+
+/** `open` until the first answer (`answered`), its expiry (`expired`) or the sender withdrawing it (`withdrawn`). */
+export const AskState = z.enum(["open", "answered", "expired", "withdrawn"]);
+export type AskState = z.infer<typeof AskState>;
+
+export const AskAnswer = z.object({
+  /** Label of the answer button chosen, or null for a text answer. */
+  option: z.string().nullable(),
+  text: z.string().max(2000).nullable(),
+  deviceId: z.string().nullable(),
+  deviceName: z.string().nullable(),
+  at: isoDate,
+});
+export type AskAnswer = z.infer<typeof AskAnswer>;
+
+export const AskBlock = z.object({
+  /** Answer-button labels. */
+  options: z.array(z.string().min(1).max(32)).max(3),
+  /** Whether a free-text answer is accepted. */
+  allowText: z.boolean(),
+  replyPlaceholder: z.string().max(64).nullable(),
+  expiresAt: isoDate,
+  /** The first answer, from any device. */
+  answer: AskAnswer.nullable(),
+  state: AskState,
+});
+export type AskBlock = z.infer<typeof AskBlock>;
+
+/** `stopped` = Stopped reporting: the sender went quiet for longer than `staleAfter`; a later update revives it. */
+export const ProgressState = z.enum(["running", "done", "failed", "stopped"]);
+export type ProgressState = z.infer<typeof ProgressState>;
+
+export const ProgressBlock = z.object({
+  value: z.number().min(0),
+  max: z.number().positive(),
+  label: z.string().max(64).optional(),
+  state: ProgressState,
+  /** How long the progress may go quiet before it counts as stopped. */
+  staleAfter: Duration,
+  lastReportAt: isoDate,
+});
+export type ProgressBlock = z.infer<typeof ProgressBlock>;
+
+/** Fields every intent shares. */
+export const NotificationShared = z.object({
+  id: z.string(),
+  source: z.string().min(1).max(64),
+  key: Key.nullable(),
+  title: z.string().min(1).max(200),
+  body: z.string().max(4000).nullable(),
+  severity: IntentSeverity,
+  status: NotificationStatus,
+  /** Opens when the notification is tapped. */
+  url: httpsUrl.nullable(),
+  version: z.number().int().positive(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+  readAt: isoDate.nullable(),
+  resolvedAt: isoDate.nullable(),
+  /**
+   * Devices that get a system notification / push for this item. `null` (or absent, for older items) = every device.
+   * Every inbox still lists the notification; only alerting is targeted.
+   */
+  targetDeviceIds: z.array(z.string()).nullable().optional(),
+});
+
+export const InformNotification = NotificationShared.extend({ intent: z.literal("inform"), inform: InformBlock });
+export const AskNotification = NotificationShared.extend({ intent: z.literal("ask"), ask: AskBlock });
+export const ProgressNotification = NotificationShared.extend({ intent: z.literal("progress"), progress: ProgressBlock });
+
+/**
+ * Protocol v2 notification: shared fields plus exactly one block, named after its intent. Every intent in every state,
+ * as shared test fixtures for all clients: packages/schema/fixtures/notifications.v2.json.
+ */
+export const IntentNotification = z.discriminatedUnion("intent", [InformNotification, AskNotification, ProgressNotification]);
+export type IntentNotification = z.infer<typeof IntentNotification>;
+
 // ─── Notification (stored / returned) ───────────────────────────────────────
 
-export const Notification = CardContent.extend({
+/** Protocol v1 flat card as stored and sent before intents. Removed with the flat card (ticket 15). */
+export const FlatNotification = CardContent.extend({
   id: z.string(),
   source: z.string().min(1).max(64),
   threadId: z.string().min(1).max(128).nullable(),
@@ -114,6 +226,20 @@ export const Notification = CardContent.extend({
    */
   targetDeviceIds: z.array(z.string()).nullable().optional(),
 });
+export type FlatNotification = z.infer<typeof FlatNotification>;
+
+const flatOnly = FlatNotification.omit({ progress: true }).shape;
+
+/**
+ * The stored / wire notification while both protocols overlap: the v2 intent shape plus every v1 flat field, so
+ * older app builds keep rendering. `progress` is the v1 bar on inform/ask and the v2 block (a superset of the v1 bar)
+ * on progress. Becomes IntentNotification when the flat card is removed.
+ */
+export const Notification = z.discriminatedUnion("intent", [
+  InformNotification.extend({ ...flatOnly, progress: Progress.nullable() }),
+  AskNotification.extend({ ...flatOnly, progress: Progress.nullable() }),
+  ProgressNotification.extend({ ...flatOnly, progress: ProgressBlock.extend({ indeterminate: z.boolean().default(false) }) }),
+]);
 export type Notification = z.infer<typeof Notification>;
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
@@ -445,7 +571,11 @@ export const LIMITS = {
   updatePushIntervalMs: 2000,
   signupsPerIpPerDay: 5,
   authFailuresPerIpPerMinute: 30,
-} as const;
+  /** An ask closes this long after it was sent unless the sender says otherwise. */
+  defaultAskExpiry: "1h",
+  /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
+  defaultStaleAfter: "30m",
+} as const satisfies Record<string, number | Duration>;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
 
@@ -492,6 +622,85 @@ export function renderTemplateValue<T>(value: T, vars: Record<string, string | n
     ) as T;
   }
   return value;
+}
+
+// ─── Durations ──────────────────────────────────────────────────────────────
+
+const DURATION_UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000 } as const;
+
+/** "30m" → 1_800_000. */
+export function durationMs(d: Duration): number {
+  const unit = d.slice(-1) as keyof typeof DURATION_UNIT_MS;
+  return Number(d.slice(0, -1)) * DURATION_UNIT_MS[unit];
+}
+
+// ─── Flat card → intent (expand step; removed with the flat card) ───────────
+
+/** A flat-card button is a link button when it only opens a URL. */
+export const isLinkAction = (a: Pick<Action, "url" | "callback">): boolean => a.url !== undefined && !a.callback;
+
+/**
+ * Infers the intent block of a flat (protocol v1) card: non-link actions or a reply → ask; progress → progress;
+ * otherwise inform (link actions become links). `legacy` is for cards stored before intents existed, whose sender can
+ * no longer act: an unanswered ask is `expired` and an unfinished progress has `stopped`. Live cards are `open`
+ * (`withdrawn` once resolved unanswered) and `running` (`done` at max).
+ */
+export function inferIntent(
+  n: FlatNotification & { key?: string | null },
+  opts: { legacy?: boolean } = {},
+): Notification {
+  const { inform: _i, ask: _a, intent: _t, ...rest } = n as FlatNotification & Partial<Record<"inform" | "ask" | "intent", unknown>>;
+  const flat = { ...rest, key: n.key ?? null };
+  if (n.actions.some((a) => !isLinkAction(a)) || n.reply) {
+    const last = n.responses[n.responses.length - 1];
+    const answer: AskAnswer | null = last
+      ? {
+          option: last.actionId === null ? null : (n.actions.find((a) => a.id === last.actionId)?.label ?? last.actionId),
+          text: last.text,
+          deviceId: last.deviceId,
+          deviceName: last.deviceName,
+          at: last.at,
+        }
+      : null;
+    const state: AskState = answer ? "answered" : opts.legacy ? "expired" : n.status === "resolved" ? "withdrawn" : "open";
+    return {
+      ...flat,
+      intent: "ask",
+      ask: {
+        options: n.actions.filter((a) => !isLinkAction(a)).map((a) => a.label),
+        allowText: n.reply !== null,
+        replyPlaceholder: n.reply?.placeholder ?? null,
+        expiresAt: new Date(Date.parse(n.createdAt) + durationMs(LIMITS.defaultAskExpiry)).toISOString(),
+        answer,
+        state,
+      },
+    };
+  }
+  if (n.progress) {
+    const p = n.progress;
+    const atMax = !p.indeterminate && p.value >= p.max;
+    return {
+      ...flat,
+      intent: "progress",
+      progress: {
+        ...p,
+        state: atMax ? "done" : opts.legacy ? "stopped" : "running",
+        staleAfter: LIMITS.defaultStaleAfter,
+        lastReportAt: n.updatedAt,
+      },
+    };
+  }
+  return {
+    ...flat,
+    intent: "inform",
+    inform: {
+      links: n.actions.filter(isLinkAction).map((a) => ({ label: a.label, url: a.url! })),
+      fields: n.fields,
+      image: n.image,
+      icon: n.icon,
+      cooldown: null,
+    },
+  };
 }
 
 /** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */

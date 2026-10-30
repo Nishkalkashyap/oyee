@@ -1,8 +1,8 @@
-import type { Notification } from "@oyee/schema";
+import { inferIntent, type FlatNotification, type Notification } from "@oyee/schema";
 
-export function makeNotification(p: Partial<Notification> & { id: string }): Notification {
+export function makeNotification(p: Partial<FlatNotification> & { id: string }): Notification {
   const at = p.createdAt ?? "2026-10-28T10:00:00.000Z";
-  return {
+  return inferIntent({
     source: "test",
     threadId: null,
     title: `Title ${p.id}`,
@@ -26,7 +26,7 @@ export function makeNotification(p: Partial<Notification> & { id: string }): Not
     resolvedAt: null,
     responses: [],
     ...p,
-  };
+  });
 }
 
 /** createdAt N minutes after 10:00. */

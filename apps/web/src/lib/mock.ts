@@ -5,8 +5,10 @@
 import {
   QUOTAS,
   QuotaKind,
+  inferIntent,
   renderTemplateValue,
   type Device,
+  type FlatNotification,
   type Notification,
   type PairingCode,
   type SendNotificationInput,
@@ -28,9 +30,9 @@ const HOUR = 60 * MIN;
 
 const user: User = { id: "usr_mock", email: "demo@oyee.dev", name: "Demo User", avatarUrl: null };
 
-function base(partial: Partial<Notification> & Pick<Notification, "title">, msAgo: number): Notification {
+function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, msAgo: number): Notification {
   const at = iso(msAgo);
-  return {
+  return inferIntent({
     id: `ntf_${ulid()}`,
     source: "web",
     threadId: null,
@@ -54,7 +56,7 @@ function base(partial: Partial<Notification> & Pick<Notification, "title">, msAg
     resolvedAt: null,
     responses: [],
     ...partial,
-  };
+  });
 }
 
 function fixtures(): Notification[] {
@@ -255,8 +257,8 @@ function emit(msg: ServerMessage) {
   sockets.forEach((s) => s.deliver(data));
 }
 
-function touch(n: Notification, patch: Partial<Notification>): Notification {
-  const next = { ...n, ...patch, version: n.version + 1, updatedAt: new Date().toISOString() };
+function touch(n: Notification, patch: Partial<FlatNotification>): Notification {
+  const next = inferIntent({ ...n, ...patch, version: n.version + 1, updatedAt: new Date().toISOString() });
   db.notifications = db.notifications.map((x) => (x.id === n.id ? next : x));
   return next;
 }
@@ -509,7 +511,7 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
       return ok(null, 204);
     }
     if (!action && method === "PATCH") {
-      const next = touch(n, body as Partial<Notification>);
+      const next = touch(n, body as Partial<FlatNotification>);
       updated(next, "update");
       return ok(next);
     }

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
+  `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
+  sends get the intent they most resemble and existing notifications are converted once; the flat card fields are
+  unchanged, so current app builds keep working.
 - Web: a simpler landing page that reads like a README. One line on what Oyee does, the two setup commands, a card
   you can answer to see the reply go back, and sign-in. The integration grid, feature tiles, platform previews and
   setup tabs are gone (downloads are in Help and the pairing dialog).

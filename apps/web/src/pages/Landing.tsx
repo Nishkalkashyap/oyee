@@ -5,7 +5,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Action, Notification } from "@oyee/schema";
+import { inferIntent, type Action, type Notification } from "@oyee/schema";
 import { isMockMode } from "../lib/env";
 import { loginErrorMessage, safeRedirect } from "../lib/login";
 import { qk, useConfig, useMe } from "../lib/queries";
@@ -110,7 +110,7 @@ const DEMO_ACTIONS: Action[] = [
 
 function demoCard(answer: Action | null): Notification {
   const at = new Date().toISOString();
-  return {
+  return inferIntent({
     id: "ntf_demo",
     source: "claude-code",
     threadId: null,
@@ -134,7 +134,7 @@ function demoCard(answer: Action | null): Notification {
     readAt: null,
     resolvedAt: null,
     responses: answer ? [{ actionId: answer.id, text: null, deviceId: null, deviceName: "This browser", at }] : [],
-  };
+  });
 }
 
 /** An agent's question you can actually answer: the tap comes back as the agent's tool result. */

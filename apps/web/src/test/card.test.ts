@@ -26,7 +26,8 @@ describe("toPreviewNotification", () => {
     const n = toPreviewNotification({ title: "Hi", progress: { value: 2, max: 100, indeterminate: false } });
     expect(n.severity).toBe("info");
     expect(n.source).toBe("web");
-    expect(n.progress).toEqual({ value: 2, max: 100, label: undefined, indeterminate: false });
+    // On a progress intent the v1 bar is the v2 progress block, which adds state, staleAfter and lastReportAt.
+    expect(n.progress).toMatchObject({ value: 2, max: 100, label: undefined, indeterminate: false });
     expect(n.actions).toEqual([]);
     expect(toPreviewNotification({}).title).toBe("Untitled notification");
   });
