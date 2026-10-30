@@ -58,16 +58,19 @@ export function ProgressBar({
   severity = "info",
   className,
   compact,
+  muted,
 }: {
   progress: Pick<Progress, "value"> & Partial<Progress>;
   severity?: Severity;
   className?: string;
   compact?: boolean;
+  /** Greyed out: a progress that stopped reporting. */
+  muted?: boolean;
 }) {
   const pct = progressPercent(progress);
   const label = progressLabel(progress);
   // Progress is ink, like Gluon's quiet controls; severity already shows in the pill and avatar dot.
-  const bar = severity === "critical" ? "bg-red-500" : "bg-foreground";
+  const bar = muted ? "bg-zinc-400 dark:bg-zinc-500" : severity === "critical" ? "bg-red-500" : "bg-foreground";
   return (
     <div className={className}>
       {!compact && (label || progress.indeterminate) && (

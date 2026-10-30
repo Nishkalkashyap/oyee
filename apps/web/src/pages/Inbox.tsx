@@ -258,7 +258,9 @@ function InboxRow({
               {n.status === "resolved" && <CheckIcon size={13} className="shrink-0 text-emerald-600" aria-label="Resolved" />}
               {unread && <span className={cx("size-2.5 shrink-0 rounded-full bg-brand", yieldToHover)} aria-label="Unread" />}
             </span>
-            {n.intent === "progress" && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
+            {n.intent === "progress" && n.status === "active" && (
+              <ProgressBar progress={n.progress} severity={n.severity} muted={n.progress.state === "stopped"} compact className="mt-2" />
+            )}
           </span>
         </Link>
       </SwipeToResolve>
