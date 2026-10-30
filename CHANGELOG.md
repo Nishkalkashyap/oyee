@@ -77,9 +77,14 @@
   image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without
   sound, later reports update it silently, and `done` or `failed` alerts once; a finished progress stays in the inbox
-  until read. The tool answers in plain text with the outcome and the next step. The web inbox draws progress with
+  until read. The tool answers in plain text in the same shape as `inform`: an `outcome:` line (`created`,
+  `updated_silently` or `alerted`), an `id:` line, then what happened at what amount ("at 3/7 checks") and the next
+  step (report again with the key, finish with `done` or `failed`, and when it would count as stopped reporting).
+  Webhooks and REST return the same `outcome` and `reason` as JSON. The web inbox draws progress with
   its own card (state pill, a real bar with its label, last report), and a failed progress is no longer listed under
   In progress. Silent notifications no longer go out as alerting, high-priority FCM messages.
+- Web inbox: a progress that stopped reporting has its row bar greyed out, as on its card, so it no longer looks as
+  alive as a running one.
 - Stopped reporting: a running progress that gets no report for `staleAfter` (default 30m, `progress` tool input, 1m
   to 24h) alerts once at warning and shows "Stopped reporting after 40%" (its last label or percent). The next report
   brings it back as running, silently. The web progress card says how long it went quiet and that a report revives it.
@@ -119,8 +124,11 @@
 ## Unreleased (apps, next release: 0.3.0)
 - **Protocol v2 only.** The apps read nothing but the intent blocks, so they keep working once the server stops
   sending the flat card. (0.2.x builds keep showing title, body and the progress bar from v2 notifications, but not
-  icon, image, rows, links or answer buttons; shipping this alongside that server deploy is recommended.) An ask that takes text
-  without a reply placeholder shows the app's own "Reply…". Android drops indeterminate progress.
+  icon, image, rows, links or answer buttons; shipping this alongside that server deploy is recommended.) An ask
+  that takes text without a reply placeholder shows the app's own "Reply…".
+- No more indeterminate progress (protocol v2 has none): Android drops the card's animated bar and the system
+  notification's indeterminate flag, so a progress always shows how far it is. A progress that stopped reporting has
+  a greyed-out bar (Android: card and inbox row; macOS: card).
 - macOS on intents: the Mac app reads the intent-shaped notification and draws one card per intent. An **inform**
   shows its icon, severity, body, rows and up to three link buttons. An **ask** says how long it has waited and when
   it expires, with its answer buttons (answering sends `{ "option" }`) and the reply box as the conversation's
