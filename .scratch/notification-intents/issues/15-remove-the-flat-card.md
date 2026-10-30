@@ -31,3 +31,5 @@ From 06: the web Needs you section uses `ask.state` only; treat an open ask past
 From 11: remove the flat fallback for JSON bodies without `intent` that use v1-only fields (actions, replaceKey, template…); update web `lib/snippets.ts` examples (still replaceKey, tags, flat progress).
 
 From 13: web sw.js builds the stopped label from `progressAmount`, which differs from `stoppedReportingLabel` when max != 100 and there is no label ("3/7" vs "43%"); make sw.js/webpush.ts match it. docs/protocol.md §9 still lists `oyee.debug`.
+
+From 14: rewrite protocol §9 (Apple threadIdentifier is now the source; no debug or silent). Add a fixture for an ask without a reply placeholder. The Swift fixture copy is guarded by a drift test, so update it when the fixtures change.
