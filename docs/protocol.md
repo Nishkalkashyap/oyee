@@ -258,8 +258,9 @@ Resolution order:
      - for inform: `severity`, `priority`, `icon`, `cooldown`;
      - for progress: `value`, `max`, `label`, `status`;
    - ntfy-style headers: `Title`/`X-Title`, `Priority`/`X-Priority` (1–3 → info, 4 → warning, 5 → critical),
-     `Click`/`X-Click`, `Icon`/`X-Icon`. `Tags` headers and `?tags=` are ignored.
-   - `?replaceKey=`, `?template=` and `?threadId=` get `400`, pointing to `key`; `var.*` parameters are ignored.
+     `Click`/`X-Click`, `Icon`/`X-Icon`.
+   - Removed v1 parameters: `?threadId=`, `?tags=`, `var.*` and the `Tags`/`X-Tags`/`Ta` headers are ignored, so
+     existing one-liners keep working; `?replaceKey=` and `?template=` get `400`, pointing to `key`.
 3. `GET` → everything from query params (`body` or `message` param too).
 
 If `title` is missing on a text or GET send, the first line of the body (max 200 chars) becomes the title, or

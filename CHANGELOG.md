@@ -7,7 +7,7 @@
   gone: stored debug notifications became `info`. Templates (`/api/templates`), `PATCH /api/notifications/:id`,
   action callbacks and the token's callback signing secret are deleted. A send that still uses a removed field
   (`replaceKey`, `template`, `vars`, `actions`, `reply`, `progress`, `threadId`, `tags`, `silent`, or severity
-  `debug`) gets `400` naming what to use instead; `?threadId=` on webhooks too. Respond takes `{ "option" }` or
+  `debug`) gets `400` naming what to use instead (webhook query sends ignore `?threadId=` and `?tags=`). Respond takes `{ "option" }` or
   `{ "text" }` and only on asks. The list endpoint drops `threadId`. Each inbox converts its stored notifications
   once (v1 cards to the intent they resemble); converted asks and unfinished progress are resolved, so they leave
   the inbox and the tray and free their key. docs/protocol.md is rewritten as protocol v2. **App builds before
@@ -22,7 +22,8 @@
   `reason` next to `id` and `version`. `intent: "ask"` gets `400`: asks are for agents over MCP. Alertmanager and
   Grafana produce informs keyed by the group (a `debug` severity label becomes info) and the group's resolution
   resolves that inform; SNS produces an inform. `?replaceKey=` and `?template=` are no longer accepted (`400`
-  pointing to `key`); ntfy `Tags` are ignored, and ntfy priority 1 is info.
+  pointing to `key`); `?threadId=`, `?tags=` and ntfy `Tags` are ignored, so existing curl one-liners keep working,
+  and ntfy priority 1 is info.
 - `POST /api/notifications` takes the same intent-tagged body and answers `{ id, version, outcome, reason,
   notification }`. The web Send page composes an inform (severity, key, cooldown, icon, image, rows, link buttons) or
   a progress (key, value, max, label, status, staleAfter); thread, tags, silent, actions, reply and templates are gone

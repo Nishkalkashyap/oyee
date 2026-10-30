@@ -179,7 +179,24 @@ describe("webhook: text and GET", () => {
     expect(rk.body.error.message).toMatch(/use key/);
   });
 
-  it("rejects ?intent=ask and the removed replaceKey, template and threadId parameters", async () => {
+  it("ignores the removed threadId and tags parameters and ntfy Tags headers, so old one-liners keep working", async () => {
+    const { secret, get } = await setup();
+    const r = await call("GET", `/hook/${secret}?title=Backup%20done&threadId=nightly&tags=nas,backup`, null);
+    expect(r.status).toBe(200);
+    expect(await get(r.body.id)).toMatchObject({ intent: "inform", title: "Backup done" });
+    const res = await SELF.fetch(`${BASE}/hook/${secret}?threadId=nightly`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", "X-Title": "Backup", "X-Tags": "nas", Ta: "backup" },
+      body: "Backup failed",
+    });
+    expect(res.status).toBe(200);
+    expect(await get(((await res.json()) as { id: string }).id)).toMatchObject({ title: "Backup", body: "Backup failed" });
+    // A JSON body is checked strictly: removed fields there still get a 400 saying what to use.
+    const json = await call("POST", `/hook/${secret}`, null, { title: "x", threadId: "t" });
+    expect(json.status).toBe(400);
+  });
+
+  it("rejects ?intent=ask and the removed replaceKey and template parameters", async () => {
     const { secret } = await setup();
     const ask = await call("GET", `/hook/${secret}?intent=ask&title=Deploy%3F`, null);
     expect(ask.status).toBe(400);
@@ -187,8 +204,9 @@ describe("webhook: text and GET", () => {
     const rk = await call("GET", `/hook/${secret}?title=x&replaceKey=a`, null);
     expect(rk.status).toBe(400);
     expect(rk.body.error.message).toMatch(/use key/);
-    expect((await call("GET", `/hook/${secret}?template=t`, null)).status).toBe(400);
-    expect((await call("GET", `/hook/${secret}?title=x&threadId=t`, null)).status).toBe(400);
+    const template = await call("GET", `/hook/${secret}?template=t`, null);
+    expect(template.status).toBe(400);
+    expect(template.body.error.message).toMatch(/key/);
   });
 
   it("rate limits per token", async () => {

@@ -21,7 +21,9 @@ export const ASK_REJECTED =
  */
 export const REMOVED_FIELDS: Record<string, string> = {
   replaceKey: "replaceKey is no longer supported: use key (a later send with the same key updates the notification)",
-  template: "template is no longer supported: send the fields themselves (title, body, severity…)",
+  template:
+    "template is no longer supported: send the fields themselves (title, body, severity…), with a key to update one " +
+    "notification instead of creating another",
   vars: "vars (templates) is no longer supported: send the fields themselves (title, body, severity…)",
   actions:
     'actions is no longer supported: use links ([{"label", "url"}], up to 3) for link buttons; questions with answer ' +

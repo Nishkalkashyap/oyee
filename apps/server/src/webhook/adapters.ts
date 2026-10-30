@@ -200,10 +200,11 @@ export function fromSns(body: Json): HookAction {
 // ─── text/plain, GET, ntfy headers ──────────────────────────────────────────
 
 /**
- * Query parameters of removed features that change what a sender gets: a send using one is rejected, saying what to
- * use instead. (ntfy's Tags header and `?tags=` are ignored as before: they never changed delivery.)
+ * Query parameters of removed features whose meaning a send would silently lose (updating one notification, a saved
+ * template): a send using one is rejected, saying to use `key`. `?threadId=`, `?tags=` and ntfy's Tags header only
+ * grouped or labelled notifications, so they are ignored and existing one-liners keep working.
  */
-const REMOVED_PARAMS = { replaceKey: REMOVED_FIELDS.replaceKey!, template: REMOVED_FIELDS.template!, threadId: REMOVED_FIELDS.threadId! };
+const REMOVED_PARAMS = { replaceKey: REMOVED_FIELDS.replaceKey!, template: REMOVED_FIELDS.template! };
 
 /** The first non-empty line of a text body: the title for senders that only post text. */
 const firstLine = (text: string | undefined) =>
