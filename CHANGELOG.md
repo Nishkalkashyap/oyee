@@ -83,6 +83,21 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
+## 0.3.0 (unreleased)
+- macOS on intents: the Mac app reads the intent-shaped notification and draws one card per intent. An **inform**
+  shows its icon, severity, body, rows and up to three link buttons. An **ask** says how long it has waited and when
+  it expires, with its answer buttons (answering sends `{ "option" }`) and the reply box as the conversation's
+  composer; once closed it reads "Answered: Approve · Pixel 9", "Expired" or "Withdrawn" with its buttons disabled.
+  A late answer (another device was first) shows who won. A **progress** has a real bar that reads Running, Done,
+  Failed or "Stopped reporting after 40%".
+- macOS inbox and menu bar: **Needs you** is open asks, **In progress** running or stopped progress, **Updates**
+  everything else; repeats stack by source and key (without a key: source and title).
+- macOS notifications: an open ask has its answer buttons and a text Reply; an inform its link buttons; a progress
+  shows the text bar while running, updates silently, and alerts once when done, failed or stopped. Answered, expired
+  and withdrawn asks leave Notification Center. Every severity alerts.
+- macOS: tags, threads, `silent`, the `debug` severity and templates are gone from the app. The inbox cache from
+  0.2.x is dropped once and refilled from the server.
+
 ## 0.2.11
 - Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;
   repeats of the same thread, or source + title, stack into one row with a count. The filter chips and status tabs

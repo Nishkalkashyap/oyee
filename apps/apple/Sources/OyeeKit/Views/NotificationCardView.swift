@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// A Oyee card in Gluon's language. Full size it is the white message bubble of the conversation view (severity
-/// pill, bold title, body, fields, ink progress, image, link, pill actions, and a Resolve footer when `onResolve` is
-/// set); `compact` is the menu-bar row with an avatar, the essentials, small pill actions and a ✓ that resolves it
-/// (or its whole stack of repeats, `stackCount` > 1).
+/// An Oyee notification in Gluon's language. Full size it is the intent's card (`IntentCardView`: the white message
+/// bubble of the conversation view, with a Resolve footer when `onResolve` is set); `compact` is the menu-bar row with
+/// an avatar, the essentials, an open ask's answer buttons or a progress bar, and a ✓ that resolves it (or its whole
+/// stack of repeats, `stackCount` > 1).
 public struct NotificationCardView: View {
     let notification: OyeeNotification
     let store: InboxStore
@@ -12,8 +12,6 @@ public struct NotificationCardView: View {
     /// Unread styling for the row; a stack passes whether any of its repeats is unread.
     var unread: Bool
     var onResolve: (() -> Void)?
-
-    @ViewState private var busyAction: String?
 
     public init(
         notification: OyeeNotification, store: InboxStore, compact: Bool = false, stackCount: Int = 1,
@@ -30,78 +28,11 @@ public struct NotificationCardView: View {
     private var n: OyeeNotification { notification }
 
     public var body: some View {
-        if compact { compactBody } else { bubble }
-    }
-
-    // MARK: Bubble
-
-    private var bubble: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FlowRow {
-                SeverityPill(n.severity)
-                if n.isResolved {
-                    Label("Resolved", systemImage: "checkmark")
-                        .font(.oyee(11.5, .semibold))
-                        .foregroundStyle(Theme.background)
-                        .padding(.horizontal, 9)
-                        .frame(height: 22)
-                        .background(Theme.foreground, in: Capsule())
-                }
-                ForEach(n.tags.prefix(5), id: \.self) { tag in
-                    Text("#\(tag)")
-                        .font(.oyee(11.5, .semibold))
-                        .foregroundStyle(Theme.secondaryLabel)
-                        .padding(.horizontal, 9)
-                        .frame(height: 22)
-                        .background(Theme.secondary, in: Capsule())
-                }
-            }
-            Text(n.title)
-                .font(.oyee(18, .bold))
-                .foregroundStyle(Theme.foreground)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-            if let body = n.body, !body.isEmpty {
-                Text(MarkdownSubset.attributed(body))
-                    .font(.oyee(14.5))
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .lineSpacing(2)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let imageURL = n.imageURL { image(imageURL) }
-            if !n.fields.isEmpty { fieldsGrid(limit: 10) }
-            if let progress = n.progress { NotificationProgressView(progress: progress).padding(.top, 2) }
-            if let url = n.openURL {
-                Button {
-                    store.openURL(url)
-                } label: {
-                    Label(url.host() ?? url.absoluteString, systemImage: "arrow.up.right")
-                        .font(.oyee(13, .medium))
-                        .foregroundStyle(Theme.foreground)
-                        .underline(color: Theme.faint)
-                }
-                .buttonStyle(.plain)
-            }
-            if !n.actions.isEmpty, n.status == .active { actionButtons(size: .regular).padding(.top, 2) }
-            if let onResolve, n.status == .active {
-                // The card's own control, under a hairline so it doesn't read as one of the agent's buttons.
-                Divider().overlay(Theme.border).padding(.top, 4)
-                Button(action: onResolve) {
-                    Label("Resolve", systemImage: "checkmark")
-                }
-                .buttonStyle(PillButtonStyle(.primary, size: .small))
-            }
+        if compact {
+            compactBody
+        } else {
+            IntentCardView(notification: n, store: store, onResolve: onResolve)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22,
-                style: .continuous
-            )
-            .fill(Theme.bubble)
-        )
     }
 
     // MARK: Compact (menu bar)
@@ -125,11 +56,11 @@ public struct NotificationCardView: View {
                     .font(.oyee(12.5))
                     .foregroundStyle(unread ? Theme.secondaryLabel : Theme.muted)
                     .lineLimit(2)
-                if let progress = n.progress, n.status == .active {
-                    NotificationProgressView(progress: progress, showLabel: false).padding(.top, 4)
+                if let progress = n.progress {
+                    RowProgress(progress: progress).padding(.top, 4)
                 }
-                if !n.actions.isEmpty, n.status == .active {
-                    actionButtons(size: .small).padding(.top, 5)
+                if n.needsAnswer {
+                    AnswerButtons(notification: n, store: store).padding(.top, 5)
                 }
             }
             if n.status == .active {
@@ -154,74 +85,68 @@ public struct NotificationCardView: View {
         .contentShape(Rectangle())
     }
 
-    private var subtitle: String {
-        let body = n.body.map(MarkdownSubset.plainText) ?? ""
-        return body.isEmpty ? n.source : "\(n.source) · \(body)"
-    }
+    private var subtitle: String { RowText.preview(n, includeSource: true) }
+}
 
-    // MARK: Parts
-
-    private func fieldsGrid(limit: Int) -> some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
-            ForEach(Array(n.fields.prefix(limit).enumerated()), id: \.offset) { _, field in
-                GridRow {
-                    Text(field.label)
-                        .foregroundStyle(Theme.muted)
-                        .gridColumnAlignment(.leading)
-                    Text(field.value)
-                        .font(.oyee(13.5, .medium))
-                        .foregroundStyle(Theme.foreground)
-                        .textSelection(.enabled)
-                }
-            }
+/// The line under a row's title: the ask's status once it closed or the progress state once it ended, else the body.
+enum RowText {
+    static func preview(_ n: OyeeNotification, includeSource: Bool, now: Date = Date()) -> String {
+        var detail = n.body.map(MarkdownSubset.plainText)?.replacingOccurrences(of: "\n", with: " ") ?? ""
+        if n.ask != nil {
+            let card = AskCardModel(n, now: now)
+            if !card.isOpen { detail = card.status }
+        } else if let p = n.progress, p.state != .running {
+            detail = ProgressCardModel(p).stateLabel + (detail.isEmpty ? "" : " · \(detail)")
         }
-        .font(.oyee(13.5))
+        if !includeSource { return detail.isEmpty ? n.source : detail }
+        return detail.isEmpty ? n.source : "\(n.source) · \(detail)"
     }
+}
 
-    private func image(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            case .failure:
-                Label("Image unavailable", systemImage: "photo").font(.oyee(12)).foregroundStyle(Theme.muted)
-            default:
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-            }
-        }
-        .frame(maxHeight: 320)
+/// A row's thin progress bar (any state, coloured by it).
+struct RowProgress: View {
+    let progress: ProgressBlock
+
+    var body: some View {
+        let card = ProgressCardModel(progress)
+        ProgressBar(fraction: card.percent / 100, tone: card.tone, height: 5)
+            .accessibilityElement()
+            .accessibilityLabel("\(card.amount), \(card.stateLabel)")
     }
+}
 
-    private func actionButtons(size: PillButtonStyle.Size) -> some View {
-        HStack(spacing: 6) {
-            ForEach(n.actions) { action in
+/// An open ask's answer buttons as small pills (rows and the menu bar), plus Reply when it takes text.
+struct AnswerButtons: View {
+    let notification: OyeeNotification
+    let store: InboxStore
+    var onReply: (() -> Void)?
+    @ViewState private var busy: String?
+
+    var body: some View {
+        let ask = notification.ask ?? AskBlock()
+        FlowRow {
+            ForEach(Array(ask.options.enumerated()), id: \.offset) { index, option in
                 Button {
-                    busyAction = action.id
+                    busy = option
                     Task {
-                        await store.perform(action, on: n)
-                        busyAction = nil
+                        await store.answer(option, to: notification)
+                        busy = nil
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        if busyAction == action.id {
-                            ProgressView().controlSize(.mini)
-                        } else if action.url != nil {
-                            Image(systemName: "arrow.up.right")
-                        }
-                        Text(action.label)
+                        if busy == option { ProgressView().controlSize(.mini) }
+                        Text(option)
                     }
                 }
-                .buttonStyle(PillButtonStyle(variant(for: action), size: size))
-                .disabled(busyAction != nil)
+                .buttonStyle(PillButtonStyle(index == 0 ? .primary : .secondary, size: .small))
+                .disabled(busy != nil)
             }
-        }
-    }
-
-    private func variant(for action: Action) -> PillButtonStyle.Variant {
-        switch action.style {
-        case .primary: .primary
-        case .destructive: .destructive
-        default: .secondary
+            if let onReply, ask.allowText || ask.options.isEmpty {
+                Button(action: onReply) {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                }
+                .buttonStyle(PillButtonStyle(.secondary, size: .small))
+            }
         }
     }
 }
@@ -276,10 +201,11 @@ public struct NotificationRowView: View {
                         .foregroundStyle(unread ? Theme.secondaryLabel : Theme.muted)
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    if !n.responses.isEmpty {
-                        Label("\(n.responses.count)", systemImage: "arrowshape.turn.up.left")
+                    if n.ask?.answer != nil {
+                        Image(systemName: "arrowshape.turn.up.left")
                             .font(.oyee(11.5))
                             .foregroundStyle(Theme.muted)
+                            .accessibilityLabel("Answered")
                     }
                     if n.isResolved {
                         Image(systemName: "checkmark").font(.oyee(12, .bold)).foregroundStyle(Color(hex: 0x16A34A))
@@ -289,8 +215,8 @@ public struct NotificationRowView: View {
                             .opacity(showResolve ? 0 : 1)
                     }
                 }
-                if let progress = n.progress, n.status == .active {
-                    NotificationProgressView(progress: progress, showLabel: false).padding(.top, 5)
+                if let progress = n.progress {
+                    RowProgress(progress: progress).padding(.top, 5)
                 }
             }
         }
@@ -303,11 +229,7 @@ public struct NotificationRowView: View {
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var preview: String {
-        let body = notification.body.map(MarkdownSubset.plainText)?.replacingOccurrences(of: "\n", with: " ") ?? ""
-        if child { return body.isEmpty ? notification.source : body }
-        return body.isEmpty ? notification.source : "\(notification.source) · \(body)"
-    }
+    private var preview: String { RowText.preview(notification, includeSource: !child) }
 }
 
 /// The grey count beside a stacked row's title.

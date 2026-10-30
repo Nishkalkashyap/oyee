@@ -252,16 +252,16 @@ public final class OyeeModel {
                 requestInbox(select: info.notificationId)
             }
             await store.markRead(info.notificationId)
-        case .action(let actionId, let url):
-            if let url {
-                openURL(url)
-            } else {
-                await store.respond(id: info.notificationId, actionId: actionId, text: nil)
-            }
+        case .answer(let option):
+            await store.respond(id: info.notificationId, option: option, text: nil)
+        case .link(let url):
+            // A link button sends nothing back; opening it counts as reading the notification (as on the web).
+            openURL(url)
+            await store.markRead(info.notificationId)
         case .reply(let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
-            await store.respond(id: info.notificationId, actionId: nil, text: String(trimmed.prefix(2000)))
+            await store.respond(id: info.notificationId, option: nil, text: String(trimmed.prefix(2000)))
         case .dismiss:
             break
         }

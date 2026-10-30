@@ -1,11 +1,10 @@
 import Foundation
 
-/// Platform rendering helpers (protocol §9).
+/// Platform rendering helpers (protocol §8–9): the text of a system notification, per intent.
 public enum Rendering {
     /// Text progress bar used where native progress isn't available: `▓▓▓░░░░░░░ 3/7`.
     /// Mirrors `progressText` in packages/schema exactly.
-    public static func progressText(_ progress: Progress) -> String {
-        if progress.indeterminate { return progress.label ?? "In progress…" }
+    public static func progressText(_ progress: ProgressBlock) -> String {
         let max = progress.max
         let ratio = Swift.max(0, Swift.min(1, progress.value / max))
         let filled = Int(jsRound(ratio * 10))
@@ -16,17 +15,34 @@ public enum Rendering {
         return "\(bar) \(suffix)"
     }
 
-    /// The body of a system notification: plain-text body + `Label: value` lines + progress text.
+    /// "Stopped reporting after 3/7 checks" or "… after 40%". Mirrors `stoppedReportingLabel` in packages/schema
+    /// exactly: the sender's last label, else the rounded percent.
+    public static func stoppedReportingLabel(_ progress: ProgressBlock) -> String {
+        let ratio = progress.max > 0 ? Swift.max(0, Swift.min(1, progress.value / progress.max)) : 0
+        return "Stopped reporting after \(progress.label ?? "\(Int(jsRound(ratio * 100)))%")"
+    }
+
+    /// The body of a system notification (same text as the browser popup, apps/web/src/lib/webpush.ts): the
+    /// plain-text body, then an inform's `Label: value` rows or a progress's line (the text bar while running,
+    /// "Done · 7/7 checks" / "Failed · 4/7 checks" once ended, "Stopped reporting after 40%" when stopped).
     public static func systemBody(for notification: OyeeNotification) -> String {
         var lines: [String] = []
-        if let body = notification.body, !body.isEmpty {
-            lines.append(MarkdownSubset.plainText(body))
+        if let body = notification.body {
+            let plain = MarkdownSubset.plainText(body).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !plain.isEmpty { lines.append(plain) }
         }
-        for field in notification.fields {
-            lines.append("\(field.label): \(field.value)")
-        }
-        if let progress = notification.progress {
-            lines.append(progressText(progress))
+        switch notification.content {
+        case .inform(let inform):
+            lines += inform.fields.map { "\($0.label): \($0.value)" }
+        case .ask:
+            break
+        case .progress(let progress):
+            let card = ProgressCardModel(progress)
+            switch progress.state {
+            case .running: lines.append(progressText(progress))
+            case .stopped: lines.append(card.stateLabel)
+            case .done, .failed: lines.append("\(card.stateLabel) · \(card.amount)")
+            }
         }
         return lines.joined(separator: "\n")
     }

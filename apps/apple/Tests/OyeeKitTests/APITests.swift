@@ -117,12 +117,12 @@ struct APITests {
     }
 
     @Test func respondReadResolveDelete() async throws {
-        let full = String(decoding: try fixture("notification_full"), as: UTF8.self)
+        let full = String(decoding: try OyeeJSON.makeEncoder().encode(try v2("ask-open")), as: UTF8.self)
         let (session, id) = StubURLProtocol.makeSession { request in
             request.method == "DELETE" ? (204, "") : (200, full)
         }
         let api = OyeeAPI(baseURL: base, token: "t", session: session)
-        _ = try await api.respond(id: "ntf_1", actionId: "ack")
+        _ = try await api.respond(id: "ntf_1", option: "Approve")
         _ = try await api.respond(id: "ntf_1", text: "hello")
         _ = try await api.markRead(id: "ntf_1")
         _ = try await api.resolve(id: "ntf_1")
@@ -136,7 +136,7 @@ struct APITests {
                 "/api/notifications/ntf_1/resolve", "/api/notifications/ntf_1",
             ])
         let first = try JSONSerialization.jsonObject(with: try #require(requests[0].body)) as? [String: String]
-        #expect(first == ["actionId": "ack"])
+        #expect(first == ["option": "Approve"])
         let second = try JSONSerialization.jsonObject(with: try #require(requests[1].body)) as? [String: String]
         #expect(second == ["text": "hello"])
     }

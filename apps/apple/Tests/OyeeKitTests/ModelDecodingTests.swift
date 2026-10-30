@@ -14,92 +14,171 @@ func decode<T: Decodable>(_ type: T.Type, fixture name: String) throws -> T {
 
 func iso(_ s: String) -> Date { OyeeJSON.parseDate(s)! }
 
+/// The shared protocol v2 examples (packages/schema/fixtures/notifications.v2.json), by name.
+func v2(_ name: String) throws -> OyeeNotification {
+    let all = try OyeeJSON.makeDecoder().decode([String: OyeeNotification].self, from: fixture("notifications.v2"))
+    return try #require(all[name], "no fixture \(name)")
+}
+
 @Suite("Model decoding")
 struct ModelDecodingTests {
-    @Test func fullNotificationFromProtocolExample() throws {
-        let n = try decode(OyeeNotification.self, fixture: "notification_full")
-        #expect(n.id == "ntf_01JBX9Z6Q2W3E4R5T6Y7U8I9O0")
-        #expect(n.source == "aws-monitor")
-        #expect(n.threadId == "run-42")
-        #expect(n.title == "prod-api CPU high")
-        #expect(n.body == "CPU above **90%** for 5m")
-        #expect(n.severity == .critical)
-        #expect(n.status == .active)
-        #expect(n.icon == "🔥")
-        #expect(n.emojiIcon == "🔥")
-        #expect(n.iconURL == nil)
-        #expect(n.imageURL?.absoluteString == "https://example.com/graph.png")
-        #expect(n.fields == [Field(label: "Region", value: "us-east-1")])
-        #expect(n.progress == Progress(value: 3, max: 7, label: "3/7 checks", indeterminate: false))
-        #expect(n.actions.count == 3)
-        #expect(n.actions[0] == Action(id: "ack", label: "Acknowledge", style: .primary, resolves: true))
-        #expect(n.actions[1].callback?.url == "https://example.com/scale")
-        #expect(n.actions[1].resolves == false)
-        #expect(n.actions[2].openURL?.absoluteString == "https://console.aws.amazon.com")
-        #expect(n.actions[2].style == .default)
-        #expect(n.reply == Reply(placeholder: "Tell the agent…", buttonLabel: "Send"))
-        #expect(n.tags == ["prod", "aws"])
-        #expect(n.silent == false)
-        #expect(n.template == "aws-alarm")
-        #expect(n.version == 3)
-        #expect(n.createdAt == iso("2026-10-28T10:00:00.000Z"))
-        #expect(n.updatedAt == iso("2026-10-28T10:05:00.000Z"))
-        #expect(n.readAt == nil)
-        #expect(n.resolvedAt == nil)
-        #expect(n.responses.count == 1)
-        #expect(n.responses[0].actionId == "ack")
-        #expect(n.responses[0].text == nil)
-        #expect(n.responses[0].deviceName == "Pixel 9")
-        #expect(n.threadIdentifier == "run-42")
-        #expect(n.wantsSystemNotification)
+    @Test func sharedFixturesMatchTheSchemaPackage() throws {
+        // A test target can only bundle files inside its own folder, so it carries a copy. Refresh it with
+        // `cp packages/schema/fixtures/notifications.v2.json apps/apple/Tests/OyeeKitTests/Fixtures/`.
+        let original = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../../../packages/schema/fixtures/notifications.v2.json")
+            .standardizedFileURL
+        #expect(try fixture("notifications.v2") == Data(contentsOf: original), "the Swift copy of notifications.v2.json drifted")
     }
 
-    @Test func missingOptionalKeysFallBackToDefaults() throws {
+    @Test func everySharedFixtureDecodesAsItsIntent() throws {
+        let all = try OyeeJSON.makeDecoder().decode([String: OyeeNotification].self, from: fixture("notifications.v2"))
+        #expect(all.count == 14)
+        for (name, n) in all {
+            #expect(name.hasPrefix(n.intent.rawValue + "-"), "\(name) decoded as \(n.intent)")
+        }
+    }
+
+    @Test func informBlock() throws {
+        let n = try v2("inform-full")
+        #expect(n.intent == .inform)
+        #expect(n.id == "ntf_01JBXA0000000000000000INF2")
+        #expect(n.source == "alertmanager")
+        #expect(n.key == "disk-full-db1")
+        #expect(n.title == "Disk 95% full on db-1")
+        #expect(n.body == "Free space is **below 5%**. See the `/var` breakdown.\nNext check in 5 minutes.")
+        #expect(n.severity == .critical)
+        #expect(n.status == .active)
+        #expect(n.url == "https://grafana.example.com/d/disk")
+        #expect(n.version == 3)
+        #expect(n.createdAt == iso("2026-10-30T09:00:00.000Z"))
+        #expect(n.updatedAt == iso("2026-10-30T09:10:00.000Z"))
+        #expect(n.readAt == nil && n.resolvedAt == nil)
+        #expect(n.targetDeviceIds == ["dev_01JBXA00000000000000000PX9"])
+        let inform = try #require(n.inform)
+        #expect(
+            inform.links == [
+                LinkButton(label: "Dashboard", url: "https://grafana.example.com/d/disk"),
+                LinkButton(label: "Runbook", url: "https://wiki.example.com/runbooks/disk"),
+            ])
+        #expect(inform.fields == [Field(label: "Host", value: "db-1"), Field(label: "Used", value: "95%")])
+        #expect(inform.image == "https://grafana.example.com/render/disk.png")
+        #expect(inform.icon == "💾")
+        #expect(inform.cooldown == "1h")
+        #expect(n.ask == nil && n.progress == nil)
+
+        let minimal = try v2("inform-minimal")
+        #expect(minimal.key == nil && minimal.body == nil && minimal.targetDeviceIds == nil)
+        #expect(minimal.inform == InformBlock())
+        let resolved = try v2("inform-resolved")
+        #expect(resolved.isResolved && resolved.isRead)
+        #expect(!resolved.wantsSystemNotification)
+    }
+
+    @Test func askBlock() throws {
+        let open = try v2("ask-open")
+        #expect(open.intent == .ask)
+        #expect(open.severity == .warning)
+        let ask = try #require(open.ask)
+        #expect(ask.options == ["Approve", "Reject", "Wait"])
+        #expect(ask.allowText)
+        #expect(ask.replyPlaceholder == "Reply…")
+        #expect(ask.expiresAt == iso("2026-10-30T10:00:00.000Z"))
+        #expect(ask.answer == nil)
+        #expect(ask.state == .open)
+        #expect(open.inform == nil && open.progress == nil)
+
+        let answered = try #require(try v2("ask-answered-option").ask)
+        #expect(answered.state == .answered)
+        #expect(
+            answered.answer
+                == AskAnswer(
+                    option: "Approve", text: nil, deviceId: "dev_01JBXA00000000000000000PX9", deviceName: "Pixel 9",
+                    at: iso("2026-10-30T09:04:00.000Z")))
+        let text = try #require(try v2("ask-answered-text").ask)
+        #expect(text.answer?.option == nil)
+        #expect(text.answer?.text == "release/1.4")
+        #expect(text.answer?.deviceName == "MacBook Pro")
+        #expect(text.options.isEmpty)
+        #expect(try v2("ask-expired").ask?.state == .expired)
+        #expect(try v2("ask-withdrawn").ask?.state == .withdrawn)
+    }
+
+    @Test func progressBlock() throws {
+        let running = try v2("progress-running")
+        #expect(running.intent == .progress)
+        #expect(running.key == "ci-run-812")
+        #expect(
+            running.progress
+                == ProgressBlock(
+                    value: 3, max: 7, label: "3/7 checks", state: .running, staleAfter: "30m",
+                    lastReportAt: iso("2026-10-30T09:03:00.000Z")))
+        let percent = try #require(try v2("progress-running-percent").progress)
+        #expect(percent.label == nil)
+        #expect(percent.value == 40 && percent.max == 100)
+        #expect(percent.staleAfter == "2h")
+        #expect(try v2("progress-done").progress?.state == .done)
+        #expect(try v2("progress-failed").progress?.state == .failed)
+        #expect(try v2("progress-stopped").progress?.state == .stopped)
+        #expect(running.inform == nil && running.ask == nil)
+    }
+
+    @Test func missingKeysFallBackToDefaults() throws {
+        // A notification from a server that predates intents still shows its title and body, as an inform.
         let n = try decode(OyeeNotification.self, fixture: "notification_minimal")
         #expect(n.title == "Backup finished")
+        #expect(n.intent == .inform)
+        #expect(n.inform == InformBlock())
+        #expect(n.key == nil)
         #expect(n.source == "unknown")
         #expect(n.severity == .info)
         #expect(n.status == .active)
         #expect(n.body == nil)
-        #expect(n.fields.isEmpty)
-        #expect(n.actions.isEmpty)
-        #expect(n.tags.isEmpty)
-        #expect(n.responses.isEmpty)
-        #expect(n.progress == nil)
-        #expect(n.reply == nil)
-        #expect(n.silent == false)
         #expect(n.version == 1)
         #expect(n.updatedAt == n.createdAt)
-        #expect(n.threadIdentifier == "unknown")
     }
 
     @Test func unknownEnumsAndBrokenElementsAreTolerated() throws {
         let n = try decode(OyeeNotification.self, fixture: "notification_unknown_enums")
         #expect(n.severity == .info)  // "emergency" → fallback
         #expect(n.status == .active)  // "archived" → fallback
-        #expect(n.fields == [Field(label: "Branch", value: "main"), Field(label: "", value: "")])
-        #expect(n.actions.map(\.id) == ["retry"])  // action without id dropped
-        #expect(n.actions[0].style == .default)  // "fancy" → default
-        #expect(n.progress?.max == 100)  // default max
-        #expect(n.progress?.indeterminate == false)
-        #expect(n.reply == Reply(placeholder: nil, buttonLabel: nil))
-        #expect(n.silent)
+        #expect(n.intent == .inform)  // "poll" → fallback
+        #expect(n.inform?.fields == [Field(label: "Branch", value: "main"), Field(label: "", value: "")])
+        #expect(n.inform?.links.map(\.label) == ["Logs"])  // a link without a url is dropped
         #expect(n.isRead)
         #expect(!n.wantsSystemNotification)
         // Microsecond precision and offsets.
         #expect(abs(n.createdAt.timeIntervalSince(iso("2026-10-28T09:00:00.123Z"))) < 0.001)
         #expect(n.updatedAt == iso("2026-10-28T09:00:00Z"))
+
+        // The old `debug` severity reads as info; an unknown ask state reads as closed, a progress one as running.
+        let ask = try OyeeJSON.makeDecoder().decode(
+            OyeeNotification.self,
+            from: Data(#"{"id":"a","title":"t","severity":"debug","intent":"ask","ask":{"options":["Yes"],"state":"snoozed"}}"#.utf8))
+        #expect(ask.severity == .info)
+        #expect(ask.ask?.state == .expired)
+        #expect(ask.ask?.options == ["Yes"])
+        #expect(ask.ask?.allowText == false)
+        #expect(ask.ask?.expiresAt == nil)
+        let progress = try OyeeJSON.makeDecoder().decode(
+            OyeeNotification.self,
+            from: Data(#"{"id":"p","title":"t","intent":"progress","progress":{"value":4,"max":0,"state":"paused"}}"#.utf8))
+        #expect(progress.progress == ProgressBlock(value: 4, max: 100, state: .running))
     }
 
     @Test func notificationRoundTrips() throws {
-        let original = try decode(OyeeNotification.self, fixture: "notification_full")
-        let data = try OyeeJSON.makeEncoder().encode(original)
-        let decoded = try OyeeJSON.makeDecoder().decode(OyeeNotification.self, from: data)
-        #expect(decoded == original)
-        // Nullable fields are encoded as explicit nulls (camelCase keys).
-        let json = String(decoding: data, as: UTF8.self)
+        for name in ["inform-full", "ask-answered-option", "ask-open", "progress-running-percent"] {
+            let original = try v2(name)
+            let data = try OyeeJSON.makeEncoder().encode(original)
+            #expect(try OyeeJSON.makeDecoder().decode(OyeeNotification.self, from: data) == original)
+        }
+        // Nullable fields are encoded as explicit nulls (camelCase keys), the block under its intent's name.
+        let json = String(decoding: try OyeeJSON.makeEncoder().encode(try v2("ask-open")), as: UTF8.self)
         #expect(json.contains("\"readAt\":null"))
-        #expect(json.contains("\"createdAt\":\"2026-10-28T10:00:00.000Z\""))
+        #expect(json.contains("\"intent\":\"ask\""))
+        #expect(json.contains("\"ask\":{"))
+        #expect(json.contains("\"createdAt\":\"2026-10-30T09:00:00.000Z\""))
     }
 
     @Test func notificationWithoutIdFails() {
@@ -128,7 +207,7 @@ struct ModelDecodingTests {
         #expect(link.code == "K7Q29XMA")
     }
 
-    @Test func pageConfigSourcesDeviceTemplate() throws {
+    @Test func pageConfigSourcesDevice() throws {
         let page = try decode(Page<OyeeNotification>.self, fixture: "page")
         #expect(page.items.map(\.id) == ["ntf_A", "ntf_B"])
         #expect(page.nextCursor == "opaque-cursor-1")
@@ -147,11 +226,6 @@ struct ModelDecodingTests {
         #expect(device.platform == .android)
         // Unknown transport falls back instead of failing the device.
         #expect(device.transports == [.fcm, .websocket, .websocket])
-
-        let template = try decode(Template.self, fixture: "template")
-        #expect(template.name == "aws-alarm")
-        #expect(template.card.severity == .warning)
-        #expect(template.card.fields?.first?.value == "{{region|us-east-1}}")
     }
 
     @Test func errorEnvelope() throws {
@@ -173,7 +247,7 @@ struct ModelDecodingTests {
 
     @Test func notificationQueryItems() {
         let q = NotificationQuery(
-            limit: 500, cursor: "c", source: "aws", severity: .warning, status: .active, threadId: "t", q: "cpu",
+            limit: 500, cursor: "c", source: "aws", severity: .warning, status: .active, q: "cpu",
             updatedSince: "2026-10-28T10:00:00.000Z")
         let items = Dictionary(uniqueKeysWithValues: q.queryItems.map { ($0.name, $0.value ?? "") })
         #expect(items["limit"] == "200")  // clamped to the max

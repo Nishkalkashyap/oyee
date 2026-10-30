@@ -1,23 +1,21 @@
 import Foundation
 
-// How the active inbox is laid out (same rules as the web, apps/web/src/lib/inbox.ts): live progress, then what's
-// waiting on you, then everything else with repeats stacked into one row.
+// How the active inbox is laid out, by intent (GLOSSARY.md), with the same rules as the web
+// (apps/web/src/lib/inbox.ts) and Android (InboxSections.kt): open asks first (Needs you), then running or stopped
+// progress (In progress), then everything else (Updates) with repeats stacked into one row.
 
 extension OyeeNotification {
-    /// An unanswered question: buttons that call back (not links) or a reply box, with no response yet.
-    public var needsAnswer: Bool {
-        guard status == .active, responses.isEmpty else { return false }
-        return reply != nil || actions.contains { $0.url == nil }
-    }
+    /// An open ask: someone is waiting on the user's answer.
+    public var needsAnswer: Bool { ask?.state == .open }
 
-    /// A job that's still running (progress below its max, or an indeterminate bar).
+    /// A progress that hasn't ended: running, or stopped reporting (it may still pick up again).
     public var isInProgress: Bool {
-        guard status == .active, let p = progress else { return false }
-        return p.indeterminate || p.value < p.max
+        guard let state = progress?.state else { return false }
+        return state == .running || state == .stopped
     }
 
-    /// Repeats collapse by thread, otherwise by source + title.
-    public var stackKey: String { threadId.map { "thread:\($0)" } ?? "title:\(source)\u{0}\(title)" }
+    /// Repeats collapse by `(source, key)` when there is a key, otherwise by source + title.
+    public var stackKey: String { key.map { "key:\(source)\u{0}\($0)" } ?? "title:\(source)\u{0}\(title)" }
 }
 
 /// Newest first; the first item is the row that's shown.
@@ -48,11 +46,10 @@ public struct InboxSection: Identifiable, Hashable, Sendable {
         var order: [String] = []
         var groups: [String: [OyeeNotification]] = [:]
         for n in items {
-            if n.isInProgress {
-                // A running job's buttons (Pause, Roll back) are controls, not questions.
-                live.append(InboxStack(id: n.id, items: [n]))
-            } else if n.needsAnswer {
+            if n.needsAnswer {
                 needs.append(InboxStack(id: n.id, items: [n]))
+            } else if n.isInProgress {
+                live.append(InboxStack(id: n.id, items: [n]))
             } else {
                 let key = n.stackKey
                 if groups[key] == nil { order.append(key) }

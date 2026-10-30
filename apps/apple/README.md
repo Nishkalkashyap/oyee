@@ -31,7 +31,7 @@ Sources/OyeeKit/
   Views/                      shared SwiftUI: NotificationCardView, InboxListView, PairingView, …
 Sources/OyeeMac/            macOS app: MenuBarExtra + inbox Window + Settings
 iOS/                          iOS app: pairing → inbox → settings, foreground socket, background refresh
-Tests/OyeeKitTests/         Swift Testing suites + JSON fixtures from docs/protocol.md
+Tests/OyeeKitTests/         Swift Testing suites + JSON fixtures (notifications.v2.json copied from packages/schema)
 Resources/                    Info.plist files for both apps
 project.yml                   XcodeGen spec (iOS + macOS app targets)
 scripts/build-macos-app.sh    builds build/Oyee.app without Xcode
@@ -80,26 +80,36 @@ Notes:
 ### What the Mac app does
 
 - **Menu bar**: a bell with the unread count, a connection status dot, and a live list of active
-  notifications (questions first, then running jobs, then the rest with repeats stacked into one row) with a ✓ on each
+  notifications (open asks first, then running or stopped progress, then the rest with repeats stacked into one row) with a ✓ on each
   row to resolve it, or its whole stack, in one tap (it disappears at once; resolve everything and it reads
   "All caught up"). If macOS blocks Oyee's notifications, a "Notifications are off · Turn on" notice appears at the
-  top of the menu bar and the inbox; it opens Oyee's page in System Settings and clears when you come back. Progress bars update in place, and you can use the action buttons right there. It also has
+  top of the menu bar and the inbox; it opens Oyee's page in System Settings and clears when you come back. Progress bars update in place, and an open ask's answer buttons work right there. It also has
   **Open Inbox**, **Settings…** and **Quit**.
-- **Inbox window**: list + detail, sorted like the web inbox (`Store/InboxSections.swift`): **Needs you** (answerable
-  from the list), **In progress** and **Updates** with repeats stacked into one row (click to open the newest and
-  expand the rest). Hovering a row swaps its time for a ✓ that resolves it (or the stack); Resolve also sits in the
+- **Inbox window**: list + detail, sorted by intent like the web inbox (`Store/InboxSections.swift`): **Needs you**
+  (open asks, answerable from the list), **In progress** (running or stopped progress) and **Updates** (everything
+  else) with repeats stacked into one row by source and key, or source and title without a key (click to open the
+  newest and expand the rest). The detail shows one card per intent (`Views/IntentCardViews.swift`, labels from the
+  pure `Support/IntentCards.swift`): an inform with its icon, severity, rows and link buttons; an ask with its waiting
+  time, expiry and answer buttons, the composer as its reply box, and "Answered: Approve · Pixel 9" / "Expired" /
+  "Withdrawn" once closed; a progress with its bar and Running / Done / Failed / "Stopped reporting after 40%". Hovering a row swaps its time for a ✓ that resolves it (or the stack); Resolve also sits in the
   card's footer and opens the next row. Search hides behind a round button; filters (a source from the row's context
   menu, iOS's filter menu) show as removable pills; Resolved is a row at the end of the list. Blue means unread: only
-  critical and warning put a dot on the avatar. Also infinite scroll, markdown bodies, fields, images, actions, reply
-  box, responses, and read/resolve/delete.
-- **System notifications**: one per Oyee notification, with identifier = Oyee id.
-  - Updates replace it in place, silently unless the update has `alert: true`.
-  - Read, resolved or deleted elsewhere → it's removed from Notification Center.
-  - Action buttons and the reply box come from dynamic notification categories.
+  critical and warning put a dot on the avatar. Also infinite scroll, markdown bodies, images, and
+  read/resolve/delete.
+- **System notifications**: one per Oyee notification, with identifier = Oyee id, grouped by source.
+  - Updates replace it in place, silently unless the update has `alert: true`. A running progress appears and updates
+    without sound; done, failed and stopped reporting alert once.
+  - Read, resolved or deleted elsewhere → it's removed from Notification Center (so answered, expired and withdrawn
+    asks leave it).
+  - Buttons come from dynamic notification categories (`NotificationCategories.plan`): an open ask's answer buttons
+    (`oyee.answer.<label>` → `POST …/respond { option }`) plus a text-input Reply when it takes text; an inform's link
+    buttons (`oyee.link.<i>`, the URLs travel in the notification's userInfo; opening one marks it read). Progress and
+    closed asks have none.
+  - The body matches the browser popup: the plain-text body, then an inform's `Label: value` rows or a progress's
+    line (the text bar while running, "Done · 7/7 checks", "Stopped reporting after 40%").
   - Tapping opens the `url` (if set) or the inbox detail, and marks the notification read.
-  - Severity mapping: `critical`/`warning`/`info`/`success` → default sound and `.active`. `debug` → no sound and
-    `.passive`. `silent` → never a sound. (Time-sensitive delivery needs an entitlement we can't get without a paid
-    account.)
+  - Every severity alerts with the default sound and `.active` (time-sensitive delivery needs an entitlement we can't
+    get without a paid account).
 - **Settings**: server/account/device, reconnect, unpair, launch at login (`SMAppService.mainApp`), notification
   permission status, test notification.
 
@@ -152,11 +162,17 @@ scripts/typecheck-ios.sh       # optional: compile-check the iOS app against Mac
 
 The tests use **Swift Testing** (`import Testing`). XCTest isn't available with the Command Line Tools alone. They
 cover:
-- model decoding against the protocol examples, including unknown fields, unknown enum values and missing keys
+- model decoding against the shared protocol v2 examples, `Fixtures/notifications.v2.json`, a copy of
+  `packages/schema/fixtures/notifications.v2.json` (a test fails when the two differ; refresh it with `cp`), plus
+  unknown fields, unknown enum values and missing keys
 - the REST client (with a `URLProtocol` stub) and WebSocket message coding
 - pairing code, server URL and deep-link parsing
-- category id hashing stability, body composition (fields + `progressText`), and the markdown subset
+- inbox sections and stacking, each card's state labels, the notification categories per intent, the system
+  notification text (`progressText`, `stoppedReportingLabel`), and the markdown subset
 - backoff, the sync cursor, InboxStore event handling and the cache, and credential file permissions
+
+Card screenshots for review: `OYEE_SCREENSHOTS=/some/dir scripts/test.sh --filter CardScreenshots` renders every
+card state from the shared fixtures (plus the inbox rows and the menu bar) to `14-mac-*.png` with `ImageRenderer`.
 
 `scripts/test.sh` exists because, with only the Command Line Tools, SwiftPM sometimes fails to find the Swift
 Testing macro plugin while compiling test files in parallel (`plugin for module 'TestingMacros' not found`). The

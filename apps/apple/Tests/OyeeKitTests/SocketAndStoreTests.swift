@@ -21,13 +21,13 @@ struct SocketMessageTests {
     }
 
     @Test func created() throws {
-        let full = String(decoding: try fixture("notification_full"), as: UTF8.self)
+        let full = String(decoding: try OyeeJSON.makeEncoder().encode(try v2("ask-open")), as: UTF8.self)
         let text = #"{"type":"notification.created","notification":"# + full + "}"
         guard case .notificationCreated(let n) = try ServerMessage.decode(text) else {
             Issue.record("expected created")
             return
         }
-        #expect(n.id == "ntf_01JBX9Z6Q2W3E4R5T6Y7U8I9O0")
+        #expect(n.id == "ntf_01JBXA0000000000000000ASK1")
     }
 
     @Test func updated() throws {
@@ -123,13 +123,27 @@ struct InboxStoreTests {
     }
 
     func make(
-        _ id: String, version: Int = 1, minute: Int = 0, silent: Bool = false, read: Bool = false,
-        status: NotificationStatus = .active
+        _ id: String, version: Int = 1, minute: Int = 0, content: IntentContent = .inform(InformBlock()),
+        read: Bool = false, status: NotificationStatus = .active
     ) -> OyeeNotification {
         let created = iso("2026-10-28T10:00:00Z").addingTimeInterval(TimeInterval(minute * 60))
         return OyeeNotification(
-            id: id, title: id, status: status, silent: silent, version: version, createdAt: created,
+            id: id, title: id, status: status, content: content, version: version, createdAt: created,
             updatedAt: created.addingTimeInterval(TimeInterval(version)), readAt: read ? created : nil)
+    }
+
+    func running(_ id: String, version: Int = 1, minute: Int = 0) -> OyeeNotification {
+        make(id, version: version, minute: minute, content: .progress(ProgressBlock(value: 1, state: .running)))
+    }
+
+    func session(_ handler: @escaping StubURLProtocol.Handler) -> String {
+        let (session, id) = StubURLProtocol.makeSession(handler)
+        store.api = OyeeAPI(baseURL: URL(string: "https://oyee.test")!, token: "t", session: session)
+        return id
+    }
+
+    func json(_ n: OyeeNotification) -> String {
+        String(decoding: try! OyeeJSON.makeEncoder().encode(n), as: UTF8.self)
     }
 
     @Test func targetedAtOtherDevicesStaysInInboxWithoutPosting() {
@@ -147,12 +161,69 @@ struct InboxStoreTests {
         #expect(store.notifications.map(\.id) == ["m", "p"])
     }
 
-    @Test func createdPostsAndAlertsUnlessSilent() {
+    @Test func createdAlertsExceptARunningProgress() {
         store.apply(.notificationCreated(make("a")))
-        store.apply(.notificationCreated(make("b", minute: 1, silent: true)))
-        #expect(sink.events == [.present("a", alert: true), .present("b", alert: false)])
-        #expect(store.notifications.map(\.id) == ["b", "a"])  // newest first
-        #expect(store.unreadCount == 2)
+        store.apply(.notificationCreated(running("b", minute: 1)))
+        store.apply(.notificationCreated(make("c", minute: 2, content: .ask(AskBlock(options: ["Yes"])))))
+        #expect(sink.events == [.present("a", alert: true), .present("b", alert: false), .present("c", alert: true)])
+        #expect(store.notifications.map(\.id) == ["c", "b", "a"])  // newest first
+        #expect(store.unreadCount == 3)
+    }
+
+    @Test func progressUpdatesQuietlyThenAlertsWhenItEnds() {
+        store.apply(.notificationCreated(running("p")))
+        store.apply(.notificationUpdated(running("p", version: 2), alert: false, reason: .update))
+        let done = make("p", version: 3, content: .progress(ProgressBlock(value: 100, state: .done)))
+        store.apply(.notificationUpdated(done, alert: true, reason: .update))
+        #expect(sink.events == [.present("p", alert: false), .replace("p"), .present("p", alert: true)])
+    }
+
+    @Test func expiredOrAnsweredAsksLeaveTheTray() throws {
+        let open = try v2("ask-open")
+        store.apply(.notificationCreated(open))
+        var expired = try v2("ask-expired")
+        expired.id = open.id
+        expired.version = 2
+        store.apply(.notificationUpdated(expired, alert: false, reason: .resolved))
+        #expect(sink.events == [.present(open.id, alert: true), .remove([open.id])])
+    }
+
+    @Test func answeringSendsTheOptionAndClosesTheAsk() async throws {
+        let open = try v2("ask-open")
+        store.apply(.notificationCreated(open))
+        var answered = open
+        answered.version = 2
+        answered.status = .resolved
+        answered.content = .ask(AskBlock(options: ["Approve"], answer: AskAnswer(option: "Approve", text: nil, deviceId: nil, deviceName: "Mac", at: Date()), state: .answered))
+        let body = json(answered)
+        let id = session { _ in (200, body) }
+        await store.respond(id: open.id, option: "Approve", text: nil)
+        let request = try #require(StubURLProtocol.requests(id).first)
+        #expect(request.url.path == "/api/notifications/\(open.id)/respond")
+        #expect(try JSONSerialization.jsonObject(with: try #require(request.body)) as? [String: String] == ["option": "Approve"])
+        #expect(store.notification(id: open.id)?.ask?.state == .answered)
+        #expect(sink.events.last == .remove([open.id]))
+        #expect(store.lastError == nil)
+    }
+
+    @Test func aLateAnswerShowsWhoWonInstead() async throws {
+        // Another device answered first: the server says 409, and the card catches up with the real answer.
+        let open = try v2("ask-open")
+        store.apply(.notificationCreated(open))
+        var answered = try v2("ask-answered-option")
+        answered.id = open.id
+        answered.version = 2
+        let body = json(answered)
+        let id = session { request in
+            request.method == "GET"
+                ? (200, body)
+                : (409, #"{"error":{"code":"conflict","message":"This ask was already answered: Approve · Pixel 9"}}"#)
+        }
+        await store.respond(id: open.id, option: "Reject", text: nil)
+        #expect(StubURLProtocol.requests(id).map(\.method) == ["POST", "GET"])
+        #expect(store.notification(id: open.id)?.ask?.answer?.deviceName == "Pixel 9")
+        #expect(store.lastError == "This ask was already answered: Approve · Pixel 9")
+        #expect(sink.events.last == .remove([open.id]))
     }
 
     @Test func updatesReplaceSilentlyAlertOrCancel() {
@@ -280,7 +351,7 @@ struct InboxStoreTests {
         let testID = OyeeNotification.makeLocalTestID()
         await store.markRead(testID)
         await store.resolve(testID)
-        await store.respond(id: testID, actionId: "ack", text: nil)
+        await store.respond(id: testID, option: "Yes", text: nil)
         #expect(StubURLProtocol.requests(id).isEmpty)
         #expect(store.lastError == nil)
     }
@@ -336,47 +407,51 @@ struct CredentialStoreTests {
 @Suite("Notification content")
 struct NotificationContentTests {
     @Test func userInfoAndResponseMapping() throws {
-        let n = try decode(OyeeNotification.self, fixture: "notification_full")
+        let n = try v2("inform-full")
         let info = NotificationContentBuilder.userInfo(for: n, alert: true)
         #expect(info["oyeeId"] == n.id)
         #expect(info["alert"] == "1")
-        #expect(info["url"] == "https://console.aws.amazon.com/cloudwatch")
+        #expect(info["url"] == "https://grafana.example.com/d/disk")
         let userInfo: [AnyHashable: Any] = info
 
         let open = NotificationContentBuilder.responseInfo(
             notificationIdentifier: n.id, actionIdentifier: UNNotificationDefaultActionIdentifier, userText: nil,
             userInfo: userInfo)
         #expect(open.kind == .open)
-        #expect(open.url?.absoluteString == "https://console.aws.amazon.com/cloudwatch")
+        #expect(open.url?.absoluteString == "https://grafana.example.com/d/disk")
 
-        let ack = NotificationContentBuilder.responseInfo(
-            notificationIdentifier: n.id, actionIdentifier: "oyee.action.ack", userText: nil, userInfo: userInfo)
-        #expect(ack.kind == .action(id: "ack", url: nil))
+        // Link buttons share categories by label, so the URL comes from this notification's own userInfo.
+        let runbook = NotificationContentBuilder.responseInfo(
+            notificationIdentifier: n.id, actionIdentifier: "oyee.link.1", userText: nil, userInfo: userInfo)
+        #expect(runbook.kind == .link(URL(string: "https://wiki.example.com/runbooks/disk")!))
 
-        let openAction = NotificationContentBuilder.responseInfo(
-            notificationIdentifier: n.id, actionIdentifier: "oyee.action.open", userText: nil, userInfo: userInfo)
-        #expect(openAction.kind == .action(id: "open", url: URL(string: "https://console.aws.amazon.com")))
+        let answer = NotificationContentBuilder.responseInfo(
+            notificationIdentifier: "ask", actionIdentifier: "oyee.answer.Approve", userText: nil, userInfo: [:])
+        #expect(answer.kind == .answer(option: "Approve"))
+        #expect(answer.notificationId == "ask")
 
         let reply = NotificationContentBuilder.responseInfo(
-            notificationIdentifier: n.id, actionIdentifier: "oyee.reply", userText: "scale it", userInfo: userInfo)
-        #expect(reply.kind == .reply(text: "scale it"))
+            notificationIdentifier: n.id, actionIdentifier: "oyee.reply", userText: "release/1.4", userInfo: userInfo)
+        #expect(reply.kind == .reply(text: "release/1.4"))
 
         let dismiss = NotificationContentBuilder.responseInfo(
             notificationIdentifier: n.id, actionIdentifier: UNNotificationDismissActionIdentifier, userText: nil,
             userInfo: [:])
         #expect(dismiss.kind == .dismiss)
         #expect(dismiss.notificationId == n.id)
+
+        // A link whose URL isn't known (stale userInfo) just opens the app.
+        let unknown = NotificationContentBuilder.responseInfo(
+            notificationIdentifier: n.id, actionIdentifier: "oyee.link.7", userText: nil, userInfo: userInfo)
+        #expect(unknown.kind == .open)
     }
 
-    @Test func soundRules() {
-        var n = OyeeNotification(id: "a", title: "a", severity: .critical)
-        #expect(NotificationContentBuilder.playsSound(n, alert: true))
-        #expect(!NotificationContentBuilder.playsSound(n, alert: false))
-        n.silent = true
-        #expect(!NotificationContentBuilder.playsSound(n, alert: true))
-        n.silent = false
-        n.severity = .debug
-        #expect(!NotificationContentBuilder.playsSound(n, alert: true))
+    @Test func everySeverityAlertsWhenAsked() {
+        for severity in Severity.allCases {
+            let n = OyeeNotification(id: "a", title: "a", severity: severity)
+            #expect(NotificationContentBuilder.playsSound(n, alert: true))
+            #expect(!NotificationContentBuilder.playsSound(n, alert: false))
+        }
         #expect(NotificationContentBuilder.relevanceScore(.critical) > NotificationContentBuilder.relevanceScore(.info))
     }
 

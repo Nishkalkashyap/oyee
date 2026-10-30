@@ -54,99 +54,118 @@ struct PairingTests {
     }
 }
 
-@Suite("Category ids")
+@Suite("Notification categories")
 struct CategoryTests {
-    let actions = [
-        Action(id: "ack", label: "Acknowledge", style: .primary, resolves: true),
-        Action(id: "open", label: "Open", url: "https://example.com"),
-    ]
-
     @Test func fnvTestVectors() {
         #expect(NotificationCategories.fnv1a64Hex("") == "cbf29ce484222325")
         #expect(NotificationCategories.fnv1a64Hex("a") == "af63dc4c8601ec8c")
         #expect(NotificationCategories.fnv1a64Hex("foobar") == "85944171f73967e8")
     }
 
-    @Test func stableAcrossCallsAndPinned() {
-        let a = NotificationCategories.categoryIdentifier(actions: actions, reply: Reply(placeholder: "Say"))
-        let b = NotificationCategories.categoryIdentifier(actions: actions, reply: Reply(placeholder: "Say"))
-        #expect(a == b)
-        #expect(a?.hasPrefix("oyee.cat.") == true)
-        #expect(a?.count == "oyee.cat.".count + 16)
-        // Pinned value: changing the canonical form breaks categories registered by older builds.
-        let pinned = NotificationCategories.categoryIdentifier(
-            actions: [Action(id: "ack", label: "Acknowledge")], reply: nil)
-        #expect(pinned == "oyee.cat." + NotificationCategories.fnv1a64Hex("v1\u{1E}a\u{1F}ack\u{1F}Acknowledge\u{1F}default\u{1F}r"))
+    @Test func openAskGetsAnswerButtonsAndATextReply() throws {
+        let plan = try #require(NotificationCategories.plan(for: try v2("ask-open")))
+        #expect(plan.buttons == [
+            .init(identifier: "oyee.answer.Approve", title: "Approve", opensURL: false),
+            .init(identifier: "oyee.answer.Reject", title: "Reject", opensURL: false),
+            .init(identifier: "oyee.answer.Wait", title: "Wait", opensURL: false),
+        ])
+        #expect(plan.textInput == "Reply…")
+        #expect(plan.id.hasPrefix("oyee.cat.") && plan.id.count == "oyee.cat.".count + 16)
+
+        var textOnly = try v2("ask-open")
+        textOnly.content = .ask(AskBlock(allowText: true, replyPlaceholder: "Branch name", state: .open))
+        let reply = try #require(NotificationCategories.plan(for: textOnly))
+        #expect(reply.buttons.isEmpty)
+        #expect(reply.textInput == "Branch name")
     }
 
-    @Test func differsWhenAnythingVisibleChanges() {
-        let base = NotificationCategories.categoryIdentifier(actions: actions, reply: nil)
-        var relabeled = actions
-        relabeled[0].label = "Ack"
-        var restyled = actions
-        restyled[0].style = .destructive
-        var urlChanged = actions
-        urlChanged[1].url = nil
-        let ids: [String?] = [
-            base,
-            NotificationCategories.categoryIdentifier(actions: relabeled, reply: nil),
-            NotificationCategories.categoryIdentifier(actions: restyled, reply: nil),
-            NotificationCategories.categoryIdentifier(actions: urlChanged, reply: nil),
-            NotificationCategories.categoryIdentifier(actions: actions.reversed(), reply: nil),
-            NotificationCategories.categoryIdentifier(actions: actions, reply: Reply()),
-            NotificationCategories.categoryIdentifier(actions: actions, reply: Reply(buttonLabel: "Go")),
-        ]
-        #expect(Set(ids.compactMap { $0 }).count == ids.count)
+    @Test func informGetsItsLinkButtons() throws {
+        let plan = try #require(NotificationCategories.plan(for: try v2("inform-full")))
+        #expect(plan.buttons == [
+            .init(identifier: "oyee.link.0", title: "Dashboard", opensURL: true),
+            .init(identifier: "oyee.link.1", title: "Runbook", opensURL: true),
+        ])
+        #expect(plan.textInput == nil)
     }
 
-    @Test func sameActionSetSharesCategoryEvenIfURLDiffers() {
-        var other = actions
-        other[1].url = "https://another.example.com"
-        #expect(
-            NotificationCategories.categoryIdentifier(actions: actions, reply: nil)
-                == NotificationCategories.categoryIdentifier(actions: other, reply: nil))
+    @Test func nothingToPressNoCategory() throws {
+        for name in ["inform-minimal", "ask-answered-option", "ask-expired", "ask-withdrawn", "progress-running", "progress-done"] {
+            #expect(NotificationCategories.plan(for: try v2(name)) == nil, "\(name)")
+        }
     }
 
-    @Test func noButtonsNoCategory() {
-        #expect(NotificationCategories.categoryIdentifier(actions: [], reply: nil) == nil)
-        #expect(NotificationCategories.categoryIdentifier(actions: [], reply: Reply()) != nil)
+    @Test func categoryIdsAreStableAndOnlyChangeWithWhatIsShown() throws {
+        let ask = try v2("ask-open")
+        let id = try #require(NotificationCategories.plan(for: ask)?.id)
+        // Pinned: changing the canonical form strands categories registered by older launches.
+        #expect(id == "oyee.cat." + NotificationCategories.fnv1a64Hex(
+            "v2\u{1E}oyee.answer.Approve\u{1F}Approve\u{1F}r\u{1E}oyee.answer.Reject\u{1F}Reject\u{1F}r"
+                + "\u{1E}oyee.answer.Wait\u{1F}Wait\u{1F}r\u{1E}reply\u{1F}Reply…"))
+
+        // Another ask with the same buttons shares the category; the links' URLs don't matter either.
+        var same = try v2("ask-open")
+        same.id = "other"
+        same.title = "Another question"
+        #expect(NotificationCategories.plan(for: same)?.id == id)
+        var relinked = try v2("inform-full")
+        relinked.content = .inform(InformBlock(links: [
+            LinkButton(label: "Dashboard", url: "https://elsewhere.dev"), LinkButton(label: "Runbook", url: "https://x.dev"),
+        ]))
+        #expect(NotificationCategories.plan(for: relinked)?.id == NotificationCategories.plan(for: try v2("inform-full"))?.id)
+
+        var reordered = ask
+        reordered.content = .ask(AskBlock(options: ["Reject", "Approve", "Wait"], allowText: true, replyPlaceholder: "Reply…"))
+        var noReply = ask
+        noReply.content = .ask(AskBlock(options: ["Approve", "Reject", "Wait"]))
+        let links = try v2("inform-full")
+        let ids = [ask, reordered, noReply, links].compactMap { NotificationCategories.plan(for: $0)?.id }
+        #expect(Set(ids).count == 4)
     }
 
-    @Test func actionIdentifierMapping() {
-        #expect(NotificationCategories.actionIdentifier(for: "ack") == "oyee.action.ack")
-        #expect(NotificationCategories.oyeeActionId(from: "oyee.action.ack") == "ack")
-        #expect(NotificationCategories.oyeeActionId(from: "something") == nil)
+    @Test func buttonIdentifiersMapBack() {
+        #expect(NotificationCategories.answerOption(from: "oyee.answer.Ship it") == "Ship it")
+        #expect(NotificationCategories.answerOption(from: "oyee.link.0") == nil)
+        #expect(NotificationCategories.linkIndex(from: "oyee.link.2") == 2)
+        #expect(NotificationCategories.linkIndex(from: "oyee.link.x") == nil)
+        #expect(NotificationCategories.linkIndex(from: "oyee.answer.0") == nil)
     }
 }
 
 @Suite("Rendering")
 struct RenderingTests {
     @Test func progressTextMatchesSchema() {
-        #expect(Rendering.progressText(Progress(value: 3, max: 7)) == "▓▓▓▓░░░░░░ 3/7")
-        #expect(Rendering.progressText(Progress(value: 50)) == "▓▓▓▓▓░░░░░ 50%")
-        #expect(Rendering.progressText(Progress(value: 0)) == "░░░░░░░░░░ 0%")
-        #expect(Rendering.progressText(Progress(value: 150)) == "▓▓▓▓▓▓▓▓▓▓ 100%")
-        #expect(Rendering.progressText(Progress(value: 3, max: 7, label: "3/7 checks")) == "▓▓▓▓░░░░░░ 3/7 checks")
+        #expect(Rendering.progressText(ProgressBlock(value: 3, max: 7)) == "▓▓▓▓░░░░░░ 3/7")
+        #expect(Rendering.progressText(ProgressBlock(value: 50)) == "▓▓▓▓▓░░░░░ 50%")
+        #expect(Rendering.progressText(ProgressBlock(value: 0)) == "░░░░░░░░░░ 0%")
+        #expect(Rendering.progressText(ProgressBlock(value: 150)) == "▓▓▓▓▓▓▓▓▓▓ 100%")
+        #expect(Rendering.progressText(ProgressBlock(value: 3, max: 7, label: "3/7 checks")) == "▓▓▓▓░░░░░░ 3/7 checks")
         // Math.round(2.5) == 3 in JS (round half up).
-        #expect(Rendering.progressText(Progress(value: 0.25, max: 1)) == "▓▓▓░░░░░░░ 0.25/1")
-        #expect(Rendering.progressText(Progress(value: 12.5)) == "▓░░░░░░░░░ 13%")
-        #expect(Rendering.progressText(Progress(value: 1, indeterminate: true)) == "In progress…")
-        #expect(Rendering.progressText(Progress(value: 1, label: "Deploying", indeterminate: true)) == "Deploying")
+        #expect(Rendering.progressText(ProgressBlock(value: 0.25, max: 1)) == "▓▓▓░░░░░░░ 0.25/1")
+        #expect(Rendering.progressText(ProgressBlock(value: 12.5)) == "▓░░░░░░░░░ 13%")
     }
 
-    @Test func systemBodyComposition() throws {
-        let n = try decode(OyeeNotification.self, fixture: "notification_full")
-        #expect(Rendering.systemBody(for: n) == "CPU above 90% for 5m\nRegion: us-east-1\n▓▓▓▓░░░░░░ 3/7 checks")
-        #expect(Rendering.systemTitle(for: n) == "🔥 prod-api CPU high")
+    @Test func systemTextPerIntent() throws {
+        // Same text as the browser popup (apps/web/src/lib/webpush.ts webPushBody).
+        let inform = try v2("inform-full")
+        #expect(Rendering.systemTitle(for: inform) == "💾 Disk 95% full on db-1")
+        #expect(
+            Rendering.systemBody(for: inform)
+                == "Free space is below 5%. See the /var breakdown.\nNext check in 5 minutes.\nHost: db-1\nUsed: 95%")
+        #expect(Rendering.systemBody(for: try v2("inform-minimal")) == "")
 
-        let bare = OyeeNotification(id: "ntf_x", title: "Hi")
-        #expect(Rendering.systemBody(for: bare) == "")
-        let fieldsOnly = OyeeNotification(
-            id: "ntf_y", title: "Hi", fields: [Field(label: "A", value: "1"), Field(label: "B", value: "2")],
-            progress: Progress(value: 1, indeterminate: true))
-        #expect(Rendering.systemBody(for: fieldsOnly) == "A: 1\nB: 2\nIn progress…")
-        let urlIcon = OyeeNotification(id: "ntf_z", title: "Hi", icon: "https://x/icon.png")
-        #expect(Rendering.systemTitle(for: urlIcon) == "Hi")
+        let ask = try v2("ask-open")
+        #expect(Rendering.systemTitle(for: ask) == "Deploy prod-api v1.4.2?")
+        #expect(Rendering.systemBody(for: ask) == "Canary is green. 3 migrations pending.")
+
+        #expect(Rendering.systemBody(for: try v2("progress-running")) == "▓▓▓▓░░░░░░ 3/7 checks")
+        #expect(Rendering.systemBody(for: try v2("progress-running-percent")) == "▓▓▓▓░░░░░░ 40%")
+        #expect(Rendering.systemBody(for: try v2("progress-done")) == "Done · 7/7 checks")
+        #expect(Rendering.systemBody(for: try v2("progress-failed")) == "test:e2e failed.\nFailed · 4/7 checks")
+        #expect(Rendering.systemBody(for: try v2("progress-stopped")) == "Stopped reporting after 40%")
+
+        var urlIcon = inform
+        urlIcon.content = .inform(InformBlock(icon: "https://x/icon.png"))
+        #expect(Rendering.systemTitle(for: urlIcon) == "Disk 95% full on db-1")
     }
 }
 

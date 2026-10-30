@@ -44,7 +44,7 @@ public struct InboxFilter: Sendable, Hashable {
         if unreadOnly, n.isRead { return false }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            let haystack = [n.title, n.body ?? "", n.source, n.threadId ?? ""] + n.tags + n.fields.map(\.value)
+            let haystack = [n.title, n.body ?? "", n.source, n.key ?? ""] + (n.inform?.fields.map(\.value) ?? [])
             if !haystack.contains(where: { $0.localizedCaseInsensitiveContains(q) }) { return false }
         }
         return true
@@ -59,7 +59,9 @@ public struct InboxFilter: Sendable, Hashable {
 
 /// On-disk cache so the inbox shows instantly on launch.
 struct InboxCache: Codable {
-    var version = 1
+    /// 2 = protocol v2 (intent blocks). A cache from an older build is dropped and refilled by a fresh sync.
+    static let currentVersion = 2
+    var version = currentVersion
     var notifications: [OyeeNotification]
     var syncState: SyncState
 }
@@ -133,7 +135,8 @@ public final class InboxStore {
 
     public func loadCache() {
         guard let cacheURL, let data = try? Data(contentsOf: cacheURL),
-              let cache = try? OyeeJSON.makeDecoder().decode(InboxCache.self, from: data)
+              let cache = try? OyeeJSON.makeDecoder().decode(InboxCache.self, from: data),
+              cache.version == InboxCache.currentVersion
         else { return }
         for n in cache.notifications { byId[n.id] = n }
         syncState = cache.syncState
@@ -206,7 +209,7 @@ public final class InboxStore {
             guard upsert(n) else { return nil }
             syncState.observe([n])
             if n.wantsSystemNotification && targetedHere(n) {
-                sink?.present(n, alert: isNew && !n.silent)
+                sink?.present(n, alert: isNew && !n.arrivesQuietly)
             }
             hasLoaded = true
             scheduleSave()
@@ -218,7 +221,7 @@ public final class InboxStore {
             } else if !targetedHere(n) {
                 break
             } else if alert {
-                sink?.present(n, alert: !n.silent)
+                sink?.present(n, alert: !n.arrivesQuietly)
             } else {
                 sink?.replaceIfShowing(n)
             }
@@ -273,7 +276,7 @@ public final class InboxStore {
         if postNew {
             let newestFirst = newOnes.sorted { $0.createdAt > $1.createdAt }
             for (index, n) in newestFirst.enumerated() {
-                sink?.present(n, alert: index == 0 && !n.silent)
+                sink?.present(n, alert: index == 0 && !n.arrivesQuietly)
             }
         }
         scheduleSave()
@@ -377,26 +380,28 @@ public final class InboxStore {
 
     // MARK: - Actions
 
-    /// Taps an action button: URL actions open the URL; others `POST …/respond { actionId }`.
-    public func perform(_ action: Action, on n: OyeeNotification) async {
-        if let url = action.openURL {
-            openURL(url)
-            return
-        }
-        await respond(id: n.id, actionId: action.id, text: nil)
+    /// Taps an ask's answer button: `POST …/respond { option }`.
+    public func answer(_ option: String, to n: OyeeNotification) async {
+        await respond(id: n.id, option: option, text: nil)
     }
 
+    /// Sends a free-text answer to an ask: `POST …/respond { text }`.
     public func reply(_ text: String, to n: OyeeNotification) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        await respond(id: n.id, actionId: nil, text: String(trimmed.prefix(2000)))
+        await respond(id: n.id, option: nil, text: String(trimmed.prefix(2000)))
     }
 
-    public func respond(id: String, actionId: String?, text: String?) async {
+    /// Answers an open ask. The first answer from any device wins: when another device (or the expiry) got there
+    /// first the server says `409 conflict`, so the card is refreshed to show what happened and the message is kept.
+    public func respond(id: String, option: String?, text: String?) async {
         guard let api, !OyeeNotification.isLocalTest(id: id) else { return }
         do {
-            let updated = try await api.respond(id: id, actionId: actionId, text: text)
+            let updated = try await api.respond(id: id, option: option, text: text)
             accept(updated)
+        } catch let error as OyeeAPIError where error.status == 409 {
+            _ = await fetch(id: id)
+            lastError = error.localizedDescription
         } catch {
             handle(error, id: id)
         }

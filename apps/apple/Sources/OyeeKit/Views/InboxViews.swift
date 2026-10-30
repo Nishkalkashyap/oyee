@@ -151,7 +151,12 @@ public struct InboxListView: View {
                 if expanded.contains(stack.id) { expanded.remove(stack.id) } else { expanded.insert(stack.id) }
             }
         }
-        if section.kind == .needsYou { QuickAnswer(notification: head, store: store) }
+        if section.kind == .needsYou {
+            // A question's buttons right in the list, so answering doesn't need a detour through the conversation.
+            AnswerButtons(notification: head, store: store, onReply: { selection = head.id })
+                .padding(.leading, 68)
+                .padding(.bottom, 6)
+        }
         if isOpen {
             ForEach(stack.items.dropFirst()) { n in
                 row(n, child: true, resolveAll: [n])
@@ -341,36 +346,6 @@ struct ResolvableRow: View {
     }
 }
 
-/// A question's buttons right in the list, so answering doesn't need a detour through the conversation.
-struct QuickAnswer: View {
-    let notification: OyeeNotification
-    let store: InboxStore
-    @ViewState private var busy: String?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(notification.actions.filter { $0.url == nil }.enumerated()), id: \.element.id) { i, action in
-                Button {
-                    busy = action.id
-                    Task {
-                        await store.perform(action, on: notification)
-                        busy = nil
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        if busy == action.id { ProgressView().controlSize(.mini) }
-                        Text(action.label)
-                    }
-                }
-                .buttonStyle(PillButtonStyle(action.style == .destructive ? .destructive : i == 0 ? .primary : .secondary, size: .small))
-                .disabled(busy != nil)
-            }
-        }
-        .padding(.leading, 68)
-        .padding(.bottom, 6)
-    }
-}
-
 /// A light-blue pill with an ×.
 struct RemovablePill: View {
     let title: String
@@ -439,9 +414,7 @@ public struct NotificationDetailView: View {
                     if n.version > 1, n.updatedAt != n.createdAt {
                         Text("Updated \(RelativeTime.named(n.updatedAt)) · v\(n.version)").systemLine()
                     }
-                    ForEach(Array(n.responses.enumerated()), id: \.offset) { _, response in
-                        responseBubble(response)
-                    }
+                    if let answer = n.ask?.answer { answerBubble(answer) }
                     if n.isResolved, let at = n.resolvedAt {
                         Label("Resolved \(RelativeTime.named(at))", systemImage: "checkmark").systemLine()
                     }
@@ -450,8 +423,9 @@ public struct NotificationDetailView: View {
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
             }
-            if let reply = n.reply, n.status == .active {
-                ReplyComposer(placeholder: reply.placeholder ?? "Reply to \(n.source)…") { text in
+            // An open ask that takes text: the conversation's composer is its reply box.
+            if let placeholder = AskCardModel(n).replyPlaceholder {
+                ReplyComposer(placeholder: placeholder) { text in
                     await store.reply(text, to: n)
                 }
                 .padding(.horizontal, 16)
@@ -501,12 +475,13 @@ public struct NotificationDetailView: View {
         } else {
             parts.append("All devices")
         }
-        if let thread = n.threadId { parts.append(thread) }
+        if let key = n.key { parts.append(key) }
         return parts.joined(separator: " · ")
     }
 
-    private func responseBubble(_ r: Response) -> some View {
-        let label = r.actionId.flatMap { id in n.actions.first(where: { $0.id == id })?.label ?? id }
+    /// The answer to an ask, as the user's light-blue bubble on the right with the device it came from.
+    private func answerBubble(_ r: AskAnswer) -> some View {
+        let label = r.option
         return VStack(alignment: .trailing, spacing: 4) {
             (Text(label ?? "").font(.oyee(14.5, .semibold))
                 + Text(label != nil && r.text != nil ? " · " : "").font(.oyee(14.5))

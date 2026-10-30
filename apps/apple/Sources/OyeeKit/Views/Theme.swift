@@ -109,6 +109,10 @@ public enum OyeeFonts {
                 break
             }
         }
+        // Registered some other way (e.g. by a screenshot test from the repo's Resources/Fonts).
+        if !ok, let families = CTFontManagerCopyAvailableFontFamilyNames() as? [String] {
+            ok = families.contains("Figtree")
+        }
         registered = ok
         return ok
     }

@@ -5,62 +5,68 @@ import Testing
 
 @Suite("Inbox sections")
 struct InboxSectionsTests {
-    let yes = Action(id: "yes", label: "Yes")
-
-    func n(_ id: String, source: String = "test", title: String? = nil, thread: String? = nil) -> OyeeNotification {
-        OyeeNotification(id: id, source: source, threadId: thread, title: title ?? "Title \(id)")
+    func inform(_ id: String, source: String = "test", key: String? = nil, title: String? = nil) -> OyeeNotification {
+        OyeeNotification(id: id, source: source, key: key, title: title ?? "Title \(id)")
     }
 
-    @Test func needsAnswer() {
-        var a = n("a"); a.actions = [yes]
-        #expect(a.needsAnswer)
-        var b = n("b"); b.reply = Reply(placeholder: nil, buttonLabel: nil)
-        #expect(b.needsAnswer)
-        #expect(!n("c").needsAnswer)
-        var d = n("d"); d.actions = [Action(id: "open", label: "Open", url: "https://x.dev")]
-        #expect(!d.needsAnswer)
-        var e = a; e.responses = [Response(actionId: "yes", text: nil, deviceId: nil, deviceName: nil, at: Date())]
-        #expect(!e.needsAnswer)
-        var f = a; f.status = .resolved
-        #expect(!f.needsAnswer)
+    func ask(_ id: String, _ state: AskState, key: String? = nil) -> OyeeNotification {
+        OyeeNotification(id: id, key: key, title: "Ask", content: .ask(AskBlock(options: ["Yes"], state: state)))
     }
 
-    @Test func inProgress() {
-        var a = n("a"); a.progress = Progress(value: 2, max: 7)
-        #expect(a.isInProgress)
-        var b = n("b"); b.progress = Progress(value: 7, max: 7)
-        #expect(!b.isInProgress)
-        var c = n("c"); c.progress = Progress(value: 0, indeterminate: true)
-        #expect(c.isInProgress)
+    func progress(_ id: String, _ state: ProgressState, key: String = "job") -> OyeeNotification {
+        OyeeNotification(id: id, key: key, title: "Job", content: .progress(ProgressBlock(value: 1, state: state)))
     }
 
-    @Test func orderAndRunningJobs() {
-        var p = n("p1"); p.progress = Progress(value: 1, max: 3); p.actions = [yes]
-        var q = n("q1"); q.actions = [yes]
-        let s = InboxSection.split([n("u1"), p, q])
+    @Test func sharedFixturesLandInTheirSections() throws {
+        let names = [
+            "ask-open", "progress-running", "inform-full", "ask-expired", "progress-stopped", "progress-done",
+            "progress-failed", "ask-answered-option", "ask-withdrawn", "inform-minimal",
+        ]
+        let s = InboxSection.split(try names.map(v2))
         #expect(s.map(\.kind) == [.needsYou, .inProgress, .updates])
-        #expect(s[0].stacks.map(\.head.id) == ["q1"])
-        #expect(s[1].stacks.map(\.head.id) == ["p1"])
-        #expect(InboxSection.split([n("only")]).map(\.kind) == [.updates])
+        #expect(s.map(\.title) == ["Needs you", "In progress", "Updates"])
+        #expect(s[0].stacks.map(\.head.id) == ["ntf_01JBXA0000000000000000ASK1"])
+        #expect(s[1].stacks.map(\.head.id) == ["ntf_01JBXA0000000000000000PRG1", "ntf_01JBXA0000000000000000PRG5"])
+        #expect(s[2].stacks.count == 7)
     }
 
-    @Test func stacking() {
+    @Test func sectionsFollowIntentAndStateOnly() {
+        // Open asks need you; running and stopped progress are in progress; answered, expired and withdrawn asks,
+        // finished progress and every inform are updates.
         let s = InboxSection.split([
-            n("w1", source: "archiver", title: "Warning"),
-            n("t1", thread: "deploy"),
-            n("w2", source: "archiver", title: "Warning"),
-            n("x", source: "other", title: "Warning"),
-            n("t2", title: "Something else", thread: "deploy"),
+            inform("i"), ask("open", .open), ask("answered", .answered), ask("expired", .expired),
+            ask("withdrawn", .withdrawn), progress("running", .running, key: "a"), progress("stopped", .stopped, key: "b"),
+            progress("done", .done, key: "c"), progress("failed", .failed, key: "d"),
+        ])
+        #expect(s.map { $0.stacks.flatMap { $0.items.map(\.id) } } == [
+            ["open"], ["running", "stopped"], ["i", "answered", "expired", "withdrawn", "done", "failed"],
+        ])
+        #expect(InboxSection.split([inform("only")]).map(\.kind) == [.updates])
+        #expect(InboxSection.split([]).isEmpty)
+    }
+
+    @Test func updatesStackBySourceAndKeyElseSourceAndTitle() {
+        let s = InboxSection.split([
+            inform("w1", source: "archiver", title: "Warning"),
+            inform("k1", source: "disk", key: "db1", title: "Disk 90%"),
+            inform("w2", source: "archiver", title: "Warning"),
+            inform("x", source: "other", title: "Warning"),
+            inform("k2", source: "disk", key: "db1", title: "Disk 95%"),
+            inform("k3", source: "elsewhere", key: "db1", title: "Disk 95%"),
         ])
         #expect(s.count == 1)
-        #expect(s[0].stacks.map { $0.items.map(\.id) } == [["w1", "w2"], ["t1", "t2"], ["x"]])
+        #expect(s[0].stacks.map { $0.items.map(\.id) } == [["w1", "w2"], ["k1", "k2"], ["x"], ["k3"]])
     }
 
-    @Test func questionsNeverStackAndFlatKeepsRows() {
-        var a = n("a", thread: "t"); a.actions = [yes]
-        var b = n("b", thread: "t"); b.actions = [yes]
-        #expect(InboxSection.split([a, b])[0].stacks.count == 2)
-        #expect(InboxSection.flat([n("a", title: "Same"), n("b", title: "Same")])[0].stacks.map(\.id) == ["a", "b"])
+    @Test func openAsksAndLiveProgressNeverStack() {
+        let s = InboxSection.split([ask("a", .open, key: "q"), ask("b", .open, key: "q"), progress("p1", .running), progress("p2", .stopped)])
+        #expect(s.map { $0.stacks.count } == [2, 2])
+        // Finished progress with one key stacks like any update.
+        #expect(InboxSection.split([progress("d1", .done), progress("d2", .failed)])[0].stacks.map(\.items.count) == [2])
+    }
+
+    @Test func flatKeepsEveryRow() {
+        #expect(InboxSection.flat([inform("a", title: "Same"), inform("b", title: "Same")])[0].stacks.map(\.id) == ["a", "b"])
         #expect(InboxSection.flat([]).isEmpty)
     }
 }
