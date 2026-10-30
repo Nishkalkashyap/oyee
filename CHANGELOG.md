@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Web inbox on intents: **Needs you** lists open asks (answer buttons and Reply right in the list), **In progress**
+  running or stopped progress, **Updates** everything else. Notifications with the same key from the same source stack
+  as one row (without a key: same source and title). Tag chips, tag search, the thread filter and the Templates page
+  are gone (`/templates` redirects to Home). A running progress arrives without an in-app toast.
+- Web Push popup on intents: an open ask shows its first two answer buttons and answers with `{ "option" }`; an inform
+  shows its first two link buttons, which open their URL; a finished or stopped progress says how it ended ("Done ·
+  7/7 checks", "Stopped reporting after 40%"); only a running progress is silent.
 - MCP: agents now see exactly seven tools: `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
   `list_notifications` and `list_devices`. `send_notification`, `update_notification`, `get_notification` and the
   three template tools are gone, and `resolve` replaces `resolve_notification` (on an open ask it withdraws it). The

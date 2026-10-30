@@ -396,6 +396,17 @@ Encrypted (`aes128gcm`) JSON: `{ "type": "notification.created"|"notification.up
 The service worker shows / replaces (`tag` = id) / closes notifications. Web Push is sent only to `web` devices, and only for
 `created`, `updated` with `alert`, and close-worthy changes (read/resolved/deleted).
 
+The browser popup is drawn from the intent block (`public/sw.js`, mirrored by `apps/web/src/lib/webpush.ts`):
+
+- Buttons (browsers show at most two): an open ask shows its first two answer buttons (action `answer:<label>` →
+  `POST …/respond { "option": "<label>" }`; a failure opens the notification in the inbox), then `Reply…` if it takes
+  text and there's room (opens `/inbox/<id>?reply=1`). An inform shows its first two link buttons (action
+  `link:<url>` → open the URL and `POST …/read`; nothing is sent back). Progress and closed asks have no buttons.
+- Body: the markdown-stripped body, then an inform's rows as `Label: value` lines or a progress's line: the text bar
+  while running, `Done · 7/7 checks` / `Failed · 4/7 checks` once finished, `Stopped reporting after 40%` when stopped.
+- Icon and image come from the inform block. `critical` stays on screen (`requireInteraction`). Every severity
+  alerts; only a running progress is shown silently.
+
 ## 9. Platform rendering rules (all clients)
 
 - One system notification per Oyee notification. The system id/tag is derived from the Oyee `id`.
