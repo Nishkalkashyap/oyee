@@ -78,8 +78,10 @@ git tag vX.Y.Z && git push origin vX.Y.Z    # app release (full checklist: docs/
 
 - Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.11**.
 - Verified in production: web (Brave push), Android (Galaxy S23 Ultra), macOS (menu-bar app, self-update).
-- Protocol v2 (notification intents, no flat card) is implemented but not released: app 0.3.0 must ship before the
-  server deploy, because 0.2.x apps only read the flat card.
+- Protocol v2 (notification intents, no flat card) is implemented but not released. 0.2.x apps still decode v2
+  notifications (only `id` is required) and show title, body and the progress bar, but lose icon, image, rows, links
+  and answering asks (old Android also buzzes on the first progress report): ship app 0.3.0 alongside the deploy
+  (recommended, not required).
 - Open follow-ups: PLAN.md §10.
 
 ## Agent skills

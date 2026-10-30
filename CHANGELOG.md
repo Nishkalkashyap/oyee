@@ -11,7 +11,9 @@
   `{ "text" }` and only on asks. The list endpoint drops `threadId`. Each inbox converts its stored notifications
   once (v1 cards to the intent they resemble); converted asks and unfinished progress are resolved, so they leave
   the inbox and the tray and free their key. docs/protocol.md is rewritten as protocol v2. **App builds before
-  0.3.0 read the flat fields, so release 0.3.0 before deploying this.**
+  0.3.0** still decode v2 notifications (their decoders only require `id`) and show title, body and the progress
+  bar; they lose icon, image, rows, links and answering asks, and Android 0.2.x buzzes on the first progress report.
+  Shipping 0.3.0 alongside this deploy is recommended, not required.
 - Web: cards, mock mode, the Send preview and the landing demo are intent-only; the token snippets use `key`,
   `cooldown` and progress intents. An open ask past its expiry leaves Needs you right away. Search also matches an
   ask's answer buttons and a progress's label, as on the server.
@@ -110,7 +112,8 @@
 
 ## Unreleased (apps, next release: 0.3.0)
 - **Protocol v2 only.** The apps read nothing but the intent blocks, so they keep working once the server stops
-  sending the flat card (and 0.2.x builds don't: release this before that server deploy). An ask that takes text
+  sending the flat card. (0.2.x builds keep showing title, body and the progress bar from v2 notifications, but not
+  icon, image, rows, links or answer buttons; shipping this alongside that server deploy is recommended.) An ask that takes text
   without a reply placeholder shows the app's own "Reply…". Android drops indeterminate progress.
 - macOS on intents: the Mac app reads the intent-shaped notification and draws one card per intent. An **inform**
   shows its icon, severity, body, rows and up to three link buttons. An **ask** says how long it has waited and when

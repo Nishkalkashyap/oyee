@@ -229,8 +229,10 @@ M1 is implemented. Live at **https://oyee.app**. Latest app release: **v0.2.11**
 procedures: [docs/operations.md](docs/operations.md).
 
 **Notification intents (protocol v2)** are implemented on every client and the flat card is removed
-(docs/protocol.md, `.scratch/notification-intents/`). Not yet released or deployed: app 0.3.0 has to ship before the
-server deploy, because 0.2.x app builds only read the flat card.
+(docs/protocol.md, `.scratch/notification-intents/`). Not yet released or deployed. 0.2.x app builds still decode v2
+notifications (their decoders only require `id`) and show title, body and the progress bar; they lose icon, image,
+rows, links and answering asks, and Android 0.2.x buzzes on the first progress report. Shipping app 0.3.0 alongside
+the server deploy is recommended, not required.
 
 ### Platforms
 
