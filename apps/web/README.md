@@ -53,9 +53,10 @@ src/
   lib/webpush.ts, push.ts    Web Push presentation (mirrors public/sw.js) and subscription helpers
   lib/snippets.ts            Claude Code / Codex / JSON / curl / Home Assistant / Alertmanager / Grafana / GH Actions
   lib/composer.ts, card.ts   composer → SendNotificationInput, template rendering for previews
+  lib/inform.ts              the inform card's view model (severity, rows, ≤ 3 safe link buttons, tap target)
   lib/inbox.ts               inbox sections (Needs you / In progress / Updates) and stacking of repeats
   lib/useWebPush.ts          this browser as a push target (on / off / blocked / unavailable)
-  components/                NotificationCard, PlatformPreviews, CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
+  components/                NotificationCard (InformCard for informs), PlatformPreviews, CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
   pages/                     Landing (signed-out `/` and `/login`), Home (`/`), Inbox (+ detail), Templates, Send
 public/sw.js                 service worker: push → showNotification / close, notificationclick → respond / read / open
 ```

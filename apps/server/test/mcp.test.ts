@@ -54,6 +54,7 @@ describe("MCP", () => {
         "ask",
         "delete_template",
         "get_notification",
+        "inform",
         "list_devices",
         "list_notifications",
         "list_templates",

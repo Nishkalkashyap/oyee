@@ -310,6 +310,59 @@ export const ListNotificationsQuery = z.object({
 });
 export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuery>;
 
+// ─── Intent inputs (protocol v2): one set of shared fields, one schema per intent ─
+// Each is a flat object (no oneOf) because it is also an MCP tool's input schema; every field is described.
+
+/** Fields every intent input shares, with the same names for every sender. */
+export const IntentInputShared = {
+  title: z.string().min(1).max(200).describe("Headline, at most 200 characters. The only required field."),
+  body: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Detail in markdown (bold, italic, `code`, links, line breaks), at most 4000 characters."),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification."),
+  key: Key.optional().describe(
+    "Names this notification so a later send with the same key (from the same source) updates it instead of creating a duplicate.",
+  ),
+  source: z.string().min(1).max(64).optional().describe("Who is sending, shown on the card. Defaults to the token's name."),
+  devices: z
+    .array(z.string().min(1).max(64))
+    .max(20)
+    .optional()
+    .describe('Alert only these devices: names or ids from list_devices (a unique partial name such as "macbook" works). Default: every device.'),
+  platforms: z
+    .array(Platform)
+    .max(4)
+    .optional()
+    .describe("Alert only devices on these platforms; combined with `devices` as a union."),
+};
+
+/** Something the user should know. */
+export const InformInput = z.object({
+  ...IntentInputShared,
+  severity: IntentSeverity.optional().describe(
+    "How urgently the user needs this. info: routine news (default). success: something finished well. " +
+      "warning: needs attention soon. critical: broken now, act immediately. Every severity alerts.",
+  ),
+  links: z.array(LinkButton).max(3).optional().describe("Up to 3 link buttons (label + url), e.g. the PR, the build log, a dashboard."),
+  fields: z.array(Field).max(10).optional().describe("Up to 10 label/value rows for structured facts (region, duration, commit)."),
+  image: httpsUrl
+    .refine((u) => u.startsWith("https://"), "image must be an https URL")
+    .optional()
+    .describe("https URL of an image shown on the card, such as a chart or screenshot."),
+  icon: z.string().min(1).max(2048).optional().describe("An emoji or an https image URL shown next to the title."),
+});
+export type InformInput = z.infer<typeof InformInput>;
+
+/**
+ * What a send did. `created`: a new notification, alerted. `alerted`: the keyed one was updated and alerted again.
+ * `updated_silently`: updated without alerting (inside the cooldown). `suppressed`: nothing changed. `reused` (ask): an
+ * open ask with the same key was returned instead.
+ */
+export const SendOutcome = z.enum(["created", "updated_silently", "alerted", "suppressed", "reused"]);
+export type SendOutcome = z.infer<typeof SendOutcome>;
+
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 export const TemplateName = z.string().regex(/^[a-z0-9_-]{1,64}$/);

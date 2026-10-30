@@ -248,6 +248,7 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 
 | Tool | Input | Output (JSON text content) |
 |---|---|---|
+| `inform` | `InformInput` (below) | text: `outcome: …`, `id: …` and a sentence (below) |
 | `send_notification` | `SendNotificationInput` | `Notification` |
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
@@ -264,6 +265,23 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
 `ask` options become actions with ids `option_1..3` and labels set to the option text. Each `resolves: true`. `allowText` adds `reply`.
+
+**`inform`** (something the user should know; one-way). `InformInput`: `title` (required, ≤ 200), `body?` (markdown,
+≤ 4000), `severity?` (`info` default \| `success` \| `warning` \| `critical`; every severity alerts), `url?` (opens on
+tap), `key?` (≤ 128), `source?` (default: the token's name), `devices?`, `platforms?`, `links?` (≤ 3 link buttons
+`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL).
+Keys are unique per `(source, key)`: with a key whose latest notification is an active inform, that one is updated in
+place (same id, `version` + 1, unread again) and alerts again (`outcome: alerted`); otherwise a new inform is created
+and alerts (`outcome: created`). Another source using the same key gets its own notification. The result is text:
+
+```
+outcome: alerted
+id: ntf_01J…
+Updated the notification with key "disk-db1" in place and alerted the user's devices again.
+```
+
+Until the flat card is removed, an inform also carries the flat fields: `links` become link `actions`
+(`link_1..3`, `url` set), and `fields`, `image`, `icon` are copied, so app builds from before intents still draw it.
 
 ---
 

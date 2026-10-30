@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased (server and web)
+- MCP: new `inform` tool for one-way notifications (title, markdown body, severity, url, up to 3 link buttons, up to
+  10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
+  and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
+  in plain text. The older tools keep working for now.
+- Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
+  image and link buttons, with where a tap goes shown as the host.
 - Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
   `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
   sends get the intent they most resemble and existing notifications are converted once; the flat card fields are
