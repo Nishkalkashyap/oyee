@@ -9,6 +9,7 @@ import app.oyee.android.model.NotificationStatus
 import app.oyee.android.model.OyeeJson
 import app.oyee.android.model.Page
 import app.oyee.android.model.PairResult
+import app.oyee.android.model.ProgressBlock
 import app.oyee.android.model.ProgressState
 import app.oyee.android.model.ServerMessage
 import app.oyee.android.model.Severity
@@ -112,9 +113,10 @@ class ModelsTest {
         assertEquals(Severity.INFO, n.severity) // `debug` is gone: it reads as info
         assertEquals(NotificationStatus.ACTIVE, n.status)
         assertEquals(AskState.OPEN, n.ask!!.state)
-        val p = n.progress!!
+        val p: ProgressBlock = n.progress!!
         assertEquals(100.0, p.max, 0.0) // max default 100
         assertEquals(ProgressState.RUNNING, p.state)
+        assertEquals("30m", p.staleAfter) // the schema's default (LIMITS.defaultStaleAfter), as in Swift
         assertNull(n.body)
         assertNull(n.key)
     }

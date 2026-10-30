@@ -1,7 +1,7 @@
 package app.oyee.android.util
 
 import app.oyee.android.model.Field
-import app.oyee.android.model.Progress
+import app.oyee.android.model.ProgressBlock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -17,7 +17,7 @@ object Formatting {
     /**
      * Port of `progressText` from @oyee/schema: "▓▓▓░░░░░░░ 3/7", "▓▓▓▓▓░░░░░ 50%" or "▓▓▓▓░░░░░░ 3/7 checks".
      */
-    fun progressText(p: Progress): String {
+    fun progressText(p: ProgressBlock): String {
         val max = p.max
         val ratio = if (max > 0) (p.value / max).coerceIn(0.0, 1.0) else 0.0
         val filled = Math.round(ratio * 10).toInt()
@@ -27,14 +27,14 @@ object Formatting {
     }
 
     /** Short progress description without the bar, e.g. "3/7 checks" / "42%". */
-    fun progressLabel(p: Progress): String {
+    fun progressLabel(p: ProgressBlock): String {
         p.label?.let { return it }
         val ratio = if (p.max > 0) (p.value / p.max).coerceIn(0.0, 1.0) else 0.0
         return if (p.max == 100.0) "${Math.round(ratio * 100)}%" else "${number(p.value)}/${number(p.max)}"
     }
 
     /** Native progress values as ints for Notification APIs (scaled to keep precision for fractional max). */
-    fun progressInts(p: Progress): Pair<Int, Int> {
+    fun progressInts(p: ProgressBlock): Pair<Int, Int> {
         if (p.max <= 0) return 0 to 0
         val scale = if (p.max < 100 && p.max != Math.floor(p.max)) 100.0 else 1.0
         val max = (p.max * scale).roundToLong().coerceIn(1, Int.MAX_VALUE.toLong()).toInt()

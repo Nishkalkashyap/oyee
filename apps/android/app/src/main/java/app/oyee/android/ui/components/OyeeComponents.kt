@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.oyee.android.R
-import app.oyee.android.model.Progress
+import app.oyee.android.model.ProgressBlock
 import app.oyee.android.model.Severity
 import app.oyee.android.ui.cards.severityLabel
 import app.oyee.android.ui.theme.Oyee
@@ -194,7 +194,7 @@ fun SeverityPill(severity: Severity) {
 
 /** Ink progress bar (or [color] once a progress ended). */
 @Composable
-fun InkProgress(p: Progress, modifier: Modifier = Modifier, height: Dp = 6.dp, color: Color = Oyee.colors.foreground) {
+fun InkProgress(p: ProgressBlock, modifier: Modifier = Modifier, height: Dp = 6.dp, color: Color = Oyee.colors.foreground) {
     val c = Oyee.colors
     BoxWithConstraints(modifier.fillMaxWidth().height(height).clip(CircleShape).background(c.accent)) {
         val frac = if (p.max > 0) (p.value / p.max).toFloat().coerceIn(0f, 1f) else 0f

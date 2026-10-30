@@ -293,7 +293,7 @@ fun ProgressCard(n: Notification, onOpenUrl: (String) -> Unit, footer: (@Composa
             if (!ended) Text("Updated ${Formatting.relative(p.lastReportAt ?: n.updatedAt)}", style = MaterialTheme.typography.bodySmall, color = c.muted)
             if (v.state == ProgressState.STOPPED) {
                 Text(
-                    "No report for over ${p.staleAfter ?: "a while"}. It picks up again if ${n.source} reports.",
+                    "No report for over ${p.staleAfter}. It picks up again if ${n.source} reports.",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.secondaryLabel,
                 )

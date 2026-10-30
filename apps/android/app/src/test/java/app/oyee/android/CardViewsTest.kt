@@ -3,7 +3,7 @@ package app.oyee.android
 import app.oyee.android.model.AskState
 import app.oyee.android.model.Field
 import app.oyee.android.model.LinkButton
-import app.oyee.android.model.Progress
+import app.oyee.android.model.ProgressBlock
 import app.oyee.android.model.ProgressState
 import app.oyee.android.model.Severity
 import app.oyee.android.ui.cards.AskOption
@@ -107,9 +107,9 @@ class CardViewsTest {
 
     @Test
     fun `stopped reporting names the last label, else the rounded percent`() {
-        assertEquals("Stopped reporting after 3/7 checks", stoppedReportingLabel(Progress(value = 3.0, max = 7.0, label = "3/7 checks")))
-        assertEquals("Stopped reporting after 43%", stoppedReportingLabel(Progress(value = 3.0, max = 7.0)))
-        assertEquals("Stopped reporting after 0%", stoppedReportingLabel(Progress(value = 5.0, max = 0.0)))
+        assertEquals("Stopped reporting after 3/7 checks", stoppedReportingLabel(ProgressBlock(value = 3.0, max = 7.0, label = "3/7 checks")))
+        assertEquals("Stopped reporting after 43%", stoppedReportingLabel(ProgressBlock(value = 3.0, max = 7.0)))
+        assertEquals("Stopped reporting after 0%", stoppedReportingLabel(ProgressBlock(value = 5.0, max = 0.0)))
     }
 
     @Test

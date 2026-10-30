@@ -104,15 +104,16 @@ data class AskBlock(
     val state: AskState = AskState.OPEN,
 )
 
-/** The progress block. */
+/** The progress block (schema `ProgressBlock`). */
 @Serializable
-data class Progress(
+data class ProgressBlock(
     val value: Double = 0.0,
     val max: Double = 100.0,
     val label: String? = null,
     val state: ProgressState = ProgressState.RUNNING,
-    /** How long the progress may go quiet before it counts as stopped, e.g. "30m". */
-    val staleAfter: String? = null,
+    /** How long the progress may go quiet before it counts as stopped, e.g. "30m" (the schema's default). */
+    val staleAfter: String = "30m",
+    /** When the sender last reported. Always sent by the server; null only for a malformed payload. */
     val lastReportAt: String? = null,
 )
 
@@ -139,7 +140,7 @@ data class Notification(
     // Exactly one block, named after the intent.
     val inform: InformBlock? = null,
     val ask: AskBlock? = null,
-    val progress: Progress? = null,
+    val progress: ProgressBlock? = null,
 ) {
     /** Whether this device should show a system notification. Every device still lists it in the inbox. */
     fun isTargetedAt(deviceId: String?): Boolean = targetDeviceIds == null || deviceId == null || deviceId in targetDeviceIds

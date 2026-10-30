@@ -5,7 +5,7 @@ import app.oyee.android.model.Field
 import app.oyee.android.model.InformBlock
 import app.oyee.android.model.LinkButton
 import app.oyee.android.model.Notification
-import app.oyee.android.model.Progress
+import app.oyee.android.model.ProgressBlock
 import app.oyee.android.model.ProgressState
 import app.oyee.android.model.Severity
 import app.oyee.android.util.Formatting
@@ -118,12 +118,12 @@ data class ProgressView(
  * Port of `stoppedReportingLabel` from @oyee/schema: "Stopped reporting after <last label or rounded percent>", e.g.
  * "Stopped reporting after 3/7 checks" or "Stopped reporting after 40%".
  */
-fun stoppedReportingLabel(p: Progress): String {
+fun stoppedReportingLabel(p: ProgressBlock): String {
     val ratio = if (p.max > 0) (p.value / p.max).coerceIn(0.0, 1.0) else 0.0
     return "Stopped reporting after ${p.label ?: "${Math.round(ratio * 100)}%"}"
 }
 
-fun progressView(p: Progress): ProgressView {
+fun progressView(p: ProgressBlock): ProgressView {
     val max = if (p.max > 0) p.max else 100.0
     val percent = if (p.value.isFinite()) (p.value / max * 100).coerceIn(0.0, 100.0) else 0.0
     val (label, tone) = when (p.state) {

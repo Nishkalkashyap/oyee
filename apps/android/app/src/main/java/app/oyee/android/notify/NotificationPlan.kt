@@ -2,7 +2,7 @@ package app.oyee.android.notify
 
 import app.oyee.android.model.Intent
 import app.oyee.android.model.Notification
-import app.oyee.android.model.Progress
+import app.oyee.android.model.ProgressBlock
 import app.oyee.android.model.ProgressState
 import app.oyee.android.ui.cards.askView
 import app.oyee.android.ui.cards.informView
@@ -67,7 +67,7 @@ object NotificationPlan {
         n.shouldDismissSystemNotification || (n.intent == Intent.ASK && !askView(n, now).open)
 
     /** The progress line in the notification text, as in the browser popup: the text bar while running, then the outcome. */
-    fun progressLine(p: Progress?): String? = when (p?.state) {
+    fun progressLine(p: ProgressBlock?): String? = when (p?.state) {
         null -> null
         ProgressState.RUNNING -> Formatting.progressText(p)
         ProgressState.DONE -> "Done · ${Formatting.progressLabel(p)}"
