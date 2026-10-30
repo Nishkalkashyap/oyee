@@ -32,7 +32,7 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## Next app release (Android and macOS)
+## 0.2.11
 - Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;
   repeats of the same thread, or source + title, stack into one row with a count. The filter chips and status tabs
   are gone; Resolved is a row at the end of the list.

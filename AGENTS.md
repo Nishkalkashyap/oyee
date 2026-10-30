@@ -74,8 +74,8 @@ git tag vX.Y.Z && git push origin vX.Y.Z    # app release (full checklist: docs/
 - Limits and quotas live in one place: `LIMITS` / `QUOTAS` in `packages/schema/src/index.ts`.
 - Web UI can be checked without a backend in mock mode: `pnpm --filter @oyee/web dev`, open `/?mock=1`.
 
-## Current state (2026-10-29)
+## Current state (2026-10-30)
 
-- Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.10**.
+- Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.11**.
 - Verified in production: web (Brave push), Android (Galaxy S23 Ultra), macOS (menu-bar app, self-update).
 - Open follow-ups: PLAN.md §10.
