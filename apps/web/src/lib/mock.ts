@@ -30,7 +30,7 @@ const HOUR = 60 * MIN;
 
 const user: User = { id: "usr_mock", email: "demo@oyee.dev", name: "Demo User", avatarUrl: null };
 
-function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, msAgo: number): Notification {
+function base(partial: Partial<FlatNotification> & Pick<Notification, "title"> & { key?: string | null }, msAgo: number): Notification {
   const at = iso(msAgo);
   return inferIntent({
     id: `ntf_${ulid()}`,
@@ -57,6 +57,11 @@ function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, 
     responses: [],
     ...partial,
   });
+}
+
+/** Marks a progress as stopped reporting (the server does this when its sender goes quiet past `staleAfter`). */
+function stopped(n: Notification): Notification {
+  return n.intent === "progress" ? { ...n, severity: "warning", progress: { ...n.progress, state: "stopped" } } : n;
 }
 
 function fixtures(): Notification[] {
@@ -197,6 +202,8 @@ function fixtures(): Notification[] {
       { title: "Running the test suite", source: "claude-code", silent: true, progress: { value: 3, max: 7, label: "3/7 checks", indeterminate: false } },
       2 * MIN,
     ),
+    // A progress whose agent went quiet: it stays under In progress, marked "Stopped reporting after 40%".
+    stopped(base({ title: "Refactoring the auth module", source: "claude-code", key: "refactor-auth", progress: { value: 40, max: 100, indeterminate: false } }, 70 * MIN)),
     base(
       {
         title: "CI on main",
@@ -219,11 +226,12 @@ function fixtures(): Notification[] {
       },
       35 * MIN,
     ),
-    // The same periodic alert, several times: the inbox stacks these into one row.
+    // The same periodic alert under one key, several times: the inbox stacks these into one row.
     ...[40, 100, 160, 220].map((min, i) =>
       base(
         {
-          title: "Archiver lag warning",
+          key: "archiver-lag",
+          title: i === 0 ? "Archiver lag warning" : `Archiver lag warning (${i + 1})`,
           body: `Shared backlog ${740 + i * 12} pending; watermark still stalled. No data-loss risk yet.`,
           source: "ai-gateway-archiver",
           severity: "warning",
@@ -540,7 +548,6 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
       source: url.searchParams.get("source") ?? undefined,
       severity: (url.searchParams.get("severity") ?? undefined) as InboxFilters["severity"],
       status: (url.searchParams.get("status") ?? undefined) as InboxFilters["status"],
-      threadId: url.searchParams.get("threadId") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
     };
     const limit = Number(url.searchParams.get("limit") ?? 50);

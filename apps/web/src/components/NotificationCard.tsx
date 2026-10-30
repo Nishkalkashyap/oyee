@@ -29,7 +29,6 @@ export interface NotificationCardProps {
   inThread?: boolean;
   onAction?: (action: Action) => void;
   onReply?: (text: string) => Promise<unknown> | void;
-  onThreadClick?: (threadId: string) => void;
   onSourceClick?: (source: string) => void;
   pendingActionId?: string | null;
   busy?: { reply?: boolean };
@@ -52,7 +51,6 @@ export function NotificationCard({
   inThread,
   onAction,
   onReply,
-  onThreadClick,
   onSourceClick,
   pendingActionId,
   busy = {},
@@ -86,27 +84,6 @@ export function NotificationCard({
           ) : (
             <span className="font-semibold text-secondary-label">{n.source}</span>
           )}
-          {n.threadId && (
-            <>
-              <span aria-hidden>·</span>
-              {onThreadClick && !preview ? (
-                <button
-                  type="button"
-                  onClick={() => onThreadClick(n.threadId!)}
-                  className="inline-flex items-center gap-1 hover:text-foreground"
-                  title="Show this thread"
-                >
-                  <LayersIcon size={12} />
-                  {n.threadId}
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1">
-                  <LayersIcon size={12} />
-                  {n.threadId}
-                </span>
-              )}
-            </>
-          )}
           <span aria-hidden>·</span>
           <time dateTime={n.createdAt} title={formatDateTime(n.createdAt)}>
             {relativeTime(n.createdAt)}
@@ -123,9 +100,6 @@ export function NotificationCard({
         )}
         {n.silent && <Badge>Silent</Badge>}
         {n.targetDeviceIds && <TargetBadge ids={n.targetDeviceIds} preview={preview} />}
-        {n.tags.map((t) => (
-          <Badge key={t}>#{t}</Badge>
-        ))}
       </div>
 
       <h2 className="mt-2.5 text-[18px] leading-snug font-bold tracking-[-0.02em] break-words">{n.title}</h2>

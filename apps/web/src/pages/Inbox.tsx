@@ -15,7 +15,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   InboxIcon,
-  LayersIcon,
   PlugIcon,
   ReplyIcon,
   SearchIcon,
@@ -38,7 +37,7 @@ function statusFromParam(v: string | null): NotificationStatus | undefined {
   return "active";
 }
 
-type FilterKey = "source" | "severity" | "status" | "thread" | "q";
+type FilterKey = "source" | "severity" | "status" | "q";
 
 function useFilters(): [InboxFilters, (patch: Partial<Record<FilterKey, string | null>>) => void, URLSearchParams] {
   const [params, setParams] = useSearchParams();
@@ -46,7 +45,6 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<FilterKey, string |
     source: params.get("source") ?? undefined,
     severity: (SEVERITIES as string[]).includes(params.get("severity") ?? "") ? (params.get("severity") as Severity) : undefined,
     status: statusFromParam(params.get("status")),
-    threadId: params.get("thread") ?? undefined,
     q: params.get("q") ?? undefined,
   };
   const update = (patch: Partial<Record<FilterKey, string | null>>) => {
@@ -252,16 +250,15 @@ function InboxRow({
               <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", unread ? "text-secondary-label" : "text-zinc-500 dark:text-zinc-400")}>
                 {child ? preview || n.source : `${n.source}${preview ? ` · ${preview}` : ""}`}
               </span>
-              {n.responses.length > 0 && (
-                <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-zinc-500" title={`${n.responses.length} response(s)`}>
+              {n.intent === "ask" && n.ask.answer && (
+                <span className="shrink-0 text-zinc-500" title="Answered">
                   <ReplyIcon size={12} />
-                  {n.responses.length}
                 </span>
               )}
               {n.status === "resolved" && <CheckIcon size={13} className="shrink-0 text-emerald-600" aria-label="Resolved" />}
               {unread && <span className={cx("size-2.5 shrink-0 rounded-full bg-brand", yieldToHover)} aria-label="Unread" />}
             </span>
-            {n.progress && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
+            {n.intent === "progress" && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
           </span>
         </Link>
       </SwipeToResolve>
@@ -286,34 +283,34 @@ function InboxRow({
   );
 }
 
-/** A question's buttons right in the list, so answering doesn't need a detour through the conversation. */
+/** An open ask's answer buttons right in the list, so answering doesn't need a detour through the conversation. */
 function QuickAnswer({ n, href }: { n: Notification; href: string }) {
   const respond = useRespond(n.id);
   const toast = useToast();
-  const buttons = n.actions.filter((a) => !a.url);
+  if (n.intent !== "ask" || n.ask.state !== "open") return null;
   return (
     <div className="flex flex-wrap gap-2 pr-3 pb-2 pl-[68px]">
-      {buttons.map((a, i) => (
+      {n.ask.options.map((option, i) => (
         <Button
-          key={a.id}
+          key={option}
           size="sm"
-          variant={a.style === "destructive" ? "outline-danger" : i === 0 ? "primary" : "secondary"}
-          loading={respond.isPending && respond.variables?.actionId === a.id}
+          variant={i === 0 ? "primary" : "secondary"}
+          loading={respond.isPending && respond.variables?.option === option}
           disabled={respond.isPending}
           onClick={() =>
             respond.mutate(
-              { actionId: a.id },
+              { option },
               {
-                onSuccess: () => toast.success(`Sent “${a.label}”`, n.source),
-                onError: (e) => toast.error("Couldn't send response", errorMessage(e)),
+                onSuccess: () => toast.success(`Sent “${option}”`, n.source),
+                onError: (e) => toast.error("Couldn't send answer", errorMessage(e)),
               },
             )
           }
         >
-          {a.label}
+          {option}
         </Button>
       ))}
-      {n.reply && (
+      {n.ask.allowText && (
         <Link to={`${href}${href.includes("?") ? "&" : "?"}reply=1`} className={buttonClasses("secondary", "sm")}>
           <ReplyIcon size={13} /> Reply
         </Link>
@@ -333,7 +330,7 @@ function NotificationDetail({
   id: string;
   search: string;
   focusReply: boolean;
-  onFilter: (patch: { thread?: string; source?: string }) => void;
+  onFilter: (patch: { source?: string }) => void;
   onResolve: (n: Notification) => void;
   resolving: boolean;
 }) {
@@ -393,6 +390,9 @@ function NotificationDetail({
     );
   };
   const resolved = n.status === "resolved";
+  // The ask's answer (from any device) and whether it still takes a typed one.
+  const answer = n.intent === "ask" ? n.ask.answer : null;
+  const takesText = n.intent === "ask" && n.ask.state === "open" && n.ask.allowText;
   const cardFooter = !resolved && (
     <div className="flex items-center gap-3">
       <Button size="sm" variant="primary" icon={<CheckIcon size={14} />} loading={resolving} onClick={() => onResolve(n)}>
@@ -428,14 +428,6 @@ function NotificationDetail({
           </button>
           <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
             <Recipients ids={n.targetDeviceIds ?? null} />
-            {n.threadId && (
-              <>
-                {" · "}
-                <button type="button" className="hover:text-foreground" onClick={() => onFilter({ thread: n.threadId! })}>
-                  {n.threadId}
-                </button>
-              </>
-            )}
           </div>
         </div>
         <Button size="sm" variant="ghost" icon={<TrashIcon size={14} />} loading={del.isPending} onClick={onDelete} aria-label="Delete" title="Delete" />
@@ -477,21 +469,18 @@ function NotificationDetail({
               Updated {relativeTime(n.updatedAt)} · v{n.version}
             </SystemLine>
           )}
-          {n.responses.map((r, i) => {
-            const action = n.actions.find((a) => a.id === r.actionId);
-            return (
-              <div key={`${r.at}-${i}`} className="flex flex-col items-end">
-                <div className="ml-12 max-w-[80%] rounded-[22px] rounded-br-md bg-chip px-4 py-2.5 text-[14.5px] break-words whitespace-pre-wrap text-foreground">
-                  {r.actionId && <span className="font-semibold">{action?.label ?? r.actionId}</span>}
-                  {r.actionId && r.text && " · "}
-                  {r.text}
-                </div>
-                <span className="mt-1 mr-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {r.deviceName ?? "Unknown device"} · <time title={formatDateTime(r.at)}>{relativeTime(r.at)}</time>
-                </span>
+          {answer && (
+            <div className="flex flex-col items-end">
+              <div className="ml-12 max-w-[80%] rounded-[22px] rounded-br-md bg-chip px-4 py-2.5 text-[14.5px] break-words whitespace-pre-wrap text-foreground">
+                {answer.option && <span className="font-semibold">{answer.option}</span>}
+                {answer.option && answer.text && " · "}
+                {answer.text}
               </div>
-            );
-          })}
+              <span className="mt-1 mr-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {answer.deviceName ?? "Unknown device"} · <time title={formatDateTime(answer.at)}>{relativeTime(answer.at)}</time>
+              </span>
+            </div>
+          )}
           {resolved && n.resolvedAt && (
             <SystemLine>
               <CheckIcon size={12} /> Resolved {relativeTime(n.resolvedAt)}
@@ -502,8 +491,8 @@ function NotificationDetail({
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-2xl bg-background px-4 py-3">
               <dt>Read</dt>
               <dd>{formatDateTime(n.readAt)}</dd>
-              <dt>Template</dt>
-              <dd>{n.template ?? "—"}</dd>
+              <dt>Key</dt>
+              <dd className="font-mono">{n.key ?? "—"}</dd>
               <dt>ID</dt>
               <dd className="font-mono">{n.id}</dd>
             </dl>
@@ -511,10 +500,10 @@ function NotificationDetail({
         </div>
       </div>
 
-      {n.reply && !resolved && (
+      {takesText && (
         <div className="mx-auto w-full max-w-2xl shrink-0 px-3 pb-4 sm:px-5">
           <ReplyComposer
-            placeholder={n.reply.placeholder || `Reply to ${n.source}…`}
+            placeholder={(n.intent === "ask" && n.ask.replyPlaceholder) || `Reply to ${n.source}…`}
             busy={respond.isPending && !!respond.variables?.text}
             focus={focusReply}
             onSend={(text) =>
@@ -545,11 +534,10 @@ function Recipients({ ids }: { ids: string[] | null }) {
   return <>To {names.join(", ")}</>;
 }
 
-/** A dismissible pill for a filter set from elsewhere (a source or thread clicked in the conversation, a ?severity link). */
-function FilterPill({ icon, children, onClear }: { icon?: ReactNode; children: ReactNode; onClear: () => void }) {
+/** A dismissible pill for a filter set from elsewhere (a source clicked in the conversation, a ?severity link). */
+function FilterPill({ children, onClear }: { children: ReactNode; onClear: () => void }) {
   return (
     <span className="inline-flex h-7 max-w-full items-center gap-1 rounded-full bg-chip pr-1 pl-2.5 text-xs font-semibold text-chip-foreground">
-      {icon}
       <span className="truncate">{children}</span>
       <button type="button" aria-label="Clear filter" onClick={onClear} className="rounded-full p-0.5 hover:bg-black/5 dark:hover:bg-white/10">
         <XIcon size={11} />
@@ -577,14 +565,14 @@ export function InboxPage() {
   listParams.delete("reply");
   const search = listParams.toString() ? `?${listParams.toString()}` : "";
   const items = useMemo(() => flattenPages(list.data), [list.data]);
-  const narrowed = !!(filters.source || filters.severity || filters.threadId || filters.q);
+  const narrowed = !!(filters.source || filters.severity || filters.q);
   const activeView = filters.status === "active";
   // Sections and stacks for the everyday view; a plain list for search results and the resolved archive.
-  const sections: InboxSection[] = useMemo(
+  const sections: InboxSection<Notification>[] = useMemo(
     () => (activeView && !filters.q ? inboxSections(items) : flatSections(items)),
     [activeView, filters.q, items],
   );
-  const isExpanded = (s: InboxStack) => expanded.has(s.key) || s.items.slice(1).some((n) => n.id === id);
+  const isExpanded = (s: InboxStack<Notification>) => expanded.has(s.key) || s.items.slice(1).some((n) => n.id === id);
   // Row order on screen, for J/K and "open the next one after resolving".
   const order = sections.flatMap((sec) => sec.stacks.flatMap((s) => (isExpanded(s) ? s.items : s.items.slice(0, 1)))).map((n) => n.id);
 
@@ -611,9 +599,8 @@ export function InboxPage() {
     return () => io.disconnect();
   }, [list.hasNextPage, list.isFetchingNextPage, list.fetchNextPage, items.length]);
 
-  const filterFromDetail = (patch: { thread?: string; source?: string }) => {
+  const filterFromDetail = (patch: { source?: string }) => {
     const next = new URLSearchParams(listParams);
-    if (patch.thread) next.set("thread", patch.thread);
     if (patch.source) next.set("source", patch.source);
     navigate(`/inbox?${next.toString()}`);
   };
@@ -744,19 +731,14 @@ export function InboxPage() {
                 setFilter({ q: null });
                 setSearchOpen(false);
               }}
-              placeholder="Search titles, text and fields"
+              placeholder="Search titles, text and rows"
               className="h-10 w-full rounded-full bg-zinc-100 px-4 text-[14px] placeholder:text-zinc-500 focus:bg-background focus:ring-2 focus:ring-brand/30 focus:outline-none dark:bg-zinc-800"
             />
           )}
 
-          {(filters.source || filters.threadId || filters.severity) && (
+          {(filters.source || filters.severity) && (
             <div className="flex flex-wrap gap-1.5">
               {filters.source && <FilterPill onClear={() => setFilter({ source: null })}>{filters.source}</FilterPill>}
-              {filters.threadId && (
-                <FilterPill icon={<LayersIcon size={11} />} onClear={() => setFilter({ thread: null })}>
-                  {filters.threadId}
-                </FilterPill>
-              )}
               {filters.severity && <FilterPill onClear={() => setFilter({ severity: null })}>{SEVERITY_STYLES[filters.severity].label}</FilterPill>}
             </div>
           )}

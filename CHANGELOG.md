@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Web inbox on intents: **Needs you** lists open asks (answer buttons and Reply right in the list), **In progress**
+  running or stopped progress, **Updates** everything else. Notifications with the same key from the same source stack
+  as one row (without a key: same source and title). Tag chips, tag search, the thread filter and the Templates page
+  are gone (`/templates` redirects to Home). A running progress arrives without an in-app toast.
+- Web Push popup on intents: an open ask shows its first two answer buttons and answers with `{ "option" }`; an inform
+  shows its first two link buttons, which open their URL; a finished or stopped progress says how it ended ("Done ·
+  7/7 checks", "Stopped reporting after 40%"); only a running progress is silent.
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
