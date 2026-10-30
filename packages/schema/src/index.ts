@@ -352,6 +352,15 @@ export const InformInput = z.object({
     .optional()
     .describe("https URL of an image shown on the card, such as a chart or screenshot."),
   icon: z.string().min(1).max(2048).optional().describe("An emoji or an https image URL shown next to the title."),
+  cooldown: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minCooldown) && durationMs(d) <= durationMs(LIMITS.maxCooldown),
+    { error: () => `cooldown must be between ${LIMITS.minCooldown} and ${LIMITS.maxCooldown}` },
+  )
+    .optional()
+    .describe(
+      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; 1m to 168h). ' +
+        "Sends inside it update the notification silently, or change nothing if the user resolved it.",
+    ),
 });
 export type InformInput = z.infer<typeof InformInput>;
 
@@ -628,6 +637,9 @@ export const LIMITS = {
   defaultAskExpiry: "1h",
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
+  /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
+  minCooldown: "1m",
+  maxCooldown: "168h",
 } as const satisfies Record<string, number | Duration>;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────

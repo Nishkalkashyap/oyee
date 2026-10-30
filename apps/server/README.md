@@ -21,7 +21,7 @@ src/
   inbox/do.ts         InboxDO: notifications, tombstones, templates, quotas, push coalescing, WebSockets, waiters, retention
   lib/abuse.ts        per-IP limits: sign-ups per day (D1), failed token attempts (Rate Limiting binding)
   inbox/model.ts      pure card logic (template merge, patching)
-  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create
+  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create, cooldown outcomes
   push/fanout.ts      FCM + Web Push fan-out, signed action callbacks
   push/fcm.ts         FCM HTTP v1 (service-account JWT, RS256 via WebCrypto)
   push/webpush.ts     VAPID (ES256) + RFC 8291 aes128gcm encryption via WebCrypto
