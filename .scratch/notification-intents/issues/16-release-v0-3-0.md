@@ -12,3 +12,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] `pnpm deploy` from the repo root (never bare wrangler deploy)
 - [ ] Versions bumped, tag `v0.3.0` pushed, GitHub Release has the signed APK and macOS zip
 - [ ] Verified in production: an inform, an ask (answered and expired) and a progress (done and stopped) on web, Android and macOS
+
+## Comments
+
+All build tickets (01–15) are resolved on `notification-intents`, code-reviewed and fixed (f4105a5). Release order: 0.2.x apps decode v2 notifications (title, body, progress bar) but lose icons, images, rows, links and answering asks, so ship the apps alongside the deploy; app-first is recommended, not required. Android has no screenshots (no emulator): check the cards on the Galaxy before tagging.
