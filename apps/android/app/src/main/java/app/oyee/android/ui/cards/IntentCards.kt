@@ -55,15 +55,12 @@ import java.time.Instant
  * conversation view. The wording comes from the pure views in CardViews.kt; these only lay it out.
  */
 
-private val Amber = Color(0xFFD97706)
-private val Green = Color(0xFF16A34A)
-
 /** Bar and pill colour for a progress tone: ink while running, the outcome's colour once ended, faint when stopped. */
 @Composable
 fun toneColor(tone: ProgressTone): Color = when (tone) {
     ProgressTone.INK -> Oyee.colors.foreground
-    ProgressTone.SUCCESS -> Green
-    ProgressTone.WARNING -> Amber
+    ProgressTone.SUCCESS -> Oyee.colors.success
+    ProgressTone.WARNING -> Oyee.colors.warning
     ProgressTone.MUTED -> Oyee.colors.faint
 }
 
@@ -212,7 +209,7 @@ fun AskCard(
     Bubble {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             when {
-                v.open -> StatePill(v.status, fill = Amber.copy(alpha = 0.13f), ink = Amber) { Dot(Amber) }
+                v.open -> StatePill(v.status, fill = c.warning.copy(alpha = 0.13f), ink = c.warning) { Dot(c.warning) }
                 v.state == AskState.ANSWERED -> StatePill(v.status, fill = c.foreground, ink = c.background) {
                     Icon(Icons.Filled.Check, contentDescription = null, tint = c.background, modifier = Modifier.size(12.dp))
                 }

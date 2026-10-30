@@ -22,13 +22,14 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import app.oyee.android.model.Severity
 import app.oyee.android.ui.cards.severityLabel
+import app.oyee.android.ui.theme.SeverityColors
 import app.oyee.android.util.Formatting
 
 fun severityColor(s: Severity): Color = when (s) {
-    Severity.CRITICAL -> Color(0xFFDC2626)
-    Severity.WARNING -> Color(0xFFD97706)
-    Severity.INFO -> Color(0xFF3B82F6)
-    Severity.SUCCESS -> Color(0xFF16A34A)
+    Severity.CRITICAL -> SeverityColors.critical
+    Severity.WARNING -> SeverityColors.warning
+    Severity.INFO -> SeverityColors.info
+    Severity.SUCCESS -> SeverityColors.success
 }
 
 fun severityIcon(s: Severity): ImageVector = when (s) {
