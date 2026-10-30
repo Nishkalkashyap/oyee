@@ -45,6 +45,7 @@ import {
   type Actor,
   type SendOptions,
 } from "./model";
+import { Scheduler } from "./scheduler";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -87,6 +88,9 @@ export function decodeCursor(s: string | null | undefined): Cursor | null {
 
 /** Push fan-out for bulk operations (read-all, retention) is capped to keep it cheap. */
 const MAX_BULK_PUSH = 100;
+/** Deadline kind for the daily retention prune (one per inbox). */
+const PRUNE = "prune";
+const PRUNE_REF = "daily";
 const SYNC_PAGE = 200;
 
 /**
@@ -105,7 +109,9 @@ async function guard<T>(fn: () => T | Promise<T>): Promise<RpcResult<T>> {
 export class InboxDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private waiters = new Map<string, Set<(r: OyeeResponse) => void>>();
-  private alarmEnsured = false;
+  /** The inbox's single alarm: fires at the earliest deadline (the daily prune, plus kinds added by later features). */
+  readonly scheduler: Scheduler;
+  private pruneEnsured = false;
   /** Per-notification push coalescing for updates (see LIMITS.updatePushIntervalMs). In memory: resets on eviction. */
   private pushSlots = new Map<string, { last: number; pending: UpdatedEvent | null }>();
 
@@ -113,6 +119,11 @@ export class InboxDO extends DurableObject<Env> {
     super(ctx, env);
     this.sql = ctx.storage.sql;
     this.migrate();
+    this.scheduler = new Scheduler(ctx.storage);
+    this.scheduler.handle(PRUNE, (_refs, now) => {
+      this.prune(now);
+      this.scheduler.set(PRUNE, PRUNE_REF, now + DAY);
+    });
     // Pings are answered without waking the object from hibernation.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
   }
@@ -250,12 +261,11 @@ export class InboxDO extends DurableObject<Env> {
     );
   }
 
-  private async ensureAlarm() {
-    if (this.alarmEnsured) return;
-    this.alarmEnsured = true;
-    if ((await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + 86400_000);
-    }
+  /** Schedules the daily prune once this inbox holds data. */
+  private ensurePrune() {
+    if (this.pruneEnsured) return;
+    this.pruneEnsured = true;
+    this.scheduler.ensure(PRUNE, PRUNE_REF, Date.now() + DAY);
   }
 
   // ─── Events ───────────────────────────────────────────────────────────────
@@ -365,7 +375,7 @@ export class InboxDO extends DurableObject<Env> {
         (DAY - (now % DAY)) / 1000,
       );
     }
-    this.ctx.waitUntil(this.ensureAlarm());
+    this.ensurePrune();
     if (userId && WARN_KINDS.includes(kind) && (used === Math.ceil(q.perDay * 0.8) || used === q.perDay)) {
       this.ctx.waitUntil(this.postQuotaNotice(userId, kind, used));
     }
@@ -442,7 +452,7 @@ export class InboxDO extends DurableObject<Env> {
 
     this.save(fresh, replaceKey, actor.tokenId);
     this.emit(actor.userId, [{ type: "notification.created", notification: fresh }]);
-    await this.ensureAlarm();
+    this.ensurePrune();
     return fresh;
   }
 
@@ -900,11 +910,12 @@ export class InboxDO extends DurableObject<Env> {
     };
   }
 
-  // ─── Retention ────────────────────────────────────────────────────────────
+  // ─── Deadlines and retention ──────────────────────────────────────────────
 
   override async alarm(): Promise<void> {
-    this.prune();
-    await this.ctx.storage.setAlarm(Date.now() + 86400_000);
+    // Inboxes whose alarm predates the scheduler have no prune deadline yet; their alarm meant "prune now".
+    this.scheduler.ensure(PRUNE, PRUNE_REF, Date.now());
+    await this.scheduler.run();
   }
 
   /** Deletes notifications older than the retention window and beyond the per-user cap. Returns deleted ids. */
