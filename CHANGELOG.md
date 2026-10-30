@@ -121,7 +121,7 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## Unreleased (apps, next release: 0.3.0)
+## 0.3.0
 - **Protocol v2 only.** The apps read nothing but the intent blocks, so they keep working once the server stops
   sending the flat card. (0.2.x builds keep showing title, body and the progress bar from v2 notifications, but not
   icon, image, rows, links or answer buttons; shipping this alongside that server deploy is recommended.) An ask
