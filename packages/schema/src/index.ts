@@ -412,6 +412,27 @@ export type InformInput = z.infer<typeof InformInput>;
 export const SendOutcome = z.enum(["created", "updated_silently", "alerted", "suppressed", "reused"]);
 export type SendOutcome = z.infer<typeof SendOutcome>;
 
+/**
+ * Webhook and REST send body (`POST /hook/:token`, `POST /api/notifications`): an intent input tagged with `intent`,
+ * the same field names as the MCP tools. Senders may omit `intent` (it defaults to `inform`); ask is for agents over
+ * MCP, so it isn't accepted here.
+ */
+export const IntentSendInput = z.discriminatedUnion("intent", [
+  InformInput.extend({ intent: z.literal("inform") }),
+  ProgressInput.extend({ intent: z.literal("progress") }),
+]);
+export type IntentSendInput = z.infer<typeof IntentSendInput>;
+/** What a sender writes (defaults not yet applied), e.g. the web composer's request body. */
+export type IntentSendBody = z.input<typeof IntentSendInput>;
+
+/** The answer to a webhook or REST send: what happened (SendOutcome) and why, in one sentence. */
+export interface IntentSendResult {
+  id: string;
+  version: number;
+  outcome: SendOutcome;
+  reason: string;
+}
+
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 export const TemplateName = z.string().regex(/^[a-z0-9_-]{1,64}$/);
