@@ -177,6 +177,17 @@ function fixtures(): Notification[] {
       { title: "Running the test suite", source: "claude-code", silent: true, progress: { value: 3, max: 7, label: "3/7 checks", indeterminate: false } },
       2 * MIN,
     ),
+    // A progress whose agent went quiet for longer than its staleAfter: Stopped reporting.
+    base(
+      {
+        title: "Migrating user avatars",
+        body: "Copying avatars to the new bucket.",
+        source: "claude-code",
+        severity: "warning",
+        progress: { value: 40, max: 100, indeterminate: false, state: "stopped", staleAfter: "30m", lastReportAt: iso(52 * MIN) } as FlatNotification["progress"],
+      },
+      70 * MIN,
+    ),
     base(
       {
         title: "CI on main",

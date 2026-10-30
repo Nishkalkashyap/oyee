@@ -47,7 +47,7 @@ import {
   type Actor,
   type SendOptions,
 } from "./model";
-import { isLiveProgress, reportProgress, type ProgressReport } from "./progress";
+import { isLiveProgress, reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
 import { applyInform, buildInform, type InformResult } from "./inform";
 
@@ -95,6 +95,10 @@ const MAX_BULK_PUSH = 100;
 /** Deadline kind for the daily retention prune (one per inbox). */
 const PRUNE = "prune";
 const PRUNE_REF = "daily";
+/** Deadline kind for a running progress's stale deadline (ref = notification id). */
+const PROGRESS_STALE = "progress.stale";
+/** A stale check that failed is tried again this much later. */
+const STALE_RETRY_MS = 5 * 60_000;
 const SYNC_PAGE = 200;
 
 /**
@@ -116,6 +120,8 @@ export class InboxDO extends DurableObject<Env> {
   /** The inbox's single alarm: fires at the earliest deadline (the daily prune, plus kinds added by later features). */
   readonly scheduler: Scheduler;
   private pruneEnsured = false;
+  /** Cache of `meta.user_id` (see rememberUser). */
+  private knownUserId: string | null = null;
   /** Per-notification push coalescing for updates (see LIMITS.updatePushIntervalMs). In memory: resets on eviction. */
   private pushSlots = new Map<string, { last: number; pending: UpdatedEvent | null }>();
 
@@ -128,6 +134,7 @@ export class InboxDO extends DurableObject<Env> {
       this.prune(now);
       this.scheduler.set(PRUNE, PRUNE_REF, now + DAY);
     });
+    this.scheduler.handle(PROGRESS_STALE, (refs, now) => this.stopQuietProgress(refs, now));
     // Pings are answered without waking the object from hibernation.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
   }
@@ -766,8 +773,58 @@ export class InboxDO extends DurableObject<Env> {
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       }
+      this.rememberUser(actor.userId);
+      this.trackStale(n);
       return report;
     });
+  }
+
+  /** Keeps a progress's stale deadline in step with it: registered while running, dropped once it can't stop. */
+  private trackStale(n: Notification) {
+    const due = staleDueAt(n);
+    if (due === null) this.scheduler.clear(PROGRESS_STALE, n.id);
+    else this.scheduler.set(PROGRESS_STALE, n.id, due);
+  }
+
+  /**
+   * Stale deadlines that came due: each running progress that got no report for `staleAfter` is marked stopped and
+   * alerts once (not charged to quotas). A ref is only "check this now": one that changed meanwhile is skipped or
+   * re-registered for its real deadline, and one whose check failed is retried a few minutes later (the scheduler
+   * removes due refs before calling this, so nothing else would bring it back).
+   */
+  private stopQuietProgress(refs: string[], now: number) {
+    const userId = this.userId();
+    for (const id of refs) {
+      try {
+        const rec = this.load(id);
+        if (!rec) continue;
+        const stopped = stopIfQuiet(rec.n, now);
+        if (!stopped) {
+          this.trackStale(rec.n);
+          continue;
+        }
+        this.save(stopped, rec.replaceKey, rec.tokenId);
+        const ev: InboxEvent = { type: "notification.updated", notification: stopped, alert: true, reason: "update" };
+        if (userId) this.emit(userId, [ev]);
+        else this.broadcast(ev);
+      } catch (e) {
+        console.error(`stopped reporting: checking ${id} failed; retrying`, e);
+        this.scheduler.set(PROGRESS_STALE, id, now + STALE_RETRY_MS);
+      }
+    }
+  }
+
+  /** The inbox owner's id, kept so work the alarm does on its own (stopped reporting) can push to their devices. */
+  private rememberUser(userId: string) {
+    if (this.knownUserId === userId) return;
+    this.sql.exec("INSERT INTO meta (key, value) VALUES ('user_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", userId);
+    this.knownUserId = userId;
+  }
+
+  private userId(): string | null {
+    this.knownUserId ??=
+      this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'user_id'").toArray()[0]?.value ?? null;
+    return this.knownUserId;
   }
 
   // ─── Templates (RPC) ──────────────────────────────────────────────────────

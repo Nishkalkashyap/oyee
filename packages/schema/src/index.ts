@@ -108,6 +108,15 @@ export type IntentSeverity = z.infer<typeof IntentSeverity>;
 export const Duration = z.string().regex(/^[1-9][0-9]{0,5}[smh]$/, 'expected a duration such as "30m" or "1h"');
 export type Duration = z.infer<typeof Duration>;
 
+/** Bounds for a progress's `staleAfter` (exposed as LIMITS.minStaleAfter / maxStaleAfter; defined here for ProgressInput). */
+const LIMITS_STALE_AFTER = { min: "1m", max: "24h" } as const satisfies Record<string, Duration>;
+
+/** A Duration within `[min, max]` (bounds from LIMITS). */
+const boundedDuration = (min: Duration, max: Duration) =>
+  Duration.refine((d) => durationMs(d) >= durationMs(min) && durationMs(d) <= durationMs(max), {
+    message: `expected a duration from ${min} to ${max}`,
+  });
+
 /** Names a notification per source so later sends refer to the same one. Unique per `(source, key)`. */
 export const Key = z.string().min(1).max(128);
 
@@ -188,6 +197,12 @@ export const ProgressInput = z.object({
   status: ProgressStatus.default("running").describe(
     "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
   ),
+  staleAfter: boundedDuration(LIMITS_STALE_AFTER.min, LIMITS_STALE_AFTER.max)
+    .optional()
+    .describe(
+      'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
+        'silent step (default "30m", from "1m" to "24h"). A later report revives it.',
+    ),
   body: z.string().max(4000).optional().describe("Detail under the title. Markdown: **bold**, _italic_, `code`, links."),
   url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
   source: z.string().min(1).max(64).optional().describe("Who is reporting (defaults to this connection's name)."),
@@ -657,6 +672,9 @@ export const LIMITS = {
   defaultAskExpiry: "1h",
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
+  /** Bounds for a progress's `staleAfter`. */
+  minStaleAfter: LIMITS_STALE_AFTER.min,
+  maxStaleAfter: LIMITS_STALE_AFTER.max,
 } as const satisfies Record<string, number | Duration>;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
@@ -761,17 +779,18 @@ export function inferIntent(
   if (n.progress) {
     const p = n.progress;
     const atMax = !p.indeterminate && p.value >= p.max;
-    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it.
-    const prior = (p as Partial<ProgressBlock>).state;
-    const finished = prior === "done" || prior === "failed" ? prior : null;
+    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it, whether it stopped reporting,
+    // and when it last reported.
+    const prior = p as Partial<ProgressBlock>;
+    const kept = prior.state === "done" || prior.state === "failed" || prior.state === "stopped" ? prior.state : null;
     return {
       ...flat,
       intent: "progress",
       progress: {
         ...p,
-        state: finished ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
-        staleAfter: (p as Partial<ProgressBlock>).staleAfter ?? LIMITS.defaultStaleAfter,
-        lastReportAt: n.updatedAt,
+        state: kept ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
+        staleAfter: prior.staleAfter ?? LIMITS.defaultStaleAfter,
+        lastReportAt: prior.lastReportAt ?? n.updatedAt,
       },
     };
   }
@@ -786,6 +805,15 @@ export function inferIntent(
       cooldown: null,
     },
   };
+}
+
+/**
+ * What every client shows for a progress that stopped reporting: "Stopped reporting after <last label or percent>",
+ * e.g. "Stopped reporting after 3/7 checks" or "Stopped reporting after 40%". The stored `label` stays the sender's.
+ */
+export function stoppedReportingLabel(p: { value: number; max: number; label?: string }): string {
+  const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
+  return `Stopped reporting after ${p.label ?? `${Math.round(ratio * 100)}%`}`;
 }
 
 /** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */
