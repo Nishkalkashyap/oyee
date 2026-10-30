@@ -79,3 +79,19 @@ git tag vX.Y.Z && git push origin vX.Y.Z    # app release (full checklist: docs/
 - Live: server + web at oyee.app (rate limits, help/download dialog, usage meter). Latest app release **v0.2.11**.
 - Verified in production: web (Brave push), Android (Galaxy S23 Ultra), macOS (menu-bar app, self-update).
 - Open follow-ups: PLAN.md §10.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded on
+each issue file's `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `GLOSSARY.md` plus `docs/adr/` (created lazily by `/domain-modeling`). See
+`docs/agents/domain.md`.
