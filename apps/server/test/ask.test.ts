@@ -219,3 +219,39 @@ describe("asking again with a key", () => {
     expect((await get(cookie, b.id))).toMatchObject({ source: "other-agent", key: "q" });
   });
 });
+
+describe("ask under concurrency", () => {
+  // A targeted ask resolves its devices with an await (D1). The key check must come after it: a request that runs
+  // during the lookup could otherwise take the key unseen. Called on the inbox directly so the interleaving is certain.
+  async function inbox() {
+    const cookie = await devLogin();
+    await pairDevice(cookie, "Galaxy S23 Ultra", "android");
+    const me = (await call<{ id: string }>("GET", "/api/me", { cookie })).body;
+    const actor = { userId: me.id, deviceId: null, deviceName: null, tokenId: null, defaultSource: "claude-code" };
+    return { stub: env.INBOX.get(env.INBOX.idFromName(me.id)), actor };
+  }
+
+  it("two concurrent targeted asks with one key create one ask and reuse it", async () => {
+    const { stub, actor } = await inbox();
+    const input = { title: "Run the migration?", options: ["Yes", "No"], key: "migrate", devices: ["galaxy"] };
+    const [a, b] = await runInDurableObject(stub, (inst: InboxDO) =>
+      Promise.all([inst.ask(actor, input as never), inst.ask(actor, input as never)]),
+    );
+    if (!a.ok || !b.ok) throw new Error("ask failed");
+    expect([a.value.outcome, b.value.outcome].sort()).toEqual(["created", "reused"]);
+    expect(a.value.notification.id).toBe(b.value.notification.id);
+  });
+
+  it("a targeted ask racing a progress on the same key gets the key conflict", async () => {
+    const { stub, actor } = await inbox();
+    const [a, p] = await runInDurableObject(stub, (inst: InboxDO) =>
+      Promise.all([
+        inst.ask(actor, { title: "Ship it?", options: ["Yes"], key: "deploy", platforms: ["android"] } as never),
+        inst.progress(actor, { key: "deploy", title: "Deploying", value: 10 } as never),
+      ]),
+    );
+    expect(p.ok).toBe(true);
+    expect(a.ok).toBe(false);
+    if (!a.ok) expect(a.error.message).toMatch(/deploy/);
+  });
+});

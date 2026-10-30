@@ -808,13 +808,14 @@ export class InboxDO extends DurableObject<Env> {
   async ask(actor: Actor, input: AskInput): Promise<RpcResult<AskResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      const latest = input.key ? this.claimKey(input.source ?? actor.defaultSource, input.key, "ask")?.n : null;
-      if (latest && isOpenAsk(latest, Date.now())) return { outcome: "reused", notification: latest };
-      this.consume("send", actor.userId);
       const targets =
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
+      // No awaits from here on, so a concurrent send can't take the key between the check and the save.
+      const latest = input.key ? this.claimKey(input.source ?? actor.defaultSource, input.key, "ask")?.n : null;
+      if (latest && isOpenAsk(latest, Date.now())) return { outcome: "reused", notification: latest };
+      this.consume("send", actor.userId);
       const n = buildAsk(newId("ntf"), input, actor, new Date().toISOString(), targets);
       this.save(n, actor.tokenId);
       this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
