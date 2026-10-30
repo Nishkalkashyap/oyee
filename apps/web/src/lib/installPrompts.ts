@@ -24,7 +24,7 @@ export const INSTALL_PROMPTS: InstallPrompt[] = [
 3. Unzip it, quit Oyee if it's running, and move Oyee.app to /Applications, replacing any older copy.
 4. The app is ad-hoc signed and not notarized, so clear its download flags so Gatekeeper doesn't block it: xattr -cr /Applications/Oyee.app
 5. Open it with: open /Applications/Oyee.app (it lives in the menu bar).
-Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.`,
+Then tell me to pair it: on https://oyee.app go to Home → Connect a device and enter the code in the app.`,
   },
   {
     id: "android",
@@ -36,6 +36,6 @@ Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and
 3. Check the APK's SHA-256 against SHA256SUMS.txt. Stop and tell me if it doesn't match.
 4. Install it with: adb install -r <apk>. If that fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, a build signed with a different key is installed: ask me before uninstalling it (that deletes its data).
 5. Start it with: adb shell monkey -p app.oyee.android 1
-Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.`,
+Then tell me to pair it: on https://oyee.app go to Home → Connect a device and enter the code in the app.`,
   },
 ];

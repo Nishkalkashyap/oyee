@@ -37,7 +37,8 @@ struct MenuBarLabel: View {
 
 }
 
-/// The menu bar window: live list of active/unread notifications with progress and quick actions.
+/// The menu bar window: live list of active notifications (repeats stacked) with progress, quick actions and a ✓ to
+/// resolve.
 struct MenuBarContentView: View {
     let model: OyeeModel
     let updater: Updater
@@ -104,15 +105,24 @@ struct MenuBarContentView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
         } else {
+            // Same order as the inbox: questions, running jobs, then the rest with repeats stacked into one row
+            // (its ✓ resolves the whole stack).
+            let stacks = InboxSection.split(store.activeNotifications).flatMap(\.stacks)
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(store.activeNotifications.prefix(40)) { notification in
-                        NotificationCardView(notification: notification, store: store, compact: true)
-                            .background(Theme.background)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .onTapGesture {
-                                model.requestInbox(select: notification.id)
+                    ForEach(stacks.prefix(40)) { stack in
+                        NotificationCardView(
+                            notification: stack.head, store: store, compact: true, stackCount: stack.items.count,
+                            unread: stack.items.contains { !$0.isRead },
+                            onResolve: {
+                                Task { for n in stack.items { await store.resolve(n.id) } }
                             }
+                        )
+                        .background(Theme.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .onTapGesture {
+                            model.requestInbox(select: stack.head.id)
+                        }
                     }
                 }
                 .padding(.horizontal, 6)

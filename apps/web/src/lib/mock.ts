@@ -149,6 +149,19 @@ function fixtures(): Notification[] {
       },
       5 * HOUR,
     ),
+    // The same periodic alert, several times: the inbox stacks these into one row.
+    ...[40, 100, 160, 220].map((min, i) =>
+      base(
+        {
+          title: "Archiver lag warning",
+          body: `Shared backlog ${740 + i * 12} pending; watermark still stalled. No data-loss risk yet.`,
+          source: "ai-gateway-archiver",
+          severity: "warning",
+          readAt: i === 0 ? null : iso(min * MIN - MIN),
+        },
+        min * MIN,
+      ),
+    ),
   ];
   // Filler for pagination.
   const sources = ["cron", "github-actions", "aws-monitor", "home-assistant"];

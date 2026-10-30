@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.oyee.android.AppContainer
 import app.oyee.android.data.NotificationQuery
+import app.oyee.android.model.Action
 import app.oyee.android.model.OyeeEvent
 import app.oyee.android.model.Notification
 import app.oyee.android.model.NotificationStatus
@@ -11,6 +12,8 @@ import app.oyee.android.model.Severity
 import app.oyee.android.model.SourceSummary
 import app.oyee.android.transport.SocketClient
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +45,16 @@ data class InboxUiState(
     val filters: InboxFilters = InboxFilters(),
     val sources: List<SourceSummary> = emptyList(),
     val connection: SocketClient.State = SocketClient.State.IDLE,
-)
+    /** Being resolved from the list: hidden right away (swipe / ✓), back if the request fails. */
+    val resolving: Set<String> = emptySet(),
+    /** The notification whose button was just tapped from the list. */
+    val respondingId: String? = null,
+    val toast: String? = null,
+    /** Stacks whose older repeats are shown. Kept here: the inbox leaves composition while a conversation is open. */
+    val expanded: Set<String> = emptySet(),
+) {
+    val visibleItems: List<Notification> get() = if (resolving.isEmpty()) items else items.filterNot { it.id in resolving }
+}
 
 class InboxViewModel(private val c: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(InboxUiState())
@@ -95,6 +107,49 @@ class InboxViewModel(private val c: AppContainer) : ViewModel() {
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(loadingMore = false, error = e.message) }
+            }
+        }
+    }
+
+    /** Active ⇄ Resolved (the "Resolved" row at the end of the list, and back). */
+    fun showResolved(on: Boolean) =
+        setFilters(_state.value.filters.copy(status = if (on) NotificationStatus.RESOLVED else NotificationStatus.ACTIVE))
+
+    fun consumeToast() = _state.update { it.copy(toast = null) }
+
+    fun toggleExpanded(key: String) = _state.update { it.copy(expanded = if (key in it.expanded) it.expanded - key else it.expanded + key) }
+
+    /** Resolves one row or a whole stack of repeats. */
+    fun resolve(ns: List<Notification>) {
+        val targets = ns.filter { it.status == NotificationStatus.ACTIVE && it.id !in _state.value.resolving }
+        if (targets.isEmpty()) return
+        val ids = targets.mapTo(HashSet()) { it.id }
+        _state.update { it.copy(resolving = it.resolving + ids) }
+        viewModelScope.launch {
+            val session = c.settings.session() ?: return@launch
+            val results = targets.map { n -> async { runCatching { c.api.resolve(session, n.id) } } }.awaitAll()
+            for (r in results) r.getOrNull()?.let { c.processor.onLocal(it) }
+            val failed = results.firstOrNull { it.isFailure }?.exceptionOrNull()
+            _state.update {
+                it.copy(
+                    resolving = it.resolving - ids,
+                    toast = if (failed != null) "Couldn't resolve: ${failed.message}" else if (targets.size > 1) "Resolved ${targets.size}" else "Resolved",
+                )
+            }
+        }
+    }
+
+    /** Answers a question right from the list ("Needs you"). */
+    fun respond(n: Notification, a: Action) {
+        if (_state.value.respondingId != null) return
+        _state.update { it.copy(respondingId = n.id) }
+        viewModelScope.launch {
+            val session = c.settings.session() ?: return@launch
+            try {
+                c.processor.onLocal(c.api.respond(session, n.id, actionId = a.id))
+                _state.update { it.copy(respondingId = null, toast = "Sent: ${a.label}") }
+            } catch (e: Exception) {
+                _state.update { it.copy(respondingId = null, toast = e.message ?: "Couldn't send") }
             }
         }
     }

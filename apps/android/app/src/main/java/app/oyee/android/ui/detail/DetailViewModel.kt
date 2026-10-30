@@ -21,6 +21,8 @@ data class DetailUiState(
     val deleted: Boolean = false,
     val replyText: String = "",
     val toast: String? = null,
+    /** Resolved from this screen: go back to the list. */
+    val resolvedHere: Boolean = false,
 )
 
 class DetailViewModel(private val c: AppContainer, private val id: String) : ViewModel() {
@@ -83,7 +85,7 @@ class DetailViewModel(private val c: AppContainer, private val id: String) : Vie
 
     fun markRead() = act(null) { s -> c.api.markRead(s, id) }
 
-    fun resolve() = act("Resolved") { s -> c.api.resolve(s, id) }
+    fun resolve() = act("Resolved", onDone = { it.copy(resolvedHere = true) }) { s -> c.api.resolve(s, id) }
 
     fun delete() {
         viewModelScope.launch {
@@ -99,7 +101,12 @@ class DetailViewModel(private val c: AppContainer, private val id: String) : Vie
         }
     }
 
-    private fun act(success: String?, clearReply: Boolean = false, block: suspend (Session) -> Notification) {
+    private fun act(
+        success: String?,
+        clearReply: Boolean = false,
+        onDone: (DetailUiState) -> DetailUiState = { it },
+        block: suspend (Session) -> Notification,
+    ) {
         if (_state.value.busy) return
         viewModelScope.launch {
             val s = c.settings.session() ?: return@launch
@@ -108,7 +115,7 @@ class DetailViewModel(private val c: AppContainer, private val id: String) : Vie
                 val n = block(s)
                 c.processor.onLocal(n)
                 setNotification(n)
-                _state.update { it.copy(busy = false, toast = success, replyText = if (clearReply) "" else it.replyText) }
+                _state.update { onDone(it.copy(busy = false, toast = success, replyText = if (clearReply) "" else it.replyText)) }
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, toast = e.message ?: "Request failed") }
             }

@@ -150,8 +150,8 @@ export function HelpDialog({ open, onClose }: { open: boolean; onClose: () => vo
           meta="You're using it"
           note="Turn on browser notifications to get pushes on this computer, even with the tab closed."
           action={
-            <Link to="/devices" onClick={onClose} className={buttonClasses("secondary", "sm")}>
-              Devices
+            <Link to="/" onClick={onClose} className={buttonClasses("secondary", "sm")}>
+              Turn on
             </Link>
           }
         />

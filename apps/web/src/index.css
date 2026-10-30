@@ -143,13 +143,9 @@ dialog[open] {
   animation: toast-in 160ms var(--ease-emphasized);
 }
 
-/* Landing page: smooth in-page anchors; platform previews sit on a faint dot grid. */
+/* Landing page: smooth in-page anchors. */
 @media (prefers-reduced-motion: no-preference) {
   html:has(.landing) {
     scroll-behavior: smooth;
   }
-}
-.landing-dots {
-  background-image: radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px);
-  background-size: 14px 14px;
 }

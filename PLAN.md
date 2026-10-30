@@ -30,8 +30,8 @@ in one open-source, self-hostable package that we fully control.
 ## 2. Product summary
 
 - Sign in to the web app with **Google**.
-- The landing page has two primary buttons: **Create MCP server URL** and **Create webhook**. Each one creates a
-  scoped, revocable token and shows copy-paste snippets (Claude Code, Codex, generic MCP JSON, curl, Home Assistant YAML).
+- The Home page shows what sends to you and the devices it reaches. **Add** creates an **MCP server URL** or a
+  **webhook**: a scoped, revocable token and shows copy-paste snippets (Claude Code, Codex, generic MCP JSON, curl, Home Assistant YAML).
 - **Pair devices** (Android, iOS, macOS) with a short pairing code / QR / deep link. The browser can also enable Web Push.
 - **Inbox** (web + every client): list, filter (source, severity, status, thread, text), paginate, and act on notifications live.
 - **Templates**: named presets with `{{variables}}`, written once in a platform-neutral card schema and rendered
@@ -251,3 +251,6 @@ procedures: [docs/operations.md](docs/operations.md).
 - Web Push payload has no `alert` flag, so the browser re-alerts on visible updates.
 - Android pins libraries compatible with compileSdk 36; bumping to 37 unlocks the newer AndroidX/Compose/OkHttp/Coil.
 - Apple: no notification service extension; there is no templates UI and no device-rename UI.
+- The web inbox's `E` / `J` / `K` shortcuts aren't on macOS (plain-letter shortcuts would fire while typing a reply).
+- The new inbox layout (sections, stacks, Resolve in the card footer) is unverified on the iOS app, which isn't built
+  in CI.

@@ -1,19 +1,30 @@
 import SwiftUI
 
 /// A Oyee card in Gluon's language. Full size it is the white message bubble of the conversation view (severity
-/// pill, bold title, body, fields, ink progress, image, link, pill actions); `compact` is the menu-bar row with an
-/// avatar, the essentials and small pill actions.
+/// pill, bold title, body, fields, ink progress, image, link, pill actions, and a Resolve footer when `onResolve` is
+/// set); `compact` is the menu-bar row with an avatar, the essentials, small pill actions and a ✓ that resolves it
+/// (or its whole stack of repeats, `stackCount` > 1).
 public struct NotificationCardView: View {
     let notification: OyeeNotification
     let store: InboxStore
     var compact: Bool
+    var stackCount: Int
+    /// Unread styling for the row; a stack passes whether any of its repeats is unread.
+    var unread: Bool
+    var onResolve: (() -> Void)?
 
     @ViewState private var busyAction: String?
 
-    public init(notification: OyeeNotification, store: InboxStore, compact: Bool = false) {
+    public init(
+        notification: OyeeNotification, store: InboxStore, compact: Bool = false, stackCount: Int = 1,
+        unread: Bool? = nil, onResolve: (() -> Void)? = nil
+    ) {
         self.notification = notification
         self.store = store
         self.compact = compact
+        self.stackCount = stackCount
+        self.unread = unread ?? !notification.isRead
+        self.onResolve = onResolve
     }
 
     private var n: OyeeNotification { notification }
@@ -73,6 +84,14 @@ public struct NotificationCardView: View {
                 .buttonStyle(.plain)
             }
             if !n.actions.isEmpty, n.status == .active { actionButtons(size: .regular).padding(.top, 2) }
+            if let onResolve, n.status == .active {
+                // The card's own control, under a hairline so it doesn't read as one of the agent's buttons.
+                Divider().overlay(Theme.border).padding(.top, 4)
+                Button(action: onResolve) {
+                    Label("Resolve", systemImage: "checkmark")
+                }
+                .buttonStyle(PillButtonStyle(.primary, size: .small))
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,14 +115,15 @@ public struct NotificationCardView: View {
                         .font(.oyee(13.5, .semibold))
                         .foregroundStyle(Theme.foreground)
                         .lineLimit(2)
+                    if stackCount > 1 { StackCount(stackCount) }
                     Spacer(minLength: 4)
                     RelativeTimeText(n.createdAt)
-                        .font(.oyee(11.5, n.isRead ? .regular : .semibold))
-                        .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
+                        .font(.oyee(11.5, unread ? .semibold : .regular))
+                        .foregroundStyle(unread ? Theme.brand : Theme.muted)
                 }
                 Text(subtitle)
                     .font(.oyee(12.5))
-                    .foregroundStyle(n.isRead ? Theme.muted : Theme.secondaryLabel)
+                    .foregroundStyle(unread ? Theme.secondaryLabel : Theme.muted)
                     .lineLimit(2)
                 if let progress = n.progress, n.status == .active {
                     NotificationProgressView(progress: progress, showLabel: false).padding(.top, 4)
@@ -115,7 +135,7 @@ public struct NotificationCardView: View {
             if n.status == .active {
                 // One tap to resolve: it leaves the menu bar (and the default inbox view) on every device.
                 Button {
-                    Task { await store.resolve(n.id) }
+                    if let onResolve { onResolve() } else { Task { await store.resolve(n.id) } }
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
@@ -125,8 +145,8 @@ public struct NotificationCardView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondaryLabel)
-                .help("Resolve")
-                .accessibilityLabel("Resolve")
+                .help(stackCount > 1 ? "Resolve all \(stackCount)" : "Resolve")
+                .accessibilityLabel(stackCount > 1 ? "Resolve all \(stackCount)" : "Resolve")
             }
         }
         .padding(.horizontal, 10)
@@ -206,36 +226,54 @@ public struct NotificationCardView: View {
     }
 }
 
-/// Gluon's list row: the source's tinted avatar with a severity dot, title, time (blue while unread), preview.
+/// Gluon's list row: the source's tinted avatar (a red or amber mark only for critical and warning), title, time
+/// (blue while unread), preview. Blue means unread and nothing else. `count` > 1 makes it the head of a stack of
+/// repeats. `hideTrailing` hides the time and unread dot while the list's hover ✓ sits on top of them.
 public struct NotificationRowView: View {
     let notification: OyeeNotification
     var selected: Bool
+    var count: Int
+    var unread: Bool
+    var child: Bool
+    var highlighted: Bool
+    var hideTrailing: Bool
 
-    public init(notification: OyeeNotification, selected: Bool = false) {
+    public init(
+        notification: OyeeNotification, selected: Bool = false, count: Int = 1, unread: Bool? = nil, child: Bool = false,
+        highlighted: Bool = false, hideTrailing: Bool = false
+    ) {
         self.notification = notification
         self.selected = selected
+        self.count = count
+        self.unread = unread ?? (!notification.isRead && notification.status == .active)
+        self.child = child
+        self.highlighted = highlighted
+        self.hideTrailing = hideTrailing
     }
 
     public var body: some View {
         let n = notification
+        let showResolve = hideTrailing
         HStack(spacing: 12) {
-            SourceAvatar(name: n.source, size: 44, severity: n.severity)
+            SourceAvatar(name: n.source, size: child ? 34 : 44, severity: n.severity)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(n.title)
-                        .font(.oyee(15, .semibold))
-                        .foregroundStyle(n.isResolved && n.isRead ? Theme.muted : Theme.foreground)
+                        .font(.oyee(15, unread ? .semibold : .medium))
+                        .foregroundStyle(unread ? Theme.foreground : n.isResolved ? Theme.muted : Theme.secondaryLabel)
                         .lineLimit(1)
+                    if count > 1 { StackCount(count) }
                     Spacer(minLength: 4)
                     RelativeTimeText(n.createdAt)
-                        .font(.oyee(12, n.isRead ? .regular : .semibold))
-                        .foregroundStyle(n.isRead ? Theme.muted : Theme.brand)
+                        .font(.oyee(12, unread ? .semibold : .regular))
+                        .foregroundStyle(unread ? Theme.brand : Theme.muted)
                         .monospacedDigit()
+                        .opacity(showResolve ? 0 : 1)
                 }
                 HStack(spacing: 8) {
                     Text(preview)
                         .font(.oyee(13.5))
-                        .foregroundStyle(n.isRead ? Theme.muted : Theme.secondaryLabel)
+                        .foregroundStyle(unread ? Theme.secondaryLabel : Theme.muted)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if !n.responses.isEmpty {
@@ -246,8 +284,9 @@ public struct NotificationRowView: View {
                     if n.isResolved {
                         Image(systemName: "checkmark").font(.oyee(12, .bold)).foregroundStyle(Color(hex: 0x16A34A))
                     }
-                    if !n.isRead {
+                    if unread {
                         Circle().fill(Theme.brand).frame(width: 9, height: 9).accessibilityLabel("Unread")
+                            .opacity(showResolve ? 0 : 1)
                     }
                 }
                 if let progress = n.progress, n.status == .active {
@@ -257,13 +296,34 @@ public struct NotificationRowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(selected ? Theme.rowSelected : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(
+            selected ? Theme.rowSelected : highlighted ? Theme.secondary.opacity(0.6) : .clear,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var preview: String {
         let body = notification.body.map(MarkdownSubset.plainText)?.replacingOccurrences(of: "\n", with: " ") ?? ""
+        if child { return body.isEmpty ? notification.source : body }
         return body.isEmpty ? notification.source : "\(notification.source) · \(body)"
+    }
+}
+
+/// The grey count beside a stacked row's title.
+struct StackCount: View {
+    let count: Int
+    init(_ count: Int) { self.count = count }
+
+    var body: some View {
+        Text("\(count)")
+            .font(.oyee(11, .semibold))
+            .monospacedDigit()
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Theme.secondary, in: Capsule())
+            .accessibilityLabel("\(count) in this stack")
     }
 }
 

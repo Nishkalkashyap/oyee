@@ -98,13 +98,15 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
         state.toast?.let { snackbar.showSnackbar(it); vm.consumeToast() }
     }
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
+    // Resolving from the conversation goes back to the list, where the next thing is waiting.
+    LaunchedEffect(state.resolvedHere) { if (state.resolvedHere) onBack() }
 
     val n = state.notification
     Scaffold(
         containerColor = c.thread,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            // Header: back, who sent it and where it went, resolve / delete.
+            // Header: back, who sent it and where it went, delete. Resolve sits on the card, next to what you just read.
             Column(Modifier.background(c.background).statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.secondaryLabel) }
@@ -122,12 +124,6 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit) {
                                 color = c.muted,
                                 maxLines = 1,
                             )
-                        }
-                        if (!n.isResolved) {
-                            PillButton(onClick = vm::resolve, enabled = !state.busy, height = 32.dp) {
-                                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Text("Resolve")
-                            }
                         }
                         IconButton(onClick = { confirmDelete = true }, enabled = !state.busy) {
                             Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = c.secondaryLabel)
@@ -265,6 +261,14 @@ private fun Conversation(n: Notification, state: DetailUiState, vm: DetailViewMo
                             enabled = !state.busy,
                         ) { Text(if (a.url != null) "${a.label} ↗" else a.label) }
                     }
+                }
+            }
+            if (!n.isResolved) {
+                // The card's own control, under a hairline so it doesn't read as one of the agent's buttons.
+                HorizontalDivider(color = c.border, modifier = Modifier.padding(top = 4.dp))
+                PillButton(onClick = vm::resolve, variant = PillVariant.Primary, enabled = !state.busy, height = 34.dp) {
+                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("Resolve")
                 }
             }
         }

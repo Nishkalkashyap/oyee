@@ -71,7 +71,7 @@ fun PairScreen(vm: PairViewModel) {
             BrandMark(size = 56.dp)
             Text("Pair this phone", style = MaterialTheme.typography.headlineLarge, color = c.foreground, modifier = Modifier.padding(top = 8.dp))
             Text(
-                "On the web, open Devices → Pair a device and enter the code shown there, or scan its QR code with your camera.",
+                "On the web, open Home → Connect a device and enter the code shown there, or scan its QR code with your camera.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = c.muted,
             )

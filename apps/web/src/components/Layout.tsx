@@ -8,13 +8,12 @@ import { useUnreadCount, useUsage } from "../lib/queries";
 import { useTheme, type ThemePref } from "../lib/theme";
 import { HelpDialog } from "./HelpDialog";
 import {
-  DevicesIcon,
   HelpIcon,
+  HomeIcon,
   InboxIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
-  PlugIcon,
   SendIcon,
   SunIcon,
   TemplateIcon,
@@ -32,9 +31,8 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { to: "/", label: "Home", icon: HomeIcon, end: true },
   { to: "/inbox", label: "Inbox", icon: InboxIcon },
-  { to: "/", label: "Connect", icon: PlugIcon, end: true },
-  { to: "/devices", label: "Devices", icon: DevicesIcon },
   { to: "/templates", label: "Templates", icon: TemplateIcon },
   { to: "/send", label: "Send", icon: SendIcon },
 ];
@@ -306,7 +304,7 @@ export function Layout({ user }: { user: User }) {
       </main>
 
       {/* Bottom tabs (mobile): a light-blue pill marks the active icon. */}
-      <nav className="grid shrink-0 grid-cols-5 border-t border-zinc-200 bg-background pt-2 pb-[max(env(safe-area-inset-bottom),10px)] md:hidden dark:border-zinc-800">
+      <nav className="grid shrink-0 grid-cols-4 border-t border-zinc-200 bg-background pt-2 pb-[max(env(safe-area-inset-bottom),10px)] md:hidden dark:border-zinc-800">
         {NAV.map((item) => (
           <NavLink
             key={item.to}

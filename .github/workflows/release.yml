@@ -135,7 +135,7 @@ jobs:
 
           **iOS:** build from source ([docs/setup.md](https://github.com/${{ github.repository }}/blob/main/docs/setup.md)).
 
-          Then pair the device: on the web, *Devices → Pair a device*, and enter the code in the app.
+          Then pair the device: on the web, *Home → Connect a device*, and enter the code in the app.
 
           Verify downloads with \`SHA256SUMS.txt\`.
           EOF

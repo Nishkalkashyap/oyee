@@ -4,7 +4,6 @@ import {
   applyEventsToPages,
   eventsFromServerMessage,
   flattenPages,
-  groupByThread,
   markAllReadInPages,
   matchesFilters,
   upsertIntoPages,
@@ -155,16 +154,5 @@ describe("detail + helpers", () => {
 
   it("flattenPages de-duplicates", () => {
     expect(ids(pages([[n1, n2], [n2, n3]]))).toEqual(["n1", "n2", "n3"]);
-  });
-
-  it("groupByThread groups by threadId in order of newest item", () => {
-    const a = makeNotification({ id: "a", threadId: "t" });
-    const b = makeNotification({ id: "b" });
-    const c = makeNotification({ id: "c", threadId: "t" });
-    const g = groupByThread([a, b, c]);
-    expect(g.map((x) => [x.threadId, x.items.map((n) => n.id)])).toEqual([
-      ["t", ["a", "c"]],
-      [null, ["b"]],
-    ]);
   });
 });

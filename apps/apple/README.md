@@ -52,7 +52,7 @@ open /Applications/Oyee.app
 
 The app has no Dock icon. Look for the bell in the menu bar. On first launch it opens a window to pair it:
 
-1. In the Oyee web app, open **Devices → Pair a device**.
+1. In the Oyee web app, open **Home → Connect a device**.
 2. Enter the server URL and the `XXXX-XXXX` code, or click the `oyee://pair?…` link on the Mac (the form is
    prefilled and you confirm with **Pair**).
 3. Allow notifications when macOS asks.
@@ -80,13 +80,18 @@ Notes:
 ### What the Mac app does
 
 - **Menu bar**: a bell with the unread count, a connection status dot, and a live list of active
-  notifications with a ✓ on each row to resolve it in one tap (it disappears at once; resolve everything and it reads
+  notifications (questions first, then running jobs, then the rest with repeats stacked into one row) with a ✓ on each
+  row to resolve it, or its whole stack, in one tap (it disappears at once; resolve everything and it reads
   "All caught up"). If macOS blocks Oyee's notifications, a "Notifications are off · Turn on" notice appears at the
   top of the menu bar and the inbox; it opens Oyee's page in System Settings and clears when you come back. Progress bars update in place, and you can use the action buttons right there. It also has
   **Open Inbox**, **Settings…** and **Quit**.
-- **Inbox window**: list + detail (`NavigationSplitView`) with search, status tabs (**Active** by default, Resolved,
-  All), filters (severity, source, unread),
-  infinite scroll, markdown bodies, fields, images, actions, reply box, responses, and read/resolve/delete.
+- **Inbox window**: list + detail, sorted like the web inbox (`Store/InboxSections.swift`): **Needs you** (answerable
+  from the list), **In progress** and **Updates** with repeats stacked into one row (click to open the newest and
+  expand the rest). Hovering a row swaps its time for a ✓ that resolves it (or the stack); Resolve also sits in the
+  card's footer and opens the next row. Search hides behind a round button; filters (a source from the row's context
+  menu, iOS's filter menu) show as removable pills; Resolved is a row at the end of the list. Blue means unread: only
+  critical and warning put a dot on the avatar. Also infinite scroll, markdown bodies, fields, images, actions, reply
+  box, responses, and read/resolve/delete.
 - **System notifications**: one per Oyee notification, with identifier = Oyee id.
   - Updates replace it in place, silently unless the update has `alert: true`.
   - Read, resolved or deleted elsewhere → it's removed from Notification Center.

@@ -28,7 +28,7 @@ public struct PairingView: View {
                     .font(.oyee(28, .heavy))
                     .padding(.top, 6)
             }
-            Text("In the Oyee web app, open **Devices → Pair a device** and enter the code shown there (or open the pairing link on this device).")
+            Text("In the Oyee web app, open **Home → Connect a device** and enter the code shown there (or open the pairing link on this device).")
                 .font(.oyee(compact ? 12.5 : 14))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)

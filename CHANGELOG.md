@@ -1,25 +1,46 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Web: a simpler landing page that reads like a README. One line on what Oyee does, the two setup commands, a card
+  you can answer to see the reply go back, and sign-in. The integration grid, feature tiles, platform previews and
+  setup tabs are gone (downloads are in Help and the pairing dialog).
+- Web: **Home** replaces the Connect and Devices pages. It shows what sends to you next to the devices it reaches,
+  with **Add** (MCP URL or webhook), **Connect a device** (pairing code with direct app downloads) and a "This browser"
+  row to turn on Web Push or explain that it's blocked. `/devices` redirects to Home; the apps and docs now say
+  "Home → Connect a device".
+- Web inbox: **Needs you** (questions, answerable from the list), **In progress** and **Updates** sections; repeats of
+  the same thread or source + title stack into one row with a count. Resolve sits in the card's footer, appears on row
+  hover, works by swiping a row right on touch screens, and with `E` (`J` / `K` move). The filter chips, status tabs
+  and severity menu are gone: search sits behind a button, filters show as removable pills and Resolved is a row at
+  the end of the list.
+- Web inbox: blue means unread and nothing else. Info notifications no longer get a blue dot on the avatar (only
+  critical and warning get a coloured mark), so read rows stop looking unread.
 - Rate limits per account: 1,000 notifications, 5,000 updates and 1,000 replies a day, with per-minute burst limits,
   `429` + `Retry-After` when exceeded, and an inbox notice at 80% and 100%. Today's usage is in the web account menu.
 - At most 10 devices, 20 tokens and 100 templates per account. Push notifications for rapid updates (progress bars)
   are coalesced to one per 2 seconds per notification.
 - Per-IP limits on new accounts and failed token attempts.
 - Web: Help button in the sidebar with downloads for every platform and links to the docs.
-- Web: a landing page replaces the bare sign-in card for signed-out visitors (at `/` and `/login`): a live demo of an
-  agent updating a card and asking a question, integration cards with official logos, feature tiles, platform previews with downloads and
-  copy-paste setup snippets. Sign-in errors and the dev-login form are shown in the hero.
-- Install with an AI agent: copyable prompts (landing page below the downloads, Help dialog and README) that have Claude Code, Codex or another agent
+- Install with an AI agent: copyable prompts (Help dialog and README) that have Claude Code, Codex or another agent
   download, checksum and install the macOS app, or the Android app over `adb`. The Gatekeeper workaround is now
   `xattr -cr`, which also clears flags other than quarantine.
-- Inbox: resolved notifications leave the default view. The web inbox opens on **Active**, with **Resolved** and
-  **All** tabs (`?status=resolved` / `?status=all`), and an "All caught up" state once everything is resolved.
+- Inbox: resolved notifications leave the default view (`?status=resolved` / `?status=all` show them), with an
+  "All caught up" state once everything is resolved.
   Unread counts (`GET /api/sources`, badges) count only active notifications.
 - New accent colour: Ocean blue replaces orange across the web app (brand mark, unread counts, send buttons,
   selected chips, your reply bubbles), the favicon and the installable web-app icons.
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
+
+## Next app release (Android and macOS)
+- Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;
+  repeats of the same thread, or source + title, stack into one row with a count. The filter chips and status tabs
+  are gone; Resolved is a row at the end of the list.
+- Blue means unread and nothing else: info notifications no longer get a blue dot on the avatar.
+- Resolve moved from the conversation header into the card's footer. Android goes back to the list afterwards and
+  resolves a row with a swipe to the right; the Mac inbox window opens the next row and shows a ✓ on row hover.
+- macOS menu bar: the same order, with repeats stacked; the ✓ on a stack resolves all of it.
+- Pairing screens now say "Home → Connect a device", matching the web app.
 
 ## 0.2.10
 - macOS: clicking the Settings test notification no longer shows "Notification test-… not found" in the inbox (it

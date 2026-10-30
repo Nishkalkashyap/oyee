@@ -29,7 +29,8 @@ components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is 
 | secondary-label | `#44403c` | `#d6d0c6` | unread previews, labels |
 
 Severity: critical `#dc2626`, warning `#d97706`, info `#3b82f6`, success `#16a34a`, debug faint. Severity appears only
-as a small dot on the source avatar and a soft pill on the card, never as a stripe or background.
+as a soft pill on the card and, for critical and warning only, a small dot on the source avatar; never as a stripe or
+background. Info gets no avatar dot because blue in a list row means unread and nothing else.
 
 Avatars use six pastel tints with matching ink (`#E4E8EF/#334155`, `#D5F0EC/#0F5F57`, `#E2ECFB/#1E4E9A`,
 `#E3F2E1/#2F6B2A`, `#F9D3DE/#9D174D`, `#EDE4F7/#5B21B6`), picked by `hash = hash * 31 + codepoint` over the source name,
@@ -48,9 +49,12 @@ so a source has the same color everywhere.
 
 - **Web:** 76px rail (brand mark, sections with icon + label, the active one on a white tile with a blue count),
   content in a rounded white panel. Phones get a bottom tab bar with a light-blue pill behind the active icon.
-- **Inbox:** large title, search pill, light-blue filter chips, rows with avatar + severity dot, title, time (blue while
-  unread), preview and a blue unread dot.
-- **Conversation detail:** header (source avatar, recipients, resolve, delete), the card as a white bubble, updates and
+- **Inbox:** large title with round search / mark-all-read buttons (no filter chips; filters set elsewhere show as
+  dismissible pills), quiet sentence-case section labels (Needs you, In progress, Updates), rows with avatar (+ red or
+  amber dot), title, a grey count for stacked repeats, time (blue while unread), preview and a blue unread dot. A ✓
+  button replaces the time on hover; rows swipe right to resolve on touch.
+- **Conversation detail:** header (source avatar, recipients, delete), the card as a white bubble with Resolve in its
+  footer under a hairline (kept apart from the agent's buttons), updates and
   resolution as quiet centered lines, responses as light-blue bubbles on the right with the device name, and a composer with
   a blue round send button when the card has a reply box.
 - **macOS:** the inbox window is the ground with two 22pt panels (list, conversation); the menu-bar popover has the

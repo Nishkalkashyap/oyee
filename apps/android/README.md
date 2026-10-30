@@ -56,7 +56,7 @@ debug keystore. Building on another machine means uninstalling first.
 
 ## Pair
 
-1. In the Oyee web app, open **Devices → Pair a device**. You'll see a code like `K7Q2-9XMA` and a QR code.
+1. In the Oyee web app, open **Home → Connect a device**. You'll see a code like `K7Q2-9XMA` and a QR code.
 2. Do one of these:
    - Scan the QR code with the camera. It opens `oyee://pair?server=…&code=…`, which pre-fills the form.
      Check the server and tap **Pair**. (The app asks you to confirm instead of pairing silently, so a malicious
@@ -178,8 +178,12 @@ If you rely on the **WebSocket service** (no Play services, a self-hosted server
   not distributed through Play.
 - Some manufacturers (Xiaomi, Huawei, Samsung, OnePlus, …) kill background apps aggressively despite this. Follow
   the per-vendor steps at <https://dontkillmyapp.com>. These usually involve "autostart" or "unrestricted battery".
-- The inbox opens on **Active**: resolved notifications move to the Resolved pill (All shows both), so resolving
-  everything leaves an "All caught up" screen. Source pills narrow within the selected tab.
+- The inbox opens on **Active**, sorted like the web inbox (`ui/inbox/InboxSections.kt`): **Needs you** (unanswered
+  buttons or reply box, answerable from the list), **In progress** (unfinished progress) and **Updates**, where repeats
+  of the same thread, or source + title, stack into one row with a count (tap to open the newest and expand the rest).
+  Swipe a row right to resolve it (a stack resolves as a whole); Resolve also sits in the card's footer and goes back
+  to the list. Resolved notifications are a row at the end of the list ("All caught up" once everything is resolved).
+- Blue in a row means unread and nothing else: only critical and warning put a coloured dot on the avatar.
 - The connection status ("Live", "Reconnecting…", "Offline") is shown in the inbox header and on the Settings
   screen.
 

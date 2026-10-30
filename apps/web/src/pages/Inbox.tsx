@@ -2,25 +2,16 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { Action, Notification, NotificationStatus, Severity } from "@oyee/schema";
 import { ApiError, errorMessage } from "../lib/api";
-import { flattenPages, groupByThread, type InboxFilters } from "../lib/cache";
+import { flattenPages, type InboxFilters } from "../lib/cache";
 import { relativeTime } from "../lib/format";
+import { flatSections, inboxSections, type InboxSection, type InboxStack } from "../lib/inbox";
 import { markdownToPlainText } from "../lib/markdown";
-import {
-  useDeleteNotification,
-  useMarkAllRead,
-  useMarkRead,
-  useNotification,
-  useNotificationList,
-  useResolve,
-  useRespond,
-  useSources,
-} from "../lib/queries";
+import { useDeleteNotification, useMarkAllRead, useMarkRead, useNotification, useNotificationList, useResolve, useRespond, useSources } from "../lib/queries";
 import { SEVERITIES, SEVERITY_STYLES } from "../lib/severity";
 import {
   CheckCheckIcon,
   CheckIcon,
   TrashIcon,
-  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   InboxIcon,
@@ -34,20 +25,20 @@ import {
 import { NotificationCard, ReplyComposer } from "../components/NotificationCard";
 import { ProgressBar } from "../components/NotificationParts";
 import { useToast } from "../components/Toast";
-import { Avatar, Button, EmptyState, ErrorBanner, FilterChip, Segmented, Select, Spinner, buttonClasses, cx } from "../components/ui";
+import { Avatar, Button, EmptyState, ErrorBanner, Spinner, buttonClasses, cx } from "../components/ui";
 import { formatDateTime } from "../lib/format";
 import { useDevices } from "../lib/queries";
 
-const GROUP_KEY = "oyee:inbox:group";
-
-/** The inbox shows active notifications by default; `?status=resolved` and `?status=all` open the other tabs. */
+/** The inbox shows active notifications by default; `?status=resolved` and `?status=all` open the other lists. */
 function statusFromParam(v: string | null): NotificationStatus | undefined {
   if (v === "resolved") return "resolved";
   if (v === "all") return undefined;
   return "active";
 }
 
-function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severity" | "status" | "thread" | "q", string | null>>) => void, URLSearchParams] {
+type FilterKey = "source" | "severity" | "status" | "thread" | "q";
+
+function useFilters(): [InboxFilters, (patch: Partial<Record<FilterKey, string | null>>) => void, URLSearchParams] {
   const [params, setParams] = useSearchParams();
   const filters: InboxFilters = {
     source: params.get("source") ?? undefined,
@@ -56,7 +47,7 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severit
     threadId: params.get("thread") ?? undefined,
     q: params.get("q") ?? undefined,
   };
-  const update = (patch: Partial<Record<"source" | "severity" | "status" | "thread" | "q", string | null>>) => {
+  const update = (patch: Partial<Record<FilterKey, string | null>>) => {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -73,98 +64,258 @@ function useFilters(): [InboxFilters, (patch: Partial<Record<"source" | "severit
   return [filters, update, params];
 }
 
-/** Gluon's list row: the source's tinted avatar with a severity dot, title, time (blue while unread) and preview. */
-function InboxRow({ n, selected, search, indent }: { n: Notification; selected: boolean; search: string; indent?: boolean }) {
-  const unread = !n.readAt && n.status === "active";
-  const preview = markdownToPlainText(n.body).replace(/\s+/g, " ").trim();
+const isUnread = (n: Notification) => !n.readAt && n.status === "active";
+
+/** Wide screens open the next notification after resolving; phones go back to the list. */
+const wideLayout = () => window.matchMedia("(min-width: 1024px)").matches;
+
+function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="rounded-md border border-zinc-300 px-1.5 py-px font-mono text-[10.5px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">{children}</kbd>;
+}
+
+/** Round icon button for the list header (search, mark all read). */
+function HeaderButton({ label, pressed, onClick, children }: { label: string; pressed?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <Link
-      to={`/inbox/${encodeURIComponent(n.id)}${search}`}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      aria-pressed={pressed}
       className={cx(
-        "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-[background-color,scale] duration-150 active:scale-[0.985]",
-        indent && "ml-5",
-        selected ? "bg-row-selected" : "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+        "flex size-9 items-center justify-center rounded-full transition-[background-color,scale] duration-150 active:scale-95",
+        pressed ? "bg-chip text-chip-foreground" : "bg-zinc-100 text-secondary-label hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
       )}
-      aria-current={selected ? "true" : undefined}
     >
-      <span className="relative shrink-0">
-        <Avatar name={n.source} size={44} />
-        {n.severity !== "debug" && (
-          <span
-            className={cx("absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full border-[2.5px] border-background", SEVERITY_STYLES[n.severity].dot)}
-            title={SEVERITY_STYLES[n.severity].label}
-          />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline gap-2">
-          <span
-            className={cx(
-              "min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.005em]",
-              n.status === "resolved" && !unread && "text-zinc-500 dark:text-zinc-400",
-            )}
-          >
-            {n.title}
-          </span>
-          <time
-            className={cx("shrink-0 text-xs tabular-nums", unread ? "font-semibold text-brand" : "text-zinc-500 dark:text-zinc-400")}
-            dateTime={n.createdAt}
-          >
-            {relativeTime(n.createdAt)}
-          </time>
-        </span>
-        <span className="mt-0.5 flex items-center gap-2">
-          <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", unread ? "text-secondary-label" : "text-zinc-500 dark:text-zinc-400")}>
-            {n.source}
-            {preview && ` · ${preview}`}
-          </span>
-          {n.responses.length > 0 && (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-zinc-500" title={`${n.responses.length} response(s)`}>
-              <ReplyIcon size={12} />
-              {n.responses.length}
-            </span>
-          )}
-          {n.status === "resolved" && <CheckIcon size={13} className="shrink-0 text-emerald-600" aria-label="Resolved" />}
-          {unread && <span className="size-2.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />}
-        </span>
-        {n.progress && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
-      </span>
-    </Link>
+      {children}
+    </button>
   );
 }
 
-function ThreadGroupRows({
-  threadId,
-  items,
-  selectedId,
-  search,
-  onFilter,
-}: {
-  threadId: string;
-  items: Notification[];
-  selectedId?: string;
-  search: string;
-  onFilter: () => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const unread = items.filter((n) => !n.readAt && n.status === "active").length;
+/**
+ * Touch only: drag a row right past the threshold to resolve it (the Mail/Gmail gesture). Vertical scrolling is left
+ * to the browser; a swipe swallows the click that would otherwise open the row.
+ */
+function SwipeToResolve({ onResolve, children }: { onResolve?: () => void; children: ReactNode }) {
+  const THRESHOLD = 96;
+  const [dx, setDx] = useState(0);
+  const drag = useRef<{ x: number; y: number; swiping: boolean; dx: number } | null>(null);
+  const swallowClick = useRef(false);
+  if (!onResolve) return <>{children}</>;
+
+  // Only a finished drag resolves; a cancelled one (the browser took over the gesture) just snaps back.
+  const end = (commit: boolean) => {
+    const d = drag.current;
+    drag.current = null;
+    setDx(0);
+    if (!d?.swiping) return;
+    swallowClick.current = true;
+    if (commit && d.dx >= THRESHOLD) onResolve();
+  };
+
   return (
-    <div>
-      <div className="flex items-center gap-2 px-3 pt-3 pb-1 text-[13px]">
-        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-1.5 font-semibold text-secondary-label">
-          {open ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
-          <LayersIcon size={12} />
-          <span className="truncate font-medium">{threadId}</span>
-          <span className="text-zinc-400">
-            {items.length}
-            {unread > 0 && <span className="font-semibold text-brand"> · {unread} unread</span>}
-          </span>
-        </button>
-        <button type="button" onClick={onFilter} className="text-zinc-500 hover:text-foreground">
-          Only this
-        </button>
+    <div
+      className="relative overflow-hidden rounded-2xl touch-pan-y"
+      onPointerDown={(e) => {
+        if (e.pointerType !== "touch") return;
+        swallowClick.current = false;
+        drag.current = { x: e.clientX, y: e.clientY, swiping: false, dx: 0 };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        const mx = e.clientX - d.x;
+        const my = e.clientY - d.y;
+        if (!d.swiping) {
+          if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) {
+            drag.current = null;
+            return;
+          }
+          if (mx < 12 || mx < Math.abs(my) * 1.5) return;
+          d.swiping = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }
+        d.dx = Math.max(0, mx);
+        setDx(d.dx);
+      }}
+      onPointerUp={() => end(true)}
+      onPointerCancel={() => end(false)}
+      onClickCapture={(e) => {
+        if (!swallowClick.current) return;
+        swallowClick.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      <div
+        aria-hidden
+        className={cx(
+          "absolute inset-0 flex items-center gap-2 pl-5 text-[14px] font-semibold text-white transition-colors",
+          dx >= THRESHOLD ? "bg-emerald-600" : "bg-emerald-600/60",
+          dx === 0 && "invisible",
+        )}
+      >
+        <CheckIcon size={18} /> Resolve
       </div>
-      {open && items.map((n) => <InboxRow key={n.id} n={n} selected={n.id === selectedId} search={search} indent />)}
+      <div
+        className="relative bg-background"
+        style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? "transform 220ms var(--ease-emphasized)" : "none" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A list row: the source's avatar (with a red or amber mark only for critical and warning), title, time and preview.
+ * Blue means unread and nothing else. `count` > 1 makes it the head of a stack of repeats.
+ */
+function InboxRow({
+  n,
+  count = 1,
+  unread = isUnread(n),
+  selected,
+  href,
+  onClick,
+  onResolve,
+  resolving,
+  child,
+  below,
+}: {
+  n: Notification;
+  count?: number;
+  unread?: boolean;
+  selected: boolean;
+  href: string;
+  onClick?: () => void;
+  onResolve?: () => void;
+  resolving?: boolean;
+  child?: boolean;
+  below?: ReactNode;
+}) {
+  const preview = markdownToPlainText(n.body).replace(/\s+/g, " ").trim();
+  const loud = n.severity === "critical" || n.severity === "warning";
+  // On hover the resolve button takes the time's place (as Gmail's row actions replace the date).
+  const yieldToHover = onResolve ? "pointer-fine:group-hover:invisible" : undefined;
+  return (
+    <div className={cx("group relative", child && "ml-7")}>
+      <SwipeToResolve onResolve={onResolve}>
+        <Link
+          to={href}
+          onClick={onClick}
+          className={cx(
+            "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-[background-color,scale] duration-150 active:scale-[0.985]",
+            selected ? "bg-row-selected" : "hover:bg-zinc-100 dark:hover:bg-zinc-800",
+          )}
+          aria-current={selected ? "true" : undefined}
+        >
+          <span className="relative shrink-0">
+            <Avatar name={n.source} size={child ? 34 : 44} />
+            {loud && (
+              <span
+                className={cx("absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full border-[2.5px] border-background", SEVERITY_STYLES[n.severity].dot)}
+                title={SEVERITY_STYLES[n.severity].label}
+              />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline gap-2">
+              <span
+                className={cx(
+                  "min-w-0 truncate text-[15px] tracking-[-0.005em]",
+                  unread ? "font-semibold text-foreground" : "font-medium text-secondary-label",
+                  n.status === "resolved" && !unread && "text-zinc-500 dark:text-zinc-400",
+                )}
+              >
+                {n.title}
+              </span>
+              {count > 1 && (
+                <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[11px] leading-[18px] font-semibold text-zinc-500 tabular-nums dark:bg-zinc-800 dark:text-zinc-400" title={`${count} in this stack`}>
+                  {count}
+                </span>
+              )}
+              <time
+                className={cx(
+                  "ml-auto shrink-0 pl-1 text-xs tabular-nums",
+                  unread ? "font-semibold text-brand" : "text-zinc-500 dark:text-zinc-400",
+                  yieldToHover,
+                )}
+                dateTime={n.createdAt}
+              >
+                {relativeTime(n.createdAt)}
+              </time>
+            </span>
+            <span className="mt-0.5 flex items-center gap-2">
+              <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", unread ? "text-secondary-label" : "text-zinc-500 dark:text-zinc-400")}>
+                {child ? preview || n.source : `${n.source}${preview ? ` · ${preview}` : ""}`}
+              </span>
+              {n.responses.length > 0 && (
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-zinc-500" title={`${n.responses.length} response(s)`}>
+                  <ReplyIcon size={12} />
+                  {n.responses.length}
+                </span>
+              )}
+              {n.status === "resolved" && <CheckIcon size={13} className="shrink-0 text-emerald-600" aria-label="Resolved" />}
+              {unread && <span className={cx("size-2.5 shrink-0 rounded-full bg-brand", yieldToHover)} aria-label="Unread" />}
+            </span>
+            {n.progress && n.status === "active" && <ProgressBar progress={n.progress} severity={n.severity} compact className="mt-2" />}
+          </span>
+        </Link>
+      </SwipeToResolve>
+      {/* Mouse: shows on hover. Touch: swipe instead, but kept for screen readers (visually hidden, not removed). */}
+      {onResolve && (
+        <button
+          type="button"
+          onClick={onResolve}
+          disabled={resolving}
+          aria-label={count > 1 ? `Resolve all ${count}` : "Resolve"}
+          title={count > 1 ? `Resolve all ${count}` : "Resolve (E)"}
+          className={cx(
+            "absolute right-3 flex size-8 items-center justify-center rounded-full bg-foreground text-background opacity-0 shadow-sm transition-[opacity,scale] duration-150 group-hover:opacity-100 focus-visible:opacity-100 active:scale-90 disabled:opacity-60 pointer-coarse:sr-only",
+            child ? "top-3" : "top-4",
+          )}
+        >
+          {resolving ? <Spinner size={13} className="text-background" /> : <CheckIcon size={15} />}
+        </button>
+      )}
+      {below}
+    </div>
+  );
+}
+
+/** A question's buttons right in the list, so answering doesn't need a detour through the conversation. */
+function QuickAnswer({ n, href }: { n: Notification; href: string }) {
+  const respond = useRespond(n.id);
+  const toast = useToast();
+  const buttons = n.actions.filter((a) => !a.url);
+  return (
+    <div className="flex flex-wrap gap-2 pr-3 pb-2 pl-[68px]">
+      {buttons.map((a, i) => (
+        <Button
+          key={a.id}
+          size="sm"
+          variant={a.style === "destructive" ? "outline-danger" : i === 0 ? "primary" : "secondary"}
+          loading={respond.isPending && respond.variables?.actionId === a.id}
+          disabled={respond.isPending}
+          onClick={() =>
+            respond.mutate(
+              { actionId: a.id },
+              {
+                onSuccess: () => toast.success(`Sent “${a.label}”`, n.source),
+                onError: (e) => toast.error("Couldn't send response", errorMessage(e)),
+              },
+            )
+          }
+        >
+          {a.label}
+        </Button>
+      ))}
+      {n.reply && (
+        <Link to={`${href}${href.includes("?") ? "&" : "?"}reply=1`} className={buttonClasses("secondary", "sm")}>
+          <ReplyIcon size={13} /> Reply
+        </Link>
+      )}
     </div>
   );
 }
@@ -174,16 +325,19 @@ function NotificationDetail({
   search,
   focusReply,
   onFilter,
+  onResolve,
+  resolving,
 }: {
   id: string;
   search: string;
   focusReply: boolean;
   onFilter: (patch: { thread?: string; source?: string }) => void;
+  onResolve: (n: Notification) => void;
+  resolving: boolean;
 }) {
   const q = useNotification(id);
   const markRead = useMarkRead();
   const respond = useRespond(id);
-  const resolve = useResolve();
   const del = useDeleteNotification();
   const toast = useToast();
   const navigate = useNavigate();
@@ -250,7 +404,7 @@ function NotificationDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-thread">
-      {/* Header: who sent it and where it went, plus resolve / delete. */}
+      {/* Header: who sent it and where it went. Resolve lives on the card, next to what you just read. */}
       <header className="flex h-[62px] shrink-0 items-center gap-3 border-b border-zinc-200 bg-background px-3 sm:px-4 dark:border-zinc-800">
         <Link to={`/inbox${search}`} className="-ml-1 rounded-full p-1.5 text-secondary-label hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800" aria-label="Back to inbox">
           <ChevronLeftIcon size={20} />
@@ -272,22 +426,6 @@ function NotificationDetail({
             )}
           </div>
         </div>
-        {!n.readAt && (
-          <Button size="sm" variant="ghost" icon={<CheckCheckIcon size={14} />} loading={markRead.isPending} onClick={() => markRead.mutate(n.id)}>
-            <span className="hidden sm:inline">Mark read</span>
-          </Button>
-        )}
-        {!resolved && (
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={<CheckIcon size={14} />}
-            loading={resolve.isPending}
-            onClick={() => resolve.mutate(n.id, { onError: (e) => toast.error("Couldn't resolve", errorMessage(e)) })}
-          >
-            Resolve
-          </Button>
-        )}
         <Button size="sm" variant="ghost" icon={<TrashIcon size={14} />} loading={del.isPending} onClick={onDelete} aria-label="Delete" title="Delete" />
       </header>
 
@@ -301,6 +439,18 @@ function NotificationDetail({
             className="mr-6 sm:mr-12"
             onAction={onAction}
             pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
+            footer={
+              !resolved && (
+                <div className="flex items-center gap-3">
+                  <Button size="sm" variant="primary" icon={<CheckIcon size={14} />} loading={resolving} onClick={() => onResolve(n)}>
+                    Resolve
+                  </Button>
+                  <span className="hidden text-xs text-zinc-400 pointer-fine:inline dark:text-zinc-500">
+                    or press <Kbd>E</Kbd>
+                  </span>
+                </div>
+              )
+            }
           />
           {n.version > 1 && n.updatedAt !== n.createdAt && (
             <SystemLine>
@@ -375,6 +525,19 @@ function Recipients({ ids }: { ids: string[] | null }) {
   return <>To {names.join(", ")}</>;
 }
 
+/** A dismissible pill for a filter set from elsewhere (a source or thread clicked in the conversation, a ?severity link). */
+function FilterPill({ icon, children, onClear }: { icon?: ReactNode; children: ReactNode; onClear: () => void }) {
+  return (
+    <span className="inline-flex h-7 max-w-full items-center gap-1 rounded-full bg-chip pr-1 pl-2.5 text-xs font-semibold text-chip-foreground">
+      {icon}
+      <span className="truncate">{children}</span>
+      <button type="button" aria-label="Clear filter" onClick={onClear} className="rounded-full p-0.5 hover:bg-black/5 dark:hover:bg-white/10">
+        <XIcon size={11} />
+      </button>
+    </span>
+  );
+}
+
 export function InboxPage() {
   const { id } = useParams();
   const [filters, setFilter, params] = useFilters();
@@ -382,18 +545,28 @@ export function InboxPage() {
   const sources = useSources();
   const list = useNotificationList(filters);
   const markAll = useMarkAllRead();
+  const resolve = useResolve();
   const toast = useToast();
-  const [grouped, setGrouped] = useState(() => localStorage.getItem(GROUP_KEY) === "1");
   const [searchText, setSearchText] = useState(filters.q ?? "");
+  const [searchOpen, setSearchOpen] = useState(!!filters.q);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [resolving, setResolving] = useState<Set<string>>(() => new Set());
   const sentinel = useRef<HTMLDivElement>(null);
 
   const listParams = new URLSearchParams(params);
   listParams.delete("reply");
   const search = listParams.toString() ? `?${listParams.toString()}` : "";
   const items = useMemo(() => flattenPages(list.data), [list.data]);
-  const groups = useMemo(() => (grouped ? groupByThread(items) : null), [grouped, items]);
   const narrowed = !!(filters.source || filters.severity || filters.threadId || filters.q);
-  const hasFilters = narrowed || filters.status !== "active";
+  const activeView = filters.status === "active";
+  // Sections and stacks for the everyday view; a plain list for search results and the resolved archive.
+  const sections: InboxSection[] = useMemo(
+    () => (activeView && !filters.q ? inboxSections(items) : flatSections(items)),
+    [activeView, filters.q, items],
+  );
+  const isExpanded = (s: InboxStack) => expanded.has(s.key) || s.items.slice(1).some((n) => n.id === id);
+  // Row order on screen, for J/K and "open the next one after resolving".
+  const order = sections.flatMap((sec) => sec.stacks.flatMap((s) => (isExpanded(s) ? s.items : s.items.slice(0, 1)))).map((n) => n.id);
 
   // Debounced search → URL.
   useEffect(() => {
@@ -403,8 +576,6 @@ export function InboxPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchText]);
-
-  useEffect(() => localStorage.setItem(GROUP_KEY, grouped ? "1" : "0"), [grouped]);
 
   // Infinite scroll.
   useEffect(() => {
@@ -427,10 +598,69 @@ export function InboxPage() {
     navigate(`/inbox?${next.toString()}`);
   };
 
+  const open = (nid: string | undefined) => navigate(nid ? `/inbox/${encodeURIComponent(nid)}${search}` : `/inbox${search}`);
+
+  /** Resolves one row or a whole stack. If the open notification goes, the next one opens (or the list, on phones). */
+  const resolveAll = (ns: Notification[]) => {
+    const targets = ns.filter((n) => n.status === "active" && !resolving.has(n.id));
+    if (!targets.length) return;
+    const ids = new Set(targets.map((n) => n.id));
+    setResolving((prev) => new Set([...prev, ...ids]));
+    if (id && ids.has(id) && activeView) {
+      const at = order.indexOf(id);
+      const next = [...order.slice(at + 1), ...order.slice(0, Math.max(0, at)).reverse()].find((x) => !ids.has(x));
+      open(wideLayout() ? next : undefined);
+    }
+    void Promise.allSettled(targets.map((n) => resolve.mutateAsync(n.id))).then((results) => {
+      setResolving((prev) => new Set([...prev].filter((x) => !ids.has(x))));
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failed) toast.error("Couldn't resolve", errorMessage(failed.reason));
+      else toast.success(targets.length > 1 ? `Resolved ${targets.length}` : "Resolved", targets[0]!.title);
+    });
+  };
+
+  // Keyboard: J / K move through the list, E resolves the open notification.
+  const keys = useRef({ order, id, items, resolveAll });
+  keys.current = { order, id, items, resolveAll };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable='true']") || document.querySelector("dialog[open]")) return;
+      const k = keys.current;
+      const key = e.key.toLowerCase();
+      if (key === "j" || key === "k") {
+        const at = k.id ? k.order.indexOf(k.id) : -1;
+        const next = key === "j" ? k.order[at + 1] : k.order[at === -1 ? 0 : at - 1];
+        if (next) {
+          e.preventDefault();
+          open(next);
+        }
+      } else if (key === "e" && k.id) {
+        const n = k.items.find((x) => x.id === k.id);
+        if (n?.status === "active") {
+          e.preventDefault();
+          k.resolveAll([n]);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const sourceItems = sources.data ?? [];
   const unreadInScope = filters.source
     ? (sourceItems.find((s) => s.source === filters.source)?.unread ?? 0)
     : sourceItems.reduce((a, s) => a + s.unread, 0);
+  const withStatus = (status: string | null) => {
+    const next = new URLSearchParams(listParams);
+    if (status) next.set("status", status);
+    else next.delete("status");
+    const qs = next.toString();
+    return `/inbox${qs ? `?${qs}` : ""}`;
+  };
+  const showSectionTitles = sections.length > 1;
 
   return (
     <div className="flex h-full min-h-0">
@@ -441,110 +671,75 @@ export function InboxPage() {
           id ? "hidden" : "flex",
         )}
       >
-        <div className="sticky top-0 z-20 space-y-3 bg-background px-4 pt-5 pb-3">
+        <div className="sticky top-0 z-20 space-y-3 bg-background px-4 pt-5 pb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em] md:text-2xl md:font-bold md:tracking-tight">Inbox</h1>
-            {unreadInScope > 0 && <span className="text-[13px] font-semibold text-brand">{unreadInScope} unread</span>}
-            <div className="ml-auto flex items-center gap-1">
-              <Button
-                size="sm"
-                variant={grouped ? "secondary" : "ghost"}
-                icon={<LayersIcon size={13} />}
-                onClick={() => setGrouped((g) => !g)}
-                aria-pressed={grouped}
-                title="Group by thread"
-              >
-                Threads
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<CheckCheckIcon size={13} />}
-                loading={markAll.isPending}
-                disabled={unreadInScope === 0}
-                onClick={() =>
-                  markAll.mutate(filters.source, {
-                    onSuccess: (r) => toast.success(`Marked ${r.updated} as read`),
-                    onError: (e) => toast.error("Couldn't mark all read", errorMessage(e)),
-                  })
-                }
-                title={filters.source ? `Mark all from ${filters.source} read` : "Mark all read"}
-              >
-                Read all
-              </Button>
-            </div>
-          </div>
-
-          <div className="relative">
-            <SearchIcon size={16} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="search"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Search"
-              className="h-10 w-full rounded-full bg-zinc-100 pr-4 pl-10 text-[14px] placeholder:text-zinc-500 focus:bg-background focus:ring-2 focus:ring-brand/30 focus:outline-none dark:bg-zinc-800"
-            />
-          </div>
-
-          {sourceItems.length > 0 && (
-            <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
-              <FilterChip active={!filters.source} onClick={() => setFilter({ source: null })}>
-                All
-              </FilterChip>
-              {sourceItems.map((s) => (
-                <FilterChip key={s.source} active={filters.source === s.source} onClick={() => setFilter({ source: filters.source === s.source ? null : s.source })}>
-                  {s.source}
-                  {s.unread > 0 && <span className="text-[11px] opacity-75">{s.unread}</span>}
-                </FilterChip>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Segmented<"all" | NotificationStatus>
-              size="sm"
-              value={filters.status ?? "all"}
-              onChange={(v) => setFilter({ status: v === "active" ? null : v })}
-              options={[
-                { value: "active", label: "Active" },
-                { value: "resolved", label: "Resolved" },
-                { value: "all", label: "All" },
-              ]}
-            />
-            <Select
-              aria-label="Severity"
-              value={filters.severity ?? ""}
-              onChange={(e) => setFilter({ severity: e.target.value || null })}
-              className="h-7 w-auto! rounded-full border-0 bg-zinc-100 py-0 pl-3 text-xs dark:bg-zinc-800"
-            >
-              <option value="">Any severity</option>
-              {SEVERITIES.map((s) => (
-                <option key={s} value={s}>
-                  {SEVERITY_STYLES[s].label}
-                </option>
-              ))}
-            </Select>
-            {filters.threadId && (
-              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-chip pr-1 pl-2.5 text-xs font-semibold text-chip-foreground">
-                <LayersIcon size={11} /> {filters.threadId}
-                <button type="button" aria-label="Clear thread filter" onClick={() => setFilter({ thread: null })} className="rounded-full p-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700">
-                  <XIcon size={11} />
-                </button>
-              </span>
+            {!activeView && (
+              <Link to={withStatus(null)} className="-ml-1.5 rounded-full p-1 text-secondary-label hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Back to inbox">
+                <ChevronLeftIcon size={22} />
+              </Link>
             )}
-            {hasFilters && (
-              <button
-                type="button"
-                className="ml-auto text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            <h1 className="text-[30px] leading-tight font-extrabold tracking-[-0.035em] md:text-2xl md:font-bold md:tracking-tight">
+              {filters.status === "resolved" ? "Resolved" : activeView ? "Inbox" : "Everything"}
+            </h1>
+            {activeView && unreadInScope > 0 && <span className="text-[13px] font-semibold text-brand">{unreadInScope} unread</span>}
+            <div className="ml-auto flex items-center gap-1.5">
+              {activeView && unreadInScope > 0 && (
+                <HeaderButton
+                  label={filters.source ? `Mark all from ${filters.source} read` : "Mark all read"}
+                  onClick={() =>
+                    markAll.mutate(filters.source, {
+                      onSuccess: (r) => toast.success(`Marked ${r.updated} as read`),
+                      onError: (e) => toast.error("Couldn't mark all read", errorMessage(e)),
+                    })
+                  }
+                >
+                  {markAll.isPending ? <Spinner size={14} /> : <CheckCheckIcon size={16} />}
+                </HeaderButton>
+              )}
+              <HeaderButton
+                label="Search"
+                pressed={searchOpen}
                 onClick={() => {
-                  setSearchText("");
-                  setFilter({ source: null, severity: null, status: null, thread: null, q: null });
+                  if (searchOpen) {
+                    setSearchText("");
+                    setFilter({ q: null });
+                  }
+                  setSearchOpen((o) => !o);
                 }}
               >
-                Clear filters
-              </button>
-            )}
+                <SearchIcon size={16} />
+              </HeaderButton>
+            </div>
           </div>
+
+          {searchOpen && (
+            <input
+              type="search"
+              autoFocus
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Escape") return;
+                setSearchText("");
+                setFilter({ q: null });
+                setSearchOpen(false);
+              }}
+              placeholder="Search titles, text and fields"
+              className="h-10 w-full rounded-full bg-zinc-100 px-4 text-[14px] placeholder:text-zinc-500 focus:bg-background focus:ring-2 focus:ring-brand/30 focus:outline-none dark:bg-zinc-800"
+            />
+          )}
+
+          {(filters.source || filters.threadId || filters.severity) && (
+            <div className="flex flex-wrap gap-1.5">
+              {filters.source && <FilterPill onClear={() => setFilter({ source: null })}>{filters.source}</FilterPill>}
+              {filters.threadId && (
+                <FilterPill icon={<LayersIcon size={11} />} onClear={() => setFilter({ thread: null })}>
+                  {filters.threadId}
+                </FilterPill>
+              )}
+              {filters.severity && <FilterPill onClear={() => setFilter({ severity: null })}>{SEVERITY_STYLES[filters.severity].label}</FilterPill>}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 px-2 pb-4">
@@ -558,24 +753,24 @@ export function InboxPage() {
             </div>
           ) : items.length === 0 ? (
             narrowed ? (
-              <EmptyState icon={<SearchIcon size={20} />} title="Nothing matches these filters">
-                Try a different source, severity or search.
+              <EmptyState icon={<SearchIcon size={20} />} title="Nothing matches">
+                Try a different search, or clear the filter.
               </EmptyState>
             ) : filters.status === "resolved" ? (
               <EmptyState icon={<CheckIcon size={20} />} title="Nothing resolved yet">
                 Notifications you resolve move here, out of your inbox.
               </EmptyState>
-            ) : filters.status === "active" && sourceItems.some((s) => s.count > 0) ? (
+            ) : activeView && sourceItems.some((s) => s.count > 0) ? (
               <EmptyState
                 icon={<CheckIcon size={20} />}
                 title="All caught up"
                 actions={
-                  <Button variant="secondary" onClick={() => setFilter({ status: "resolved" })}>
+                  <Link to={withStatus("resolved")} className={buttonClasses("secondary")}>
                     View resolved
-                  </Button>
+                  </Link>
                 }
               >
-                Nothing needs your attention. Resolved notifications are in the Resolved tab.
+                Nothing needs your attention.
               </EmptyState>
             ) : (
               <EmptyState
@@ -592,27 +787,64 @@ export function InboxPage() {
                   </>
                 }
               >
-                Create an MCP server URL or a webhook on the Connect page, then send your first notification. It shows up
+                Create an MCP server URL or a webhook on the Home page, then send your first notification. It shows up
                 here instantly.
               </EmptyState>
             )
-          ) : groups ? (
-            groups.map((g) =>
-              g.threadId && g.items.length > 1 ? (
-                <ThreadGroupRows
-                  key={g.key}
-                  threadId={g.threadId}
-                  items={g.items}
-                  selectedId={id}
-                  search={search}
-                  onFilter={() => setFilter({ thread: g.threadId })}
-                />
-              ) : (
-                <InboxRow key={g.key} n={g.items[0]!} selected={g.items[0]!.id === id} search={search} />
-              ),
-            )
           ) : (
-            items.map((n) => <InboxRow key={n.id} n={n} selected={n.id === id} search={search} />)
+            sections.map((sec) => (
+              <div key={sec.id} className="pb-1">
+                {showSectionTitles && (
+                  <h2 className="flex items-center gap-1.5 px-3 pt-3 pb-1 text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    {sec.title}
+                    {sec.id === "needs-you" && <span className="text-brand">{sec.stacks.length}</span>}
+                  </h2>
+                )}
+                {sec.stacks.map((s) => {
+                  const head = s.items[0]!;
+                  const href = `/inbox/${encodeURIComponent(head.id)}${search}`;
+                  const canResolve = head.status === "active";
+                  const showAll = isExpanded(s);
+                  return (
+                    <div key={s.key}>
+                      <InboxRow
+                        n={head}
+                        count={s.items.length}
+                        unread={s.items.some(isUnread)}
+                        selected={head.id === id}
+                        href={href}
+                        onClick={
+                          s.items.length > 1
+                            ? () =>
+                                setExpanded((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(s.key)) next.delete(s.key);
+                                  else next.add(s.key);
+                                  return next;
+                                })
+                            : undefined
+                        }
+                        onResolve={canResolve ? () => resolveAll(s.items) : undefined}
+                        resolving={s.items.some((n) => resolving.has(n.id))}
+                        below={sec.id === "needs-you" ? <QuickAnswer n={head} href={href} /> : undefined}
+                      />
+                      {showAll &&
+                        s.items.slice(1).map((n) => (
+                          <InboxRow
+                            key={n.id}
+                            n={n}
+                            child
+                            selected={n.id === id}
+                            href={`/inbox/${encodeURIComponent(n.id)}${search}`}
+                            onResolve={n.status === "active" ? () => resolveAll([n]) : undefined}
+                            resolving={resolving.has(n.id)}
+                          />
+                        ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
           )}
           <div ref={sentinel} />
           {list.hasNextPage && (
@@ -622,18 +854,42 @@ export function InboxPage() {
               </Button>
             </div>
           )}
-          {!list.hasNextPage && items.length > 20 && <p className="py-6 text-center text-xs text-zinc-400">That's everything.</p>}
+          {activeView && !list.hasNextPage && items.length > 0 && (
+            <Link
+              to={withStatus("resolved")}
+              className="mt-2 flex items-center justify-between rounded-2xl px-3 py-3 text-[14px] font-semibold text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-foreground dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Resolved
+              <ChevronRightIcon size={16} />
+            </Link>
+          )}
         </div>
       </section>
 
       {/* Detail pane */}
       <section className={cx("min-h-0 min-w-0 flex-1 lg:block", id ? "block" : "hidden")}>
         {id ? (
-          <NotificationDetail key={id} id={id} search={search} focusReply={params.get("reply") === "1"} onFilter={filterFromDetail} />
+          <NotificationDetail
+            key={id}
+            id={id}
+            search={search}
+            focusReply={params.get("reply") === "1"}
+            onFilter={filterFromDetail}
+            onResolve={(n) => resolveAll([n])}
+            resolving={resolving.has(id)}
+          />
         ) : (
           <div className="flex h-full items-center justify-center bg-thread">
             <EmptyState icon={<InboxIcon size={20} />} title="Select a notification">
               Pick one from the list to see the full card, act on it, or reply.
+              <div className="mt-4 hidden justify-center gap-4 text-xs pointer-fine:flex">
+                <span>
+                  <Kbd>J</Kbd> <Kbd>K</Kbd> move
+                </span>
+                <span>
+                  <Kbd>E</Kbd> resolve
+                </span>
+              </div>
             </EmptyState>
           </div>
         )}

@@ -186,29 +186,3 @@ export function flattenPages(data: NotificationPages | undefined): Notification[
   }
   return out;
 }
-
-export interface ThreadGroup {
-  key: string;
-  threadId: string | null;
-  items: Notification[];
-}
-
-/** Groups a createdAt-desc list by threadId, ordered by each group's newest item. Unthreaded items stand alone. */
-export function groupByThread(items: Notification[]): ThreadGroup[] {
-  const groups: ThreadGroup[] = [];
-  const byThread = new Map<string, ThreadGroup>();
-  for (const n of items) {
-    if (!n.threadId) {
-      groups.push({ key: n.id, threadId: null, items: [n] });
-      continue;
-    }
-    let g = byThread.get(n.threadId);
-    if (!g) {
-      g = { key: `thread:${n.threadId}`, threadId: n.threadId, items: [] };
-      byThread.set(n.threadId, g);
-      groups.push(g);
-    }
-    g.items.push(n);
-  }
-  return groups;
-}

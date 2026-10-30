@@ -184,6 +184,14 @@ export const SearchIcon = make(
 export const ChevronLeftIcon = make(<path d="m15 18-6-6 6-6" />, "ChevronLeftIcon");
 export const ChevronDownIcon = make(<path d="m6 9 6 6 6-6" />, "ChevronDownIcon");
 export const ChevronRightIcon = make(<path d="m9 18 6-6-6-6" />, "ChevronRightIcon");
+export const ArrowRightIcon = make(<path d="M5 12h14M13 6l6 6-6 6" />, "ArrowRightIcon");
+export const HomeIcon = make(
+  <>
+    <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z" />
+  </>,
+  "HomeIcon",
+);
+export const PencilIcon = make(<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />, "PencilIcon");
 export const PlusIcon = make(<path d="M12 5v14M5 12h14" />, "PlusIcon");
 export const ReplyIcon = make(
   <>

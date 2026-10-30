@@ -36,7 +36,7 @@ Free and open source (MIT).
 
 Or let a coding agent on your computer do it: see [Install with an AI agent](#install-with-an-ai-agent).
 
-Then pair the device: on the web, **Devices → Pair a device**, and enter the code in the app.
+Then pair the device: on the web, **Home → Connect a device**, and enter the code in the app.
 
 **Updates:** the macOS app updates itself from GitHub Releases in the background (download, checksum check, restart;
 can be turned off in Settings). The Android app notifies you about a new release; **Update** downloads the APK with
@@ -57,7 +57,7 @@ Install the Oyee macOS app on this Mac from its latest GitHub release (https://g
 3. Unzip it, quit Oyee if it's running, and move Oyee.app to /Applications, replacing any older copy.
 4. The app is ad-hoc signed and not notarized, so clear its download flags so Gatekeeper doesn't block it: xattr -cr /Applications/Oyee.app
 5. Open it with: open /Applications/Oyee.app (it lives in the menu bar).
-Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.
+Then tell me to pair it: on https://oyee.app go to Home → Connect a device and enter the code in the app.
 ```
 
 **Android**, from an agent on a computer with `adb`, with your phone plugged in and USB debugging on:
@@ -69,7 +69,7 @@ Install the Oyee Android app on my phone over USB from its latest GitHub release
 3. Check the APK's SHA-256 against SHA256SUMS.txt. Stop and tell me if it doesn't match.
 4. Install it with: adb install -r <apk>. If that fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, a build signed with a different key is installed: ask me before uninstalling it (that deletes its data).
 5. Start it with: adb shell monkey -p app.oyee.android 1
-Then tell me to pair it: on https://oyee.app go to Devices → Pair a device and enter the code in the app.
+Then tell me to pair it: on https://oyee.app go to Home → Connect a device and enter the code in the app.
 ```
 
 ## Quick start

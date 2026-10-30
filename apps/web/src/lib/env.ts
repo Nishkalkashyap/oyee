@@ -17,6 +17,3 @@ export function isMockMode(): boolean {
     return false;
   }
 }
-
-/** Where users find the native apps' source. Override with VITE_REPO_URL. */
-export const REPO_URL: string = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/nishkalkashyap/oyee";

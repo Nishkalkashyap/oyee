@@ -84,7 +84,10 @@ fun BrandMark(size: Dp = 28.dp) {
     }
 }
 
-/** Round avatar with the name's initial in its tint, plus an optional severity dot. */
+/**
+ * Round avatar with the name's initial in its tint. Only critical and warning get a dot: blue in a list row means
+ * unread, so an info dot would make read rows look unread.
+ */
 @Composable
 fun SourceAvatar(name: String, size: Dp = 44.dp, severity: Severity? = null, modifier: Modifier = Modifier) {
     val (fill, ink) = avatarTint(name)
@@ -98,7 +101,7 @@ fun SourceAvatar(name: String, size: Dp = 44.dp, severity: Severity? = null, mod
                 style = MaterialTheme.typography.titleMedium,
             )
         }
-        if (severity != null && severity != Severity.DEBUG) {
+        if (severity == Severity.CRITICAL || severity == Severity.WARNING) {
             Box(
                 Modifier.align(Alignment.BottomEnd).offset(x = 1.dp, y = 1.dp).size(size * 0.3f)
                     .clip(CircleShape).background(Oyee.colors.background).padding(2.5.dp)

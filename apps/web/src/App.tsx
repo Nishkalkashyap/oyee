@@ -7,11 +7,10 @@ import { Layout, Logo, PageContainer } from "./components/Layout";
 import { LiveProvider } from "./components/LiveProvider";
 import { Button, EmptyState, Spinner, buttonClasses } from "./components/ui";
 import { LandingPage, LoginPage } from "./pages/Landing";
-import { ConnectPage } from "./pages/Connect";
+import { HomePage } from "./pages/Home";
 import { InboxPage } from "./pages/Inbox";
 
-// Heavier, less-visited pages (QR code, zod-validated editors, previews) load on demand.
-const DevicesPage = lazy(() => import("./pages/Devices").then((m) => ({ default: m.DevicesPage })));
+// Heavier, less-visited pages (zod-validated editors, previews) load on demand.
 const TemplatesPage = lazy(() => import("./pages/Templates").then((m) => ({ default: m.TemplatesPage })));
 const SendPage = lazy(() => import("./pages/Send").then((m) => ({ default: m.SendPage })));
 
@@ -100,10 +99,11 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<AuthGate />}>
-        <Route index element={<ConnectPage />} />
+        <Route index element={<HomePage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="inbox/:id" element={<InboxPage />} />
-        <Route path="devices" element={lazyEl(DevicesPage)} />
+        {/* Devices moved onto Home. */}
+        <Route path="devices" element={<Navigate to="/" replace />} />
         <Route path="templates" element={lazyEl(TemplatesPage)} />
         <Route path="send" element={lazyEl(SendPage)} />
         <Route path="*" element={<NotFound />} />

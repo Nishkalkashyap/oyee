@@ -39,8 +39,12 @@ struct InboxWindowView: View {
 
                     Group {
                         if let id = model.selectedNotificationID {
-                            NotificationLoaderView(id: id, store: model.store)
-                                .id(id)
+                            NotificationLoaderView(id: id, store: model.store) { n in
+                                // Resolving the open notification moves on to the next row, as in a mail app.
+                                model.selectedNotificationID = model.store.nextSelection(afterResolving: [n.id], current: n.id)
+                                Task { await model.store.resolve(n.id) }
+                            }
+                            .id(id)
                         } else {
                             VStack(spacing: 8) {
                                 BrandMark(size: 44)

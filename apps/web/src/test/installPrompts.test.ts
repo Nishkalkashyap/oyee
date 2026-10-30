@@ -9,7 +9,7 @@ describe("INSTALL_PROMPTS", () => {
   it("verifies checksums and pairs afterwards", () => {
     for (const { prompt } of INSTALL_PROMPTS) {
       expect(prompt).toContain("SHA256SUMS.txt");
-      expect(prompt).toContain("Pair a device");
+      expect(prompt).toContain("Connect a device");
     }
   });
 });

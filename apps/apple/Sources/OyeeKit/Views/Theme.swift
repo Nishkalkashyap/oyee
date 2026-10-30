@@ -201,7 +201,8 @@ public struct SourceAvatar: View {
             .frame(width: size, height: size)
             .background(t.fill, in: Circle())
             .overlay(alignment: .bottomTrailing) {
-                if let severity, severity != .debug {
+                // Only critical and warning: blue in a list row means unread, so an info dot read as "unread".
+                if let severity, severity == .critical || severity == .warning {
                     Circle()
                         .fill(severity.color)
                         .frame(width: size * 0.3, height: size * 0.3)

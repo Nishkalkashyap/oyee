@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Action, Notification } from "@oyee/schema";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon } from "./Icons";
@@ -31,6 +31,8 @@ export interface NotificationCardProps {
   pendingActionId?: string | null;
   busy?: { reply?: boolean };
   focusReply?: boolean;
+  /** Bottom row under a hairline: the card's own controls (Resolve), kept apart from the agent's buttons. */
+  footer?: ReactNode;
   className?: string;
 }
 
@@ -52,6 +54,7 @@ export function NotificationCard({
   pendingActionId,
   busy = {},
   focusReply,
+  footer,
   className,
 }: NotificationCardProps) {
   const resolved = n.status === "resolved";
@@ -185,6 +188,8 @@ export function NotificationCard({
           focus={focusReply}
         />
       )}
+
+      {footer && <div className="mt-4 border-t border-zinc-200/80 pt-3.5 dark:border-zinc-700/70">{footer}</div>}
     </article>
   );
 }

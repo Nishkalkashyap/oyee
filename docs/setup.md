@@ -119,7 +119,7 @@ Verify: `curl https://<your-host>/api/config` → `fcmEnabled: true`, `vapidPubl
 ## 5. Web
 
 1. Open `https://<your-host>` → **Sign in with Google**.
-2. **Devices → Enable notifications in this browser** and allow the prompt.
+2. **Home → This browser → Turn on** and allow the prompt.
    - **Brave** blocks Web Push by default: `brave://settings/privacy` → enable **Use Google services for push
      messaging** → restart Brave → try again (the page shows this hint automatically).
 
@@ -157,7 +157,7 @@ WebSocket foreground service.
 - **Or** copy the APK to the phone and open it (allow *Install unknown apps*).
 
 ### 6.4 Pair
-Web → **Devices → Pair a device** → type the `XXXX-XXXX` code into the app, or scan the QR code with the phone
+Web → **Home → Connect a device** → type the `XXXX-XXXX` code into the app, or scan the QR code with the phone
 camera (opens a `oyee://pair` link, which you confirm in the app). Allow notifications. In Settings, consider
 exempting Oyee from battery optimization if you use the WebSocket mode.
 
@@ -170,7 +170,7 @@ open build/Oyee.app                       # move it to /Applications to keep it
 # or develop it in Xcode:
 brew install xcodegen && xcodegen generate && open Oyee.xcodeproj   # scheme Oyee-macOS
 ```
-Allow notifications → menu-bar icon → pair with a code from **Devices → Pair a device**. The server URL is
+Allow notifications → menu-bar icon → pair with a code from **Home → Connect a device**. The server URL is
 prefilled (`Pairing.defaultServerURL`). Enable **Launch at login** in Settings. The menu-bar app keeps a WebSocket open;
 there is no APNs (by design, no paid Apple account).
 
