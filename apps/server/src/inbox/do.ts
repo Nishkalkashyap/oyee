@@ -13,6 +13,7 @@ import {
   type McpWaitResult,
   type Notification,
   type Page,
+  type ProgressInput,
   type QuotaKind,
   type Response as OyeeResponse,
   type RespondInput,
@@ -45,6 +46,7 @@ import {
   type Actor,
   type SendOptions,
 } from "./model";
+import { isLiveProgress, reportProgress, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
@@ -690,6 +692,41 @@ export class InboxDO extends DurableObject<Env> {
         };
         set.add(fn);
       });
+    });
+  }
+
+  // ─── Progress (RPC) ───────────────────────────────────────────────────────
+
+  /** One progress report (see inbox/progress.ts): creates by `(source, key)`, updates silently, alerts when finished. */
+  async progress(actor: Actor, input: ProgressInput): Promise<RpcResult<ProgressReport>> {
+    return guard(async () => {
+      const targets =
+        input.devices?.length || input.platforms?.length
+          ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
+          : undefined;
+      // No awaits from here on, so concurrent reports for the same key can't interleave.
+      const source = input.source ?? actor.defaultSource;
+      const row = this.sql
+        .exec<StoredRow>(
+          "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
+          source,
+          input.key,
+        )
+        .toArray()[0];
+      const latest = row ? (JSON.parse(row.data) as Notification) : null;
+      const continues = isLiveProgress(latest);
+      if (!continues && actor.tokenId) this.checkRate(actor.tokenId);
+      this.consume(continues ? "update" : "send", actor.userId);
+      const report = reportProgress(latest, input, { id: newId("ntf"), source, now: new Date().toISOString(), targets });
+      const n = report.notification;
+      this.save(n, null, continues ? (row!.token_id ?? actor.tokenId) : actor.tokenId);
+      if (continues) {
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: report.alert, reason: "update" }]);
+      } else {
+        this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
+        this.ensurePrune();
+      }
+      return report;
     });
   }
 

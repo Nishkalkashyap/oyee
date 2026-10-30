@@ -4,6 +4,8 @@ import { formatDateTime, relativeTime } from "../lib/format";
 import { CheckIcon, ExternalLinkIcon, LayersIcon, ReplyIcon } from "./Icons";
 import { Markdown } from "./Markdown";
 import { ProgressBar, SeverityBadge } from "./NotificationParts";
+import { ProgressCard } from "./ProgressCard";
+import { usesProgressCard } from "../lib/progress";
 import { Badge, Button, cx } from "./ui";
 import { useDevices } from "../lib/queries";
 
@@ -57,6 +59,9 @@ export function NotificationCard({
   footer,
   className,
 }: NotificationCardProps) {
+  if (usesProgressCard(n)) {
+    return <ProgressCard notification={n} preview={preview} inThread={inThread} onSourceClick={onSourceClick} footer={footer} className={className} />;
+  }
   const resolved = n.status === "resolved";
   const chosen = new Set(n.responses.map((r) => r.actionId).filter(Boolean));
 

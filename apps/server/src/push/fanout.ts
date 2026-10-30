@@ -32,7 +32,8 @@ export function vapidKeys(env: Env): VapidKeys | null {
 function eventInfo(ev: InboxEvent): { id: string; notification: Notification | null; alert: boolean } {
   switch (ev.type) {
     case "notification.created":
-      return { id: ev.notification.id, notification: ev.notification, alert: true };
+      // A `silent` card (e.g. the first report of a running progress) appears without sound.
+      return { id: ev.notification.id, notification: ev.notification, alert: !ev.notification.silent };
     case "notification.updated":
       return { id: ev.notification.id, notification: ev.notification, alert: ev.alert };
     case "notification.deleted":
@@ -66,8 +67,7 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
     if (sa) {
       const data = buildFcmData(type, id, notification, alert);
       const highPriority =
-        ev.type === "notification.created" ||
-        (notification !== null && (notification.severity === "critical" || notification.severity === "warning"));
+        alert || (notification !== null && (notification.severity === "critical" || notification.severity === "warning"));
       for (const d of fcmDevices.filter(targeted)) {
         const token = d.fcmToken!;
         tasks.push(

@@ -171,6 +171,35 @@ export const ProgressBlock = z.object({
 });
 export type ProgressBlock = z.infer<typeof ProgressBlock>;
 
+/** How a sender reports progress: `running` while working, then `done` or `failed` once. */
+export const ProgressStatus = z.enum(["running", "done", "failed"]);
+export type ProgressStatus = z.infer<typeof ProgressStatus>;
+
+/**
+ * Report long-running work (MCP `progress`). Called repeatedly with the same `key`: the first report appears without
+ * sound, later ones update it silently, `done` / `failed` alert once. Omitted fields keep the previous report's value.
+ */
+export const ProgressInput = z.object({
+  key: Key.describe("Names this task, e.g. \"deploy-api\". Reuse it on every report so they update one notification."),
+  title: z.string().min(1).max(200).describe("What is running, e.g. \"Deploying api to prod\"."),
+  value: z.number().min(0).optional().describe("Work done so far, out of `max`. With status done it defaults to `max`."),
+  max: z.number().positive().optional().describe("Total amount of work (default 100, so `value` is a percentage)."),
+  label: z.string().max(64).optional().describe("Short text next to the bar, e.g. \"3/7 checks\" (default: the percent)."),
+  status: ProgressStatus.default("running").describe(
+    "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
+  ),
+  body: z.string().max(4000).optional().describe("Detail under the title. Markdown: **bold**, _italic_, `code`, links."),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
+  source: z.string().min(1).max(64).optional().describe("Who is reporting (defaults to this connection's name)."),
+  devices: z
+    .array(z.string().min(1).max(64))
+    .max(20)
+    .optional()
+    .describe("Alert only these devices (names or ids from list_devices). Default: every device."),
+  platforms: z.array(Platform).max(4).optional().describe("Alert only devices on these platforms (android, macos, web, ios)."),
+});
+export type ProgressInput = z.infer<typeof ProgressInput>;
+
 /** Fields every intent shares. */
 export const NotificationShared = z.object({
   id: z.string(),
@@ -679,13 +708,16 @@ export function inferIntent(
   if (n.progress) {
     const p = n.progress;
     const atMax = !p.indeterminate && p.value >= p.max;
+    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it.
+    const prior = (p as Partial<ProgressBlock>).state;
+    const finished = prior === "done" || prior === "failed" ? prior : null;
     return {
       ...flat,
       intent: "progress",
       progress: {
         ...p,
-        state: atMax ? "done" : opts.legacy ? "stopped" : "running",
-        staleAfter: LIMITS.defaultStaleAfter,
+        state: finished ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
+        staleAfter: (p as Partial<ProgressBlock>).staleAfter ?? LIMITS.defaultStaleAfter,
         lastReportAt: n.updatedAt,
       },
     };

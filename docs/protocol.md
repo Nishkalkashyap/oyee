@@ -252,6 +252,7 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
 | `ask` | `{ title, body?, options?: string[] (≤3 → actions), allowText?: boolean, severity?, source?, threadId? }` | `{ id }` — the notification awaits a response |
+| `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: outcome (`created` / `updated_silently` / `alerted`), the id and the next step |
 | `wait_for_response` | `{ id, timeoutSeconds?: number (1..55, default 50) }` | `{ status: "answered", response } \| { status: "pending" }` (call again if pending) |
 | `get_notification` | `{ id }` | `Notification` |
 | `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |
@@ -264,6 +265,14 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
 `ask` options become actions with ids `option_1..3` and labels set to the option text. Each `resolves: true`. `allowText` adds `reply`.
+
+`progress` reports long-running work by `(source, key)`. No running (or stopped) active progress with that key →
+create one; the first report appears without sound (`created` event with flat `silent: true`). Otherwise the report
+updates it in place (`updated`, `alert: false`); fields left out keep the previous report's value (the label only while
+value and max are unchanged). `done` (value defaults to max, severity `success`) and `failed` (severity `warning`)
+finish it with one alert (`updated`, `alert: true`, `silent: false`, unread again). A finished progress stays `active`
+(not resolved) so its alert isn't cancelled; the next report with the key starts a fresh progress. New progress counts
+as `send` (and the per-token rate limit), reports to a live one as `update`.
 
 ---
 
@@ -297,8 +306,9 @@ Reconnect with exponential backoff (1 s → 60 s max, with jitter). Send `sync` 
 
 ## 7. FCM payload (Android)
 
-The server sends **data-only** messages (FCM v1 `android.priority = "HIGH"` for `created` and `critical`/`warning`,
-`"NORMAL"` otherwise). `android.collapse_key` = notification id. Data map (all string values):
+The server sends **data-only** messages (FCM v1 `android.priority = "HIGH"` when the event alerts (`created` unless
+`silent`, or `updated` with `alert`) and for `critical`/`warning`, `"NORMAL"` otherwise). `alert` on `created` is
+`"false"` for a `silent` notification (the first report of a running progress). `android.collapse_key` = notification id. Data map (all string values):
 
 ```jsonc
 {

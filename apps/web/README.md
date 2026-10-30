@@ -55,7 +55,7 @@ src/
   lib/composer.ts, card.ts   composer → SendNotificationInput, template rendering for previews
   lib/inbox.ts               inbox sections (Needs you / In progress / Updates) and stacking of repeats
   lib/useWebPush.ts          this browser as a push target (on / off / blocked / unavailable)
-  components/                NotificationCard, PlatformPreviews, CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
+  components/                NotificationCard, ProgressCard (progress intent), PlatformPreviews, CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
   pages/                     Landing (signed-out `/` and `/login`), Home (`/`), Inbox (+ detail), Templates, Send
 public/sw.js                 service worker: push → showNotification / close, notificationclick → respond / read / open
 ```
