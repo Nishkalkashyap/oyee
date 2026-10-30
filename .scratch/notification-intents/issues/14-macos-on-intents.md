@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] System notifications per intent via categories and text-input actions; expired/answered asks are removed
 - [ ] Tags, thread and silent handling removed; the iOS target still compiles
 - [ ] `swift test` passes; screenshots of each card state attached for code review
+
+## Comments
+
+From 01: Swift tests need a copy of packages/schema/fixtures/notifications.v2.json inside their test target.

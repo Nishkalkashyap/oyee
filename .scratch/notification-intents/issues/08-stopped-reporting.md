@@ -13,3 +13,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] A later `progress` call on a stopped progress revives it as running (silently)
 - [ ] The web progress card shows the stopped state
 - [ ] Tests backdate `lastReportAt`, fire the alarm, and observe via MCP and WebSocket
+
+## Comments
+
+From 04: a due deadline ref is removed before its handler runs; decide whether stale refs need retry protection.

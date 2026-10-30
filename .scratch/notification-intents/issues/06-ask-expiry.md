@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Answering an expired or withdrawn ask returns a conflict error
 - [ ] The web ask card shows expired and withdrawn states
 - [ ] Tests backdate `expiresAt` and fire the alarm, then observe via MCP, REST and WebSocket
+
+## Comments
+
+From 01: flat-path asks stay "open" past `expiresAt` until this ticket expires them; include them. From 04: a due deadline ref is removed before its handler runs; decide whether expiry refs need retry protection.

@@ -13,3 +13,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Stored `debug` severities become `info`; thread and replace-key storage is removed
 - [ ] docs/protocol.md rewritten as v2; app READMEs, CHANGELOG (v0.3.0 and Unreleased), web help-dialog snippets updated; PLAN.md §10 logs per-source mute settings as a follow-up
 - [ ] `pnpm typecheck && pnpm test`, Android unit tests and `swift test` all pass
+
+## Comments
+
+From 01: `icon` exists both top-level and in the inform block; pick one. The old-row conversion must survive deleting `inferIntent`.
