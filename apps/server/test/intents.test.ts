@@ -273,7 +273,7 @@ describe("notifications stored before protocol v2", () => {
       intent: "inform",
       key: "deploy",
       severity: "info", // debug is gone
-      version: 2,
+      version: 3, // conversion is a change: one past the stored version 2
       inform: {
         links: [{ label: "Open PR", url: "https://github.com/o/r/pull/1" }],
         fields: [{ label: "Env", value: "prod" }],
@@ -414,6 +414,23 @@ describe("notifications stored before protocol v2", () => {
     const sync = await call<{ items: Notification[] }>("GET", `/api/notifications?updatedSince=${cursor}`, { cookie });
     expect(sync.body.items).toHaveLength(LEGACY_ROWS.length);
     expect(sync.body.items.every((n) => n.intent !== undefined)).toBe(true);
+  });
+
+  it("reach clients that catch up by time or drop versions they have seen", async () => {
+    const cookie = await devLogin();
+    const me = (await call("GET", "/api/me", { cookie })).body;
+    const before = new Date().toISOString();
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
+
+    // A client whose last sync was just before the upgrade, long after these cards last changed.
+    const sync = await call<{ items: Notification[] }>("GET", `/api/notifications?updatedSince=${before}`, { cookie });
+    expect(sync.body.items.map((n) => n.id).sort()).toEqual(LEGACY_ROWS.map(([n]) => n.id as string).sort());
+    for (const n of sync.body.items) {
+      const [old] = LEGACY_ROWS.find(([r]) => r.id === n.id)!;
+      // A newer version than the client has, so it isn't discarded as already seen.
+      expect(n.version, n.id).toBe(((old.version as number | undefined) ?? 1) + 1);
+      expect(n.updatedAt >= before, n.id).toBe(true);
+    }
   });
 
   it("new notifications sit next to converted ones with their key", async () => {

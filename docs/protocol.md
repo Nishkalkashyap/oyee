@@ -95,7 +95,9 @@ became an ask (`answered` from its last response, otherwise `expired`), one with
 (`done` at max, otherwise `stopped`), and everything else an inform (link actions became `links`). `replaceKey`
 became `key`, and `debug` became `info`. Converted asks and stopped progress are `resolved` (at their last update
 when they weren't already), so they leave the inbox and the tray and don't hold their key; a converted `done`
-progress stays `active` until read, like a new one.
+progress stays `active` until read, like a new one. Each converted card counts as a change: its `version` goes up
+by one and `updatedAt` becomes the time of the conversion, so clients that sync by cursor or by time receive it
+again and don't drop it as a version they have already seen.
 
 ### 1.2 Send inputs
 

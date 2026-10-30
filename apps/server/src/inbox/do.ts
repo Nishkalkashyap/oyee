@@ -173,8 +173,9 @@ export class InboxDO extends DurableObject<Env> {
    * Protocol v2 storage, once per inbox (recorded as `meta.schema`). Inboxes created before intents get the `intent`,
    * `key` and `alerted_at` columns; every stored row becomes a v2 notification (inbox/legacy.ts: a flat card turns into
    * the intent it most resembles, flat fields and the `debug` severity go); then the thread and replace-key columns and
-   * the templates table are dropped. Rows whose meaning changed (no intent before, or `debug`) get a new `seq` so
-   * clients that sync by cursor receive them again.
+   * the templates table are dropped. Rows whose meaning changed (no intent before, `debug`, or closed by the
+   * conversion) are changes like any other: a new `seq`, `version` and `updatedAt`, so clients that sync by cursor or
+   * by time receive them again and don't drop them as a version they have already seen.
    */
   private migrateToV2() {
     const schema = this.sql.exec<{ value: number }>("SELECT value FROM meta WHERE key = 'schema'").toArray()[0]?.value ?? 0;
@@ -190,18 +191,21 @@ export class InboxDO extends DurableObject<Env> {
         `SELECT id, data, ${columns.has("replace_key") ? "replace_key" : "NULL AS replace_key"} FROM notifications`,
       )
       .toArray();
+    const now = new Date().toISOString();
     for (const r of rows) {
       const old = JSON.parse(r.data) as { intent?: string; severity?: string; status?: string };
-      const n = fromStored(old, r.replace_key);
-      const changed = old.intent === undefined || old.severity !== n.severity || old.status !== n.status;
+      const converted = fromStored(old, r.replace_key);
+      const changed = old.intent === undefined || old.severity !== converted.severity || old.status !== converted.status;
+      const n = changed ? { ...converted, version: converted.version + 1, updatedAt: now } : converted;
       this.sql.exec(
-        "UPDATE notifications SET intent = ?, key = ?, severity = ?, status = ?, search = ?, data = ?, seq = COALESCE(?, seq) WHERE id = ?",
+        "UPDATE notifications SET intent = ?, key = ?, severity = ?, status = ?, search = ?, data = ?, updated_at = ?, seq = COALESCE(?, seq) WHERE id = ?",
         n.intent,
         n.key,
         n.severity,
         n.status,
         searchText(n),
         JSON.stringify(n),
+        n.updatedAt,
         changed ? this.nextSeq() : null,
         r.id,
       );

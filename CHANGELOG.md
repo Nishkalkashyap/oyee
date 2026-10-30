@@ -10,7 +10,7 @@
   `debug`) gets `400` naming what to use instead (webhook query sends ignore `?threadId=` and `?tags=`). Respond takes `{ "option" }` or
   `{ "text" }` and only on asks. The list endpoint drops `threadId`. Each inbox converts its stored notifications
   once (v1 cards to the intent they resemble); converted asks and unfinished progress are resolved, so they leave
-  the inbox and the tray and free their key. docs/protocol.md is rewritten as protocol v2. **App builds before
+  the inbox and the tray and free their key; each converted card gets a new version and `updatedAt` so every client syncs it again. docs/protocol.md is rewritten as protocol v2. **App builds before
   0.3.0** still decode v2 notifications (their decoders only require `id`) and show title, body and the progress
   bar; they lose icon, image, rows, links and answering asks, and Android 0.2.x buzzes on the first progress report.
   Shipping 0.3.0 alongside this deploy is recommended, not required.
