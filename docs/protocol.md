@@ -276,15 +276,26 @@ each `resolves: true`) and `allowText` adds `reply`; answering with `actionId: "
 **`inform`** (something the user should know; one-way). `InformInput`: `title` (required, ≤ 200), `body?` (markdown,
 ≤ 4000), `severity?` (`info` default \| `success` \| `warning` \| `critical`; every severity alerts), `url?` (opens on
 tap), `key?` (≤ 128), `source?` (default: the token's name), `devices?`, `platforms?`, `links?` (≤ 3 link buttons
-`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL).
-Keys are unique per `(source, key)`: with a key whose latest notification is an active inform, that one is updated in
-place (same id, `version` + 1, unread again) and alerts again (`outcome: alerted`); otherwise a new inform is created
-and alerts (`outcome: created`). Another source using the same key gets its own notification. The result is text:
+`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL),
+`cooldown?` (duration such as `"30m"`, `"1h"`, `"24h"`; units s, m, h; `LIMITS.minCooldown` 1m to
+`LIMITS.maxCooldown` 168h; only meaningful with `key`, stored as `inform.cooldown`).
+Keys are unique per `(source, key)`; another source using the same key gets its own notification. With a key whose
+latest notification is an inform, the send's `cooldown` is measured from the key's last alert, whatever the
+notification's status (silent updates don't move it):
+
+| Latest inform with the key | Inside the cooldown | Cooldown passed, or no cooldown |
+|---|---|---|
+| none (or another intent) | `created`: new inform, alerts | `created` |
+| active | `updated_silently`: content replaced, `version` + 1, `notification.updated` with `alert: false`, read state kept | `alerted`: content replaced, `version` + 1, unread again, `notification.updated` with `alert: true` |
+| resolved | `suppressed`: nothing changes, nothing is broadcast; the reason says when it was resolved and when the cooldown ends | `created`: new inform, alerts |
+
+A created or alerted send counts against the `send` quota, a silent update against `update`, a suppressed one against
+neither (the per-token rate limit still applies). The result is text:
 
 ```
-outcome: alerted
+outcome: updated_silently
 id: ntf_01J…
-Updated the notification with key "disk-db1" in place and alerted the user's devices again.
+Updated the notification with key "disk-full" without alerting: it alerted 12m ago, inside its 1h cooldown. The card shows the new text; sends with this key can alert again from 2026-10-30T13:05:00.000Z (in 48m).
 ```
 
 Until the flat card is removed, an inform also carries the flat fields: `links` become link `actions`

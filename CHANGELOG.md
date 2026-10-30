@@ -15,6 +15,10 @@
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
   in plain text. The older tools keep working for now.
+- MCP: `inform` takes a `cooldown` (such as `"1h"`, 1m to 168h) alongside its key, so a cron agent alerts the user at
+  most once per cooldown: sends inside it update the card's text silently (`updated_silently`), and if the user
+  resolved it inside the cooldown nothing changes (`suppressed`, with when it was resolved and when the cooldown
+  ends). The cooldown runs from the key's last alert.
 - Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
   image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without

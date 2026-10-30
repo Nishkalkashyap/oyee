@@ -1,8 +1,9 @@
 /** The MCP `inform` tool end to end: schema, outcomes, keys per source, the stored and broadcast notification. */
 import { Notification, type ServerMessage } from "@oyee/schema";
-import { SELF } from "cloudflare:test";
+import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { BASE, call, createToken, devLogin, eventually, pairDevice } from "./helpers";
+import type { InboxDO } from "../src/inbox/do";
+import { BASE, call, createToken, devLogin, eventually, pairDevice, sleep } from "./helpers";
 
 let rpcId = 0;
 
@@ -64,7 +65,7 @@ describe("MCP inform", () => {
     expect(tool).toBeDefined();
     const props = tool!.inputSchema.properties as Record<string, { description?: string; enum?: string[] }>;
     expect(Object.keys(props).sort()).toEqual(
-      ["title", "body", "severity", "url", "key", "source", "devices", "platforms", "links", "fields", "image", "icon"].sort(),
+      ["title", "body", "severity", "url", "key", "source", "devices", "platforms", "links", "fields", "image", "icon", "cooldown"].sort(),
     );
     expect(tool!.inputSchema.required).toEqual(["title"]);
     for (const [name, p] of Object.entries(props)) expect(p.description, name).toBeTruthy();
@@ -208,3 +209,105 @@ describe("MCP inform", () => {
     expect(bad.isError).toBe(true);
   });
 });
+
+describe("MCP inform cooldown", () => {
+  it("accepts durations like 30m, 1h and 24h within the limits", async () => {
+    const { path } = await setup();
+    for (const cooldown of ["30m", "1h", "24h"]) {
+      expect((await inform(path, { title: "ok", key: `k-${cooldown}`, cooldown })).isError, cooldown).toBe(false);
+    }
+    for (const cooldown of ["0m", "1d", "1 hour", "10s", "169h"]) {
+      expect((await inform(path, { title: "bad", key: "k", cooldown })).isError, cooldown).toBe(true);
+    }
+  });
+
+  it("inside the cooldown updates the active inform silently, keeping it read", async () => {
+    const { cookie, path } = await setup();
+    const { ws, messages } = await socket(cookie);
+    const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "1h" });
+    expect(first.outcome).toBe("created");
+    expect(await get(cookie, first.id!)).toMatchObject({ inform: { cooldown: "1h" } });
+    await call("POST", `/api/notifications/${first.id}/read`, { cookie });
+
+    const second = await inform(path, { title: "Disk 92% full", key: "disk-full", cooldown: "1h" });
+    expect(second).toMatchObject({ isError: false, outcome: "updated_silently", id: first.id });
+    expect(second.text).toContain("1h");
+
+    const n = await get(cookie, first.id!);
+    expect(n).toMatchObject({ title: "Disk 92% full", status: "active", version: 3 });
+    expect(n.readAt).not.toBeNull();
+    const updated = await eventually(() =>
+      messages.find((m) => m.type === "notification.updated" && m.reason === "update" && m.notification.id === first.id),
+    );
+    expect(updated).toMatchObject({ alert: false, notification: { title: "Disk 92% full" } });
+    ws.close();
+  });
+
+  it("after a resolve inside the cooldown changes nothing and says when it was resolved and when the cooldown ends", async () => {
+    const { cookie, path } = await setup();
+    const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "1h" });
+    await call("POST", `/api/notifications/${first.id}/resolve`, { cookie });
+    const resolved = await get(cookie, first.id!);
+    const { ws, messages } = await socket(cookie);
+
+    const again = await inform(path, { title: "Disk 95% full", key: "disk-full", cooldown: "1h" });
+    expect(again).toMatchObject({ isError: false, outcome: "suppressed", id: first.id });
+    expect(again.text).toContain(`resolved`);
+    expect(again.text).toContain(resolved.resolvedAt!); // when it was resolved
+    expect(again.text).toMatch(/until|from \d{4}-/); // when the cooldown ends
+    expect(again.text).toContain("in 1h");
+
+    expect(await get(cookie, first.id!)).toEqual(resolved);
+    const list = await call("GET", "/api/notifications", { cookie });
+    expect(list.body.items).toHaveLength(1);
+    await sleep(100);
+    expect(messages.filter((m) => m.type.startsWith("notification."))).toEqual([]);
+    ws.close();
+  });
+
+  it("once the cooldown has passed, alerts again and makes the inform unread", async () => {
+    const { cookie, path } = await setup();
+    const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "1h" });
+    await call("POST", `/api/notifications/${first.id}/read`, { cookie });
+    // a silent update inside the cooldown doesn't move it: it runs from the last alert
+    expect((await inform(path, { title: "Disk 91% full", key: "disk-full", cooldown: "1h" })).outcome).toBe("updated_silently");
+    await backdateAlert(cookie, first.id!, 61 * 60_000);
+    const { ws, messages } = await socket(cookie);
+
+    const r = await inform(path, { title: "Disk 97% full", key: "disk-full", cooldown: "1h" });
+    expect(r).toMatchObject({ outcome: "alerted", id: first.id });
+    expect(await get(cookie, first.id!)).toMatchObject({ title: "Disk 97% full", readAt: null, status: "active" });
+    const updated = await eventually(() => messages.find((m) => m.type === "notification.updated" && m.reason === "update"));
+    expect(updated).toMatchObject({ alert: true, notification: { id: first.id } });
+
+    // the alert restarts the cooldown
+    expect((await inform(path, { title: "Disk 98% full", key: "disk-full", cooldown: "1h" })).outcome).toBe("updated_silently");
+    ws.close();
+  });
+
+  it("once the cooldown has passed after a resolve, creates a new inform", async () => {
+    const { cookie, path } = await setup();
+    const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "30m" });
+    await call("POST", `/api/notifications/${first.id}/resolve`, { cookie });
+    await backdateAlert(cookie, first.id!, 31 * 60_000);
+    const { ws, messages } = await socket(cookie);
+
+    const r = await inform(path, { title: "Disk full again", key: "disk-full", cooldown: "30m" });
+    expect(r.outcome).toBe("created");
+    expect(r.id).not.toBe(first.id);
+    expect(await get(cookie, r.id!)).toMatchObject({ status: "active", key: "disk-full", inform: { cooldown: "30m" } });
+    expect(await get(cookie, first.id!)).toMatchObject({ status: "resolved" });
+    const created = await eventually(() => messages.find((m) => m.type === "notification.created"));
+    expect(created).toMatchObject({ notification: { id: r.id } });
+    ws.close();
+  });
+});
+
+/** Moves the last alert of a notification into the past, through its inbox Durable Object (time-based rules). */
+async function backdateAlert(cookie: string, id: string, msAgo: number) {
+  const me = (await call<{ id: string }>("GET", "/api/me", { cookie })).body;
+  const stub = env.INBOX.get(env.INBOX.idFromName(me.id));
+  await runInDurableObject(stub, async (_inst: InboxDO, state) => {
+    state.storage.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", new Date(Date.now() - msAgo).toISOString(), id);
+  });
+}
