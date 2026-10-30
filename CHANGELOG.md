@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Keys across intents: reusing a key whose latest notification is a running or stopped progress or an open ask, with
+  a different intent (`inform`, `ask` or `progress`), now fails with a conflict that names the key, what holds it and
+  how to fix it. Once that notification is finished, answered, expired or withdrawn, the new intent takes the key.
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says

@@ -298,6 +298,19 @@ finish it with one alert (`updated`, `alert: true`, `silent: false`, unread agai
 (not resolved) so its alert isn't cancelled; the next report with the key starts a fresh progress. New progress counts
 as `send` (and the per-token rate limit), reports to a live one as `update`.
 
+**Keys across intents.** While the latest notification under a `(source, key)` is live (a running or stopped
+progress, or an open, unexpired ask), the key belongs to that intent: `inform`, `ask` or `progress` with the key and
+another intent fails with `conflict` (`409` over REST/webhooks once they send intents), and the message names the key,
+the live notification's intent and id, and the fix (use a different key, or finish the progress with `done` /
+`failed`, or withdraw the ask with resolve):
+
+```
+conflict: key "deploy" belongs to a running progress (id ntf_01J…). Use a different key for this inform, or first finish that progress by reporting it with key "deploy" and status "done" or "failed".
+```
+
+Once it is no longer live (finished progress, answered, expired or withdrawn ask, any inform, resolved or not) the
+next intent takes the key over and creates a new notification; the old one is left as it was.
+
 ---
 
 ## 6. WebSocket — `GET /api/ws`
