@@ -18,3 +18,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 09: add a webhook test for the cross-intent key 409.
+
+## Comments
+
+From 08: progress sent via webhooks/REST must also register the stale deadline (same progress operation as MCP).
