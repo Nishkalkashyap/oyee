@@ -11,6 +11,7 @@ import {
   QUOTAS,
   type FlatNotification,
   type InformInput,
+  type Intent,
   type ListNotificationsQuery,
   type McpWaitResult,
   type Notification,
@@ -622,12 +623,15 @@ export class InboxDO extends DurableObject<Env> {
     });
   }
 
-  async list(q: ListNotificationsQuery): Promise<RpcResult<Page<Notification>>> {
+  /** `key` and `intent` filter what MCP list_notifications asks for; REST lists by the other fields. */
+  async list(q: ListNotificationsQuery & { key?: string; intent?: Intent }): Promise<RpcResult<Page<Notification>>> {
     return guard(() => {
       this.consume("read");
       const where: string[] = [];
       const params: SqlStorageValue[] = [];
       if (q.source) (where.push("source = ?"), params.push(q.source));
+      if (q.key) (where.push("key = ?"), params.push(q.key));
+      if (q.intent) (where.push("intent = ?"), params.push(q.intent));
       if (q.severity) (where.push("severity = ?"), params.push(q.severity));
       if (q.status) (where.push("status = ?"), params.push(q.status));
       if (q.threadId) (where.push("thread_id = ?"), params.push(q.threadId));

@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased (server and web)
+- MCP: agents now see exactly seven tools: `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
+  `list_notifications` and `list_devices`. `send_notification`, `update_notification`, `get_notification` and the
+  three template tools are gone, and `resolve` replaces `resolve_notification` (on an open ask it withdraws it). The
+  server instructions explain in a few lines when to use inform, ask and progress. Every acting tool answers in one
+  shape: `outcome:` and `id:` lines, then what happened and the next step. `list_notifications` filters by key,
+  intent, status and source, returns 10 compact items by default (at most 50) with a cursor, and says how long ago
+  each was sent (`"12m"`).
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
