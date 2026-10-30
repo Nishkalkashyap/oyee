@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 06, 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Models mirror protocol v2 (intent blocks), decoding the shared fixtures
 - [ ] Inform, ask (open, answered, expired, withdrawn) and progress (running, done, failed, stopped) cards in inbox and detail
@@ -20,3 +20,5 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.
 
 From 08: mirror `stoppedReportingLabel` from @oyee/schema exactly ("Stopped reporting after <label or percent>"); the server does not overwrite `label`.
+
+Resolved: feature 116f41b, merged into `notification-intents`. 80 unit tests; no emulator, so no screenshots (needs a manual check on the Galaxy before release). Ask notifications have no Resolve button.
