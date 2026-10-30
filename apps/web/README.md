@@ -52,7 +52,8 @@ src/
   lib/markdown.ts            markdown subset parser (AST, no raw HTML, safe hrefs only)
   lib/webpush.ts, push.ts    Web Push presentation (mirrors public/sw.js) and subscription helpers
   lib/snippets.ts            Claude Code / Codex / JSON / curl / Home Assistant / Alertmanager / Grafana / GH Actions
-  lib/composer.ts, card.ts   composer → SendNotificationInput, template rendering for previews
+  lib/composer.ts            Send page: inform/progress form → intent send body, preview notification, presets
+  lib/card.ts                template rendering for the Templates page previews
   lib/inform.ts              the inform card's view model (severity, rows, ≤ 3 safe link buttons, tap target)
   lib/progress.ts            the progress card's view model (state label, amount, percent, tone) and which cards use it
   lib/ask.ts                 the ask card's view model (answer buttons, reply box, "Waiting 12m" / "Answered: Approve · Pixel 9")

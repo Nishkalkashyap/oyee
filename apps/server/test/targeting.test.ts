@@ -59,7 +59,7 @@ describe("targeted delivery", () => {
 
     const sent = await call("POST", "/api/notifications", { cookie }, { title: "Only the phone", devices: ["s23"] });
     expect(sent.status).toBe(201);
-    expect(sent.body.targetDeviceIds).toEqual([phone.device.id]);
+    expect(sent.body.notification.targetDeviceIds).toEqual([phone.device.id]);
     await eventually(() => fcm.length === 1);
     await sleep(100);
     expect(fcm).toEqual(["fcm-phone"]);

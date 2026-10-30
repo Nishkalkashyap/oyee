@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Webhooks and REST send intents, with the same field names as the MCP tools: a JSON body is an inform by default or
+  `{ "intent": "progress", "key": …, "value": … }`, and `?intent=progress` with `key`, `value`, `max`, `label` and
+  `status` works for plain-text, GET and header sends. They go through the same inbox operations as agents, so `key`,
+  `cooldown`, the cross-intent key conflict and stopped reporting behave identically. Responses add `outcome` and
+  `reason` next to `id` and `version`. `intent: "ask"` gets `400`: asks are for agents over MCP. Alertmanager and
+  Grafana produce informs keyed by the group (a `debug` severity label becomes info) and the group's resolution
+  resolves that inform; SNS produces an inform. `?replaceKey=` and `?template=` are no longer accepted (`400`
+  pointing to `key`); `threadId`, `tags` and ntfy `Tags` are ignored, and ntfy priority 1 is info. JSON bodies that
+  still use v1-only fields (`actions`, `reply`, `progress`, `replaceKey`, …) keep working until the flat card is
+  removed.
+- `POST /api/notifications` takes the same intent-tagged body and answers `{ id, version, outcome, reason,
+  notification }`. The web Send page composes an inform (severity, key, cooldown, icon, image, rows, link buttons) or
+  a progress (key, value, max, label, status, staleAfter); thread, tags, silent, actions, reply and templates are gone
+  from it.
 - MCP: agents now see exactly seven tools: `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
   `list_notifications` and `list_devices`. `send_notification`, `update_notification`, `get_notification` and the
   three template tools are gone, and `resolve` replaces `resolve_notification` (on an open ask it withdraws it). The

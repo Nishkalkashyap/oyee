@@ -628,19 +628,34 @@ export class InboxDO extends DurableObject<Env> {
     return n;
   }
 
-  /** Alertmanager/Grafana "resolved": resolve the active notification with this replaceKey (optionally patching it). */
-  async resolveByReplaceKey(actor: Actor, replaceKey: string, patch?: UpdateNotificationInput): Promise<RpcResult<Notification | null>> {
+  /**
+   * Alertmanager/Grafana "resolved": the active inform with this key shows `input` as its final content and is resolved
+   * without alerting. With none active, the resolution is recorded as an inform that is resolved from the start.
+   */
+  async resolveInformByKey(actor: Actor, input: InformInput & { key: string }): Promise<RpcResult<Notification>> {
     return guard(() => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("update", actor.userId);
-      const row = this.sql
-        .exec<StoredRow>(
-          "SELECT data, replace_key, token_id, seq FROM notifications WHERE replace_key = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
-          replaceKey,
-        )
-        .toArray()[0];
-      if (!row) return null;
-      return this.resolveLoaded(actor, { n: JSON.parse(row.data) as Notification, replaceKey: row.replace_key, tokenId: row.token_id }, patch);
+      const now = new Date().toISOString();
+      const fresh = buildInform(newId("ntf"), input, actor, now, null);
+      const latest = this.claimKey(fresh.source, input.key, "inform");
+      const active = latest && latest.n.intent === "inform" && latest.n.status === "active" ? latest : null;
+      this.consume(active ? "update" : "send", actor.userId);
+      const n: Notification = {
+        ...fresh,
+        ...(active && {
+          id: active.n.id,
+          createdAt: active.n.createdAt,
+          version: active.n.version + 1,
+          readAt: active.n.readAt,
+          targetDeviceIds: active.n.targetDeviceIds,
+        }),
+        status: "resolved",
+        resolvedAt: now,
+      };
+      this.save(n, active?.replaceKey ?? null, actor.tokenId ?? active?.tokenId ?? null);
+      this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
+      if (!active) this.ensurePrune();
+      return n;
     });
   }
 

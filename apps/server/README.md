@@ -15,7 +15,8 @@ src/
   routes/auth.ts      Google OAuth (code + state + PKCE), dev login, logout
   routes/api.ts       REST endpoints + WebSocket upgrade
   routes/hook.ts      webhook ingestion
-  webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers
+  routes/send.ts      webhook and REST sends: intent body (inform/progress) → the inbox's inform/progress ops
+  webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + query + ntfy headers → intents
   mcp/server.ts       the seven MCP tools + server instructions (stateless Streamable HTTP, official SDK)
   mcp/text.ts         the shared result shape ("outcome:" / "id:" lines, then words), `ago`, list_notifications items
   mcp/inform.ts       the `inform` tool and its plain-text result
@@ -142,15 +143,15 @@ curl -c jar -s "$H/auth/dev-login?email=me@example.com" -o /dev/null
 curl -b jar -s -H 'Content-Type: application/json' -d '{"kind":"webhook","label":"Home Assistant"}' $H/api/tokens
 HOOK=$H/hook/oyee_wh_...
 
-# Send: plain text + ntfy-style headers
-curl -H 'Title: Backup done' -H 'Priority: 3' -H 'Tags: nas,backup' -d 'All 3 volumes OK' $HOOK
-# Send: JSON card with actions
-curl -H 'Content-Type: application/json' -d '{"title":"Deploy prod?","severity":"warning",
-  "actions":[{"id":"yes","label":"Ship it","style":"primary","resolves":true},{"id":"no","label":"Abort"}]}' $HOOK
-# Send: GET only
+# Inform: plain text + ntfy-style headers
+curl -H 'Title: Backup done' -H 'Priority: 3' -d 'All 3 volumes OK' $HOOK
+# Inform: JSON, keyed, alerting at most once an hour
+curl -H 'Content-Type: application/json' -d '{"title":"Disk 91% full","severity":"warning","key":"disk","cooldown":"1h"}' $HOOK
+# Inform: GET only
 curl "$HOOK?title=Hello&body=World&severity=success"
-# Dedupe/update in place with replaceKey
-curl -H 'Content-Type: application/json' -d '{"title":"CI 3/7","replaceKey":"ci-run-42","progress":{"value":3,"max":7}}' $HOOK
+# Progress by key, then finish it (alerts once)
+curl -H 'Content-Type: application/json' -d '{"intent":"progress","key":"ci-run-42","title":"CI","value":3,"max":7}' $HOOK
+curl "$HOOK?intent=progress&key=ci-run-42&title=CI&status=done"
 
 # Inbox
 curl -b jar -s "$H/api/notifications?limit=20&status=active"
@@ -183,4 +184,4 @@ claude mcp add --transport http oyee $H/mcp/oyee_mcp_...              # Claude C
 - **Deadlines:** the InboxDO has one alarm, owned by the deadline scheduler (`src/inbox/scheduler.ts`). Each deadline is a `(kind, ref, dueAt)` row; the alarm is always set to the earliest one, and on firing every due ref is handed to its kind's handler. Kinds: the daily prune, and `progress.stale` (one per running progress, at `lastReportAt + staleAfter`; the handler marks it stopped, re-registers a ref that isn't due yet, and retries a failed check 5 minutes later). The alarm pushes to the owner's devices using `meta.user_id`, remembered on the first progress report.
 - **Retention:** a daily prune deadline deletes notifications older than 30 days and keeps at most 5,000 per user. It writes tombstones so `sync` reports the deletions.
 - **Action callbacks:** the server POSTs `{ notification, response }` with `X-Oyee-Signature: sha256=<hex HMAC-SHA256(body)>`. The key is the `callbackSecret` returned once by `POST /api/tokens` for the token that created the notification.
-- **Webhook extras:** `?var.<name>=<value>` passes template vars on text/GET hooks. Alertmanager `resolved` with no matching active card records a silent, already-resolved card. SNS `SubscribeURL` is fetched only for `https://sns.<region>.amazonaws.com`.
+- **Webhook extras:** webhook and REST sends are intents and go through the InboxDO's `inform` / `progress` operations (`routes/send.ts`), the same ones MCP uses; `intent: "ask"` is rejected with `400`. Alertmanager/Grafana `resolved` resolves the inform keyed by the group (`resolveInformByKey`); with none active it records an already-resolved inform without alerting. SNS `SubscribeURL` is fetched only for `https://sns.<region>.amazonaws.com`.

@@ -188,19 +188,34 @@ describe("notifications", () => {
     expect(r.body.error.code).toBe("bad_request");
   });
 
-  it("dedupes by replaceKey while active", async () => {
+  it("sends an intent-tagged body: an inform with a key updates in place, after a resolve a new one is created", async () => {
     const cookie = await devLogin();
-    const a = await call("POST", "/api/notifications", { cookie }, { title: "CPU 91%", replaceKey: "cpu-prod" });
-    const b = await call("POST", "/api/notifications", { cookie }, { title: "CPU 95%", replaceKey: "cpu-prod" });
-    expect(b.body.id).toBe(a.body.id);
-    expect(b.body.version).toBe(2);
-    expect(b.body.title).toBe("CPU 95%");
+    const a = await call("POST", "/api/notifications", { cookie }, { intent: "inform", title: "CPU 91%", key: "cpu-prod" });
+    expect(a.status).toBe(201);
+    expect(a.body).toMatchObject({ id: expect.stringMatching(/^ntf_/), version: 1, outcome: "created", reason: expect.any(String) });
+    expect(a.body.notification).toMatchObject({ id: a.body.id, intent: "inform", key: "cpu-prod", source: "web", title: "CPU 91%" });
+    const b = await call("POST", "/api/notifications", { cookie }, { title: "CPU 95%", key: "cpu-prod" });
+    expect(b.status).toBe(200);
+    expect(b.body).toMatchObject({ id: a.body.id, version: 2, outcome: "alerted", notification: { title: "CPU 95%" } });
     expect((await call("GET", "/api/notifications", { cookie })).body.items).toHaveLength(1);
 
     await call("POST", `/api/notifications/${a.body.id}/resolve`, { cookie });
-    const c = await call("POST", "/api/notifications", { cookie }, { title: "CPU 99%", replaceKey: "cpu-prod" });
+    const c = await call("POST", "/api/notifications", { cookie }, { title: "CPU 99%", key: "cpu-prod" });
     expect(c.body.id).not.toBe(a.body.id);
-    expect(c.body.version).toBe(1);
+    expect(c.body).toMatchObject({ version: 1, outcome: "created" });
+  });
+
+  it("reports progress, and rejects asks (they're for agents over MCP)", async () => {
+    const cookie = await devLogin();
+    const p = await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "import", title: "Importing", value: 2, max: 5 });
+    expect(p.status).toBe(201);
+    expect(p.body.notification).toMatchObject({ intent: "progress", progress: { value: 2, max: 5, state: "running" } });
+    const done = await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "import", title: "Imported", status: "done" });
+    expect(done.body).toMatchObject({ id: p.body.id, outcome: "alerted", notification: { progress: { value: 5, state: "done" } } });
+
+    const ask = await call("POST", "/api/notifications", { cookie }, { intent: "ask", title: "Ship it?", options: ["Yes"] });
+    expect(ask.status).toBe(400);
+    expect(ask.body.error.message).toMatch(/agents over MCP/);
   });
 
   it("read, read-all, sources, delete, pagination, updatedSince", async () => {

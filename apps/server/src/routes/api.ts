@@ -43,6 +43,7 @@ import { badRequest, conflict, notFound, parseOrThrow, rpc, unauthorized } from 
 import { readJson } from "../lib/http";
 import { formatPairingCode, newPairingCode, normalizePairingCode } from "../lib/ids";
 import { parseServiceAccount } from "../push/fcm";
+import { isFlatCard, parseIntentSend, sendIntent } from "./send";
 
 export const inbox = (env: Env, userId: string) => env.INBOX.get(env.INBOX.idFromName(userId));
 
@@ -194,10 +195,15 @@ api.get("/notifications", async (c) => {
   return c.json(await rpc(inbox(c.env, principal(c).user.id).list(q)));
 });
 
+/** The web composer's send: an intent-tagged body, answered like a webhook send plus the notification itself. */
 api.post("/notifications", sessionOnly, async (c) => {
-  const input = await readJson(c, SendNotificationInput);
+  const body = await readJson(c, z.unknown());
   const p = principal(c);
-  return c.json(await rpc(inbox(c.env, p.user.id).send(actorFor(p), input)), 201);
+  const stub = inbox(c.env, p.user.id);
+  // Protocol v1 flat cards keep the old path (and answer) until the flat card is removed (ticket 15).
+  if (isFlatCard(body)) return c.json(await rpc(stub.send(actorFor(p), parseOrThrow(SendNotificationInput, body))), 201);
+  const sent = await sendIntent(stub, actorFor(p), parseIntentSend(body));
+  return c.json(sent, sent.outcome === "created" ? 201 : 200);
 });
 
 api.post("/notifications/read-all", async (c) => {

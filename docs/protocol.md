@@ -182,7 +182,13 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /api/notifications?limit&cursor&source&severity&status&threadId&q&updatedSince`
   → `{ items: Notification[], nextCursor }`. Ordered by `createdAt` desc. With `updatedSince` the result is ordered by `updatedAt` asc (for sync).
 - `GET /api/notifications/:id` → `Notification`
-- `POST /api/notifications` `SendNotificationInput` → `201 Notification` (session only; devices may not send)
+- `POST /api/notifications` (session only; devices may not send; used by the web Send page) takes the same
+  intent-tagged body as a webhook (§4): `{ "intent": "inform" | "progress", …the intent's fields }`, `intent`
+  defaulting to `inform`; `"ask"` gets `400` (asks are for agents over MCP). Answers
+  `{ "id", "version", "outcome", "reason", "notification": Notification }`, `201` when the outcome is `created`,
+  otherwise `200`. Until the flat card is removed, a body without `intent` that uses a v1-only field (`actions`,
+  `reply`, `progress`, `template`, `vars`, `tags`, `threadId`, `silent`, `replaceKey`) still takes the v1 path and
+  answers `201 Notification`.
 - `PATCH /api/notifications/:id` `UpdateNotificationInput` → `Notification` (session only)
 - `POST /api/notifications/:id/respond` `{ "option"?: string, "actionId"?: string, "text"?: string }` (at least one) →
   `Notification`. On an ask, `option` is an answer-button label (`actionId` is the v1 way to pick one) and `text`
@@ -211,7 +217,7 @@ send, update and reply limits the inbox gets one notice (source `oyee`). Values 
 
 | Quota | Per day | Per minute | Counts |
 |---|---|---|---|
-| `send` | 1,000 | 120 (and 60 per webhook/MCP token) | new notifications, including `replaceKey` replacements |
+| `send` | 1,000 | 120 (and 60 per webhook/MCP token) | new notifications, and keyed informs that alert again |
 | `update` | 5,000 | — | update, resolve, read, read-all, delete |
 | `respond` | 1,000 | 30 | replies and action taps |
 | `read` | 20,000 | 300 | list, get, sources, templates, `wait_for_response`, WebSocket `sync` |
@@ -227,21 +233,50 @@ send, update and reply limits the inbox gets one notice (source `oyee`). Values 
 
 ## 4. Webhook ingestion — `POST|GET /hook/:token`
 
+Every webhook send is an intent with the same field names as the MCP tools (§5): **inform** (the default) or
+**progress**. Asks are for agents over MCP, which poll for the answer; a webhook ask gets `400` saying so. Webhook
+sends go through the same inbox operations as MCP, so `key`, `cooldown`, the cross-intent key conflict (`409`) and
+stopped reporting behave exactly as for agents.
+
 Resolution order:
 1. `application/json` body:
-   - Alertmanager (`body.alerts` array + `body.version`) → one notification per group. Title = `[FIRING:n] alertname`,
-     severity from `labels.severity` (critical/warning/info), `replaceKey` = `groupKey`. status `resolved` → resolve the matching notification.
-   - Grafana unified alerting (`body.alerts` + `body.orgId` or `body.state`) → same mapping.
-   - AWS SNS (`body.Type` = `SubscriptionConfirmation` → server GETs `SubscribeURL`, returns 200; `Notification` → title = `Subject`, body = `Message`).
-   - Otherwise, `SendNotificationInput`.
-2. `text/plain` (or any other content type) body → `body`, and the metadata comes from:
-   - query params: `title`, `severity`, `source`, `threadId`, `tags` (comma-separated), `url`, `icon`, `template`, `replaceKey`;
-   - ntfy-style headers: `Title`/`X-Title`, `Priority`/`X-Priority` (1–2 → debug/info, 3 → info, 4 → warning, 5 → critical),
-     `Tags`/`X-Tags`, `Click`/`X-Click`, `Icon`/`X-Icon`.
-3. `GET` → everything from query params (`body` param too).
+   - Alertmanager (`body.alerts` array + `body.version`) → one **inform** per group, keyed `am:<groupKey>` (hashed
+     when longer than 128 chars). Title = `[FIRING:n] alertname`, severity from `labels.severity` (critical/warning/
+     info; below-info levels such as `debug` → `info`), `fields` from `commonLabels`. A repeat while firing updates
+     the inform and alerts again. Status `resolved` → the keyed inform shows `[RESOLVED] alertname` at `success` and is
+     resolved without alerting (with none active, a resolved inform is recorded); firing again later creates a new one.
+   - Grafana unified alerting (`body.alerts` + `body.orgId` or `body.state`) → same mapping, keyed `grafana:<groupKey>`.
+   - AWS SNS (`body.Type` = `SubscriptionConfirmation` → server GETs `SubscribeURL`, returns 200; `Notification` → an
+     inform with title = `Subject`, body = `Message`).
+   - Otherwise an intent body: `{ "intent"?: "inform" | "progress", …the intent's fields }`:
+     ```jsonc
+     { "title": "Backup done" }                                         // inform
+     { "title": "Disk 91% full", "severity": "warning", "key": "disk", "cooldown": "1h" }
+     { "intent": "progress", "key": "deploy", "title": "Deploying api", "value": 3, "max": 7 }
+     { "intent": "progress", "key": "deploy", "title": "Deployed api", "status": "done" }
+     ```
+     Inform fields: `title`, `body`, `severity`, `url`, `key`, `cooldown`, `links`, `fields`, `image`, `icon`,
+     `source`, `devices`, `platforms`. Progress fields: `key` (required), `title`, `value`, `max`, `label`, `status`
+     (`running | done | failed`), `staleAfter`, `body`, `url`, `source`, `devices`, `platforms`. Until the flat card is
+     removed, a body without `intent` that uses a v1-only field (`actions`, `reply`, `progress`, `template`, `vars`,
+     `tags`, `threadId`, `silent`, `replaceKey`) is still read as a v1 card and answered `{ "id", "version" }`.
+2. `text/plain` (or any other content type) body → `body`, and the rest comes from:
+   - query params: `intent` (`inform` default, or `progress`), `title`, `source`, `url` (or `click`), `key`, and
+     - for inform: `severity`, `priority`, `icon`, `cooldown`;
+     - for progress: `value`, `max`, `label`, `status`;
+   - ntfy-style headers: `Title`/`X-Title`, `Priority`/`X-Priority` (1–3 → info, 4 → warning, 5 → critical),
+     `Click`/`X-Click`, `Icon`/`X-Icon`. `Tags` headers are ignored.
+   - `?replaceKey=` and `?template=` are no longer accepted (`400`, pointing to `key`); `threadId`, `tags` and
+     `var.*` parameters are ignored.
+3. `GET` → everything from query params (`body` or `message` param too).
 
-Response: `200 { "id": "ntf_…", "version": 1 }`. If `title` is missing, the first line of the body (max 200 chars) becomes the title,
-or `"Notification"`.
+If `title` is missing on a text or GET send, the first line of the body (max 200 chars) becomes the title, or
+`"Notification"`. `?devices=` / `?platforms=` (comma-separated) target devices for any payload type.
+
+Response: `200 { "id": "ntf_…", "version": 1, "outcome": "created", "reason": "…" }`, where `outcome` is `created`,
+`alerted`, `updated_silently` or `suppressed` (inform, see §5 `inform`) or `created`, `updated_silently`, `alerted`
+(progress), and `reason` says what happened in one sentence. An Alertmanager/Grafana resolution answers
+`{ "id", "version", "status": "resolved" }`.
 
 ---
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SendNotificationInput, TemplateCard } from "@oyee/schema";
+import type { TemplateCard } from "@oyee/schema";
 import { composeCard, parseVars, templateVariables, toPreviewNotification } from "../lib/card";
-import { buildSendInput, COMPOSER_PRESETS, emptyComposer } from "../lib/composer";
 
 describe("composeCard", () => {
   const tpl: TemplateCard = {
@@ -43,55 +42,5 @@ describe("parseVars / templateVariables", () => {
   });
   it("lists placeholders anywhere in a card", () => {
     expect(templateVariables({ title: "{{a}} {{ b | x }}", fields: [{ label: "L", value: "{{c}}{{a}}" }] })).toEqual(["a", "b", "c"]);
-  });
-});
-
-describe("buildSendInput", () => {
-  it("omits empty values", () => {
-    expect(buildSendInput({ ...emptyComposer, title: "  Hello " })).toEqual({ title: "Hello", severity: "info" });
-  });
-
-  it("does not override a template's severity with the default", () => {
-    expect(buildSendInput({ ...emptyComposer, template: "aws-alarm" }, { service: "api" })).toEqual({
-      template: "aws-alarm",
-      vars: { service: "api" },
-    });
-  });
-
-  it("builds a full, schema-valid card", () => {
-    const input = buildSendInput({
-      ...emptyComposer,
-      title: "T",
-      tags: "a, b,,",
-      fields: [
-        { label: "K", value: "V" },
-        { label: " ", value: "dropped" },
-      ],
-      progressOn: true,
-      progress: { value: 3, max: 7, label: "", indeterminate: false },
-      actions: [
-        { id: "", label: "Go", style: "primary", url: "https://x.io", resolves: false },
-        { id: "no", label: "", style: "default", url: "", resolves: false },
-      ],
-      replyOn: true,
-      reply: { placeholder: "Say", buttonLabel: "" },
-    });
-    expect(input).toEqual({
-      title: "T",
-      severity: "info",
-      tags: ["a", "b"],
-      fields: [{ label: "K", value: "V" }],
-      progress: { value: 3, max: 7, indeterminate: false },
-      actions: [{ id: "action_1", label: "Go", style: "primary", resolves: false, url: "https://x.io" }],
-      reply: { placeholder: "Say" },
-    });
-    expect(SendNotificationInput.safeParse(input).success).toBe(true);
-  });
-
-  it("all presets produce valid send inputs", () => {
-    for (const p of COMPOSER_PRESETS) {
-      const r = SendNotificationInput.safeParse(buildSendInput({ ...emptyComposer, ...p.state }));
-      expect(r.success, p.id).toBe(true);
-    }
   });
 });
