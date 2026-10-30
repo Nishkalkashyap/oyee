@@ -1,9 +1,11 @@
 /* Oyee service worker: Web Push (docs/protocol.md §8). Plain JS, no build step.
- * Presentation logic mirrors src/lib/webpush.ts + src/lib/format.ts (systemNotificationBody); keep them in sync. */
+ * Presentation logic mirrors src/lib/webpush.ts (webPushPresentation, per intent); keep them in sync. */
 
 const DEFAULT_ICON = "/icon-192.png";
 const BADGE_ICON = "/badge-72.png";
 const REPLY_ACTION = "__reply";
+const ANSWER_ACTION = "answer:";
+const LINK_ACTION = "link:";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -23,30 +25,45 @@ function stripMarkdown(s) {
     .trim();
 }
 
+function progressAmount(p) {
+  const max = p.max || 100;
+  const ratio = Math.max(0, Math.min(1, p.value / max));
+  return p.label || (max === 100 ? Math.round(ratio * 100) + "%" : p.value + "/" + max);
+}
+
 function progressText(p) {
   if (p.indeterminate) return p.label || "In progress…";
   const max = p.max || 100;
   const ratio = Math.max(0, Math.min(1, p.value / max));
   const filled = Math.round(ratio * 10);
-  const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
-  return bar + " " + (p.label || (max === 100 ? Math.round(ratio * 100) + "%" : p.value + "/" + max));
+  return "▓".repeat(filled) + "░".repeat(10 - filled) + " " + progressAmount(p);
 }
+
+// ─── Per intent (≈ webPushBody / webPushActions) ────────────────────────────
+
+const PROGRESS_ENDED = { done: "Done", failed: "Failed" };
 
 function bodyText(n) {
   const parts = [];
   const body = stripMarkdown(n.body);
   if (body) parts.push(body);
-  for (const f of n.fields || []) parts.push(f.label + ": " + f.value);
-  if (n.progress) parts.push(progressText(n.progress));
+  if (n.intent === "inform") for (const f of n.inform.fields || []) parts.push(f.label + ": " + f.value);
+  if (n.intent === "progress") {
+    const p = n.progress;
+    if (p.state === "stopped") parts.push("Stopped reporting after " + progressAmount(p));
+    else if (PROGRESS_ENDED[p.state]) parts.push(PROGRESS_ENDED[p.state] + " · " + progressAmount(p));
+    else parts.push(progressText(p));
+  }
   return parts.join("\n");
 }
 
+const askOpen = (n) => n.intent === "ask" && n.ask.state === "open";
+
 function actionsFor(n) {
-  const out = (n.actions || [])
-    .filter((a) => !a.url)
-    .slice(0, 2)
-    .map((a) => ({ action: a.id, title: a.label }));
-  if (n.reply && out.length < 2) out.push({ action: REPLY_ACTION, title: n.reply.buttonLabel || "Reply…" });
+  if (n.intent === "inform") return (n.inform.links || []).slice(0, 2).map((l) => ({ action: LINK_ACTION + l.url, title: l.label }));
+  if (!askOpen(n)) return [];
+  const out = n.ask.options.slice(0, 2).map((o) => ({ action: ANSWER_ACTION + o, title: o }));
+  if (n.ask.allowText && out.length < 2) out.push({ action: REPLY_ACTION, title: "Reply…" });
   return out;
 }
 
@@ -67,22 +84,25 @@ async function fetchNotification(id) {
 }
 
 async function show(n, alert) {
-  const isEmoji = n.icon && !/^https?:\/\//i.test(n.icon);
-  const silent = !!n.silent || n.severity === "debug";
+  const icon = n.intent === "inform" ? n.inform.icon : null;
+  const image = n.intent === "inform" ? n.inform.image : null;
+  const isEmoji = icon && !/^https?:\/\//i.test(icon);
+  // Every severity alerts; only a running progress updates quietly.
+  const silent = n.intent === "progress" && n.progress.state === "running";
   const options = {
     tag: n.id,
     body: bodyText(n),
-    icon: n.icon && /^https:\/\//i.test(n.icon) ? n.icon : DEFAULT_ICON,
+    icon: icon && /^https:\/\//i.test(icon) ? icon : DEFAULT_ICON,
     badge: BADGE_ICON,
     actions: actionsFor(n),
     requireInteraction: n.severity === "critical",
     silent,
     renotify: !!alert && !silent,
     timestamp: Date.parse(n.updatedAt) || Date.now(),
-    data: { id: n.id, url: n.url || null, hasReply: !!n.reply, version: n.version },
+    data: { id: n.id, url: n.url || null, hasReply: askOpen(n) && !!n.ask.allowText, version: n.version },
   };
-  if (n.image) options.image = n.image;
-  await self.registration.showNotification((isEmoji ? n.icon + " " : "") + n.title, options);
+  if (image) options.image = image;
+  await self.registration.showNotification((isEmoji ? icon + " " : "") + n.title, options);
 }
 
 async function handlePush(payload) {
@@ -143,22 +163,37 @@ self.addEventListener("notificationclick", (event) => {
   notification.close();
   if (!id) return;
   const base = "/api/notifications/" + encodeURIComponent(id);
+  const action = event.action || "";
 
-  if (event.action === REPLY_ACTION) {
+  if (action === REPLY_ACTION) {
     // Web Push can't take text input: open the inbox with the reply box focused.
     event.waitUntil(openOrFocus("/inbox/" + encodeURIComponent(id) + "?reply=1"));
     return;
   }
 
-  if (event.action) {
+  const openDetail = () => openOrFocus("/inbox/" + encodeURIComponent(id));
+
+  if (action.startsWith(ANSWER_ACTION)) {
     event.waitUntil(
-      post(base + "/respond", { actionId: event.action })
+      post(base + "/respond", { option: action.slice(ANSWER_ACTION.length) })
         .then((res) => {
-          // Not signed in / failed → let the user finish in the inbox.
-          if (!res.ok) return openOrFocus("/inbox/" + encodeURIComponent(id));
+          // Not signed in, already answered or expired → let the user see why in the inbox.
+          if (!res.ok) return openDetail();
         })
-        .catch(() => openOrFocus("/inbox/" + encodeURIComponent(id))),
+        .catch(openDetail),
     );
+    return;
+  }
+
+  if (action.startsWith(LINK_ACTION)) {
+    // A link button opens its URL; nothing is sent back.
+    event.waitUntil(Promise.all([post(base + "/read").catch(() => undefined), openOrFocus(action.slice(LINK_ACTION.length))]));
+    return;
+  }
+
+  if (action) {
+    // A button from a popup shown by an older version of this worker: open the notification instead of guessing.
+    event.waitUntil(openDetail());
     return;
   }
 

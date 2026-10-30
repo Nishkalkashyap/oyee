@@ -117,7 +117,7 @@ describe("when an ask expires", () => {
 
     const expired = await tool(mcp, "wait_for_response", { id });
     expect(expired.isError).toBe(false);
-    expect(expired.text).toMatch(/^The ask expired/);
+    expect(expired.text).toMatch(/^outcome: expired\nid: ntf_\w+\nThe ask expired/);
 
     const late = await call("POST", `/api/notifications/${id}/respond`, { cookie }, { option: "Rotate" });
     expect(late.status).toBe(409);
@@ -159,7 +159,7 @@ describe("when an ask expires", () => {
     await sleep(200);
     await backdateExpiry(stub, id);
     await runDurableObjectAlarm(stub);
-    expect((await waiting).text).toMatch(/^The ask expired/);
+    expect((await waiting).text).toMatch(/^outcome: expired\nid: ntf_\w+\nThe ask expired/);
   });
 
   it("can't be answered once its time is up, even before the alarm has run", async () => {
@@ -167,7 +167,7 @@ describe("when an ask expires", () => {
     const { id } = await ask(mcp, { title: "Deploy?", options: ["Yes"] });
     await backdateExpiry(stub, id);
     expect((await call("POST", `/api/notifications/${id}/respond`, { cookie }, { option: "Yes" })).status).toBe(409);
-    expect((await tool(mcp, "wait_for_response", { id })).text).toMatch(/^The ask expired/);
+    expect((await tool(mcp, "wait_for_response", { id })).text).toMatch(/^outcome: expired\nid: ntf_\w+\nThe ask expired/);
   });
 
   it("asking again with its key creates a new ask", async () => {
@@ -221,9 +221,9 @@ describe("withdrawing an ask", () => {
     const waiting = tool(mcp, "wait_for_response", { id, timeoutSeconds: 10 });
     await sleep(200);
 
-    const r = await tool(mcp, "resolve_notification", { id });
+    const r = await tool(mcp, "resolve", { id });
     expect(r.isError, r.text).toBe(false);
-    expect((await waiting).text).toMatch(/^The ask was withdrawn/);
+    expect((await waiting).text).toMatch(/^outcome: withdrawn\nid: ntf_\w+\nThe ask was withdrawn/);
 
     const n = await get(cookie, id);
     expect(n).toMatchObject({ status: "resolved", ask: { state: "withdrawn", answer: null } });

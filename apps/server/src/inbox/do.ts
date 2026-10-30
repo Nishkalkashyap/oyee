@@ -11,6 +11,7 @@ import {
   QUOTAS,
   type FlatNotification,
   type InformInput,
+  type Intent,
   type ListNotificationsQuery,
   type McpWaitResult,
   type Notification,
@@ -47,10 +48,11 @@ import {
   type Actor,
   type SendOptions,
 } from "./model";
-import { isLiveProgress, reportProgress, type ProgressReport } from "./progress";
+import { isLiveProgress, reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
 import { answerAsk, buildAsk, expireAsk, expiryDue, isOpenAsk, waitResult, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
+import { assertKeyFree } from "./keys";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -98,6 +100,10 @@ const PRUNE = "prune";
 const PRUNE_REF = "daily";
 /** Deadline kind for an open ask's expiry (ref = notification id). */
 const ASK_EXPIRY = "ask.expiry";
+/** Deadline kind for a running progress's stale deadline (ref = notification id). */
+const PROGRESS_STALE = "progress.stale";
+/** A stale check that failed is tried again this much later. */
+const STALE_RETRY_MS = 5 * 60_000;
 const SYNC_PAGE = 200;
 
 /**
@@ -116,10 +122,11 @@ async function guard<T>(fn: () => T | Promise<T>): Promise<RpcResult<T>> {
 export class InboxDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private waiters = new Map<string, Set<() => void>>();
-  private ownerKnown = false;
   /** The inbox's single alarm: fires at the earliest deadline (the daily prune, plus kinds added by later features). */
   readonly scheduler: Scheduler;
   private pruneEnsured = false;
+  /** Cache of `meta.user_id` (see rememberUser). */
+  private knownUserId: string | null = null;
   /** Per-notification push coalescing for updates (see LIMITS.updatePushIntervalMs). In memory: resets on eviction. */
   private pushSlots = new Map<string, { last: number; pending: UpdatedEvent | null }>();
 
@@ -134,6 +141,7 @@ export class InboxDO extends DurableObject<Env> {
       this.scheduler.set(PRUNE, PRUNE_REF, now + DAY);
     });
     this.scheduler.handle(ASK_EXPIRY, (refs, now) => this.expireAsks(refs, now));
+    this.scheduler.handle(PROGRESS_STALE, (refs, now) => this.stopQuietProgress(refs, now));
     // Pings are answered without waking the object from hibernation.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
   }
@@ -174,6 +182,13 @@ export class InboxDO extends DurableObject<Env> {
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
     this.migrateToIntents();
+    this.migrateAlertedAt();
+  }
+
+  /** Inform cooldown: when each notification last alerted, measured per key (inbox/inform.ts). */
+  private migrateAlertedAt() {
+    const columns = this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray();
+    if (!columns.some((c) => c.name === "alerted_at")) this.sql.exec("ALTER TABLE notifications ADD COLUMN alerted_at TEXT");
   }
 
   /**
@@ -267,18 +282,6 @@ export class InboxDO extends DurableObject<Env> {
     const due = expiryDue(n);
     if (due === null) this.scheduler.clear(ASK_EXPIRY, n.id);
     else if (this.scheduler.dueAt(ASK_EXPIRY, n.id) !== due) this.scheduler.set(ASK_EXPIRY, n.id, due);
-  }
-
-  /** The user this inbox belongs to, for pushes the alarm sends (it has no caller to ask). */
-  private owner(): string | null {
-    if (this.ctx.id.name) return this.ctx.id.name;
-    return this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'owner'").toArray()[0]?.value ?? null;
-  }
-
-  private rememberOwner(userId: string) {
-    if (this.ownerKnown) return;
-    this.ownerKnown = true;
-    this.sql.exec("INSERT INTO meta (key, value) VALUES ('owner', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", userId);
   }
 
   /** Wakes every wait_for_response held on this notification so it reports the notification's current state. */
@@ -414,7 +417,7 @@ export class InboxDO extends DurableObject<Env> {
       );
     }
     this.ensurePrune();
-    if (userId) this.rememberOwner(userId);
+    if (userId) this.rememberUser(userId); // so the alarm can push asks it expires
     if (userId && WARN_KINDS.includes(kind) && (used === Math.ceil(q.perDay * 0.8) || used === q.perDay)) {
       this.ctx.waitUntil(this.postQuotaNotice(userId, kind, used));
     }
@@ -499,26 +502,48 @@ export class InboxDO extends DurableObject<Env> {
   async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("send", actor.userId);
       const targets =
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
       const now = new Date().toISOString();
       const fresh = buildInform(newId("ntf"), input, actor, now, targets);
-      const latest = fresh.key ? this.latestByKey(fresh.source, fresh.key) : null;
-      const result = applyInform(latest?.n ?? null, fresh, now);
+      const latest = fresh.key ? this.claimKey(fresh.source, fresh.key, "inform") : null;
+      const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
+      if (result.outcome === "suppressed") return result;
+      // a new notification counts as a send, a silent update as an update (spec "Quotas")
+      this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
       const n = result.notification;
       if (n.id === fresh.id) {
         this.save(n, null, actor.tokenId);
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       } else {
+        const alert = result.outcome === "alerted";
         this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
+      }
+      if (result.outcome !== "updated_silently") {
+        this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
       }
       return result;
     });
+  }
+
+  /**
+   * The latest notification under `(source, key)`, for an intent about to use the key (inbox/keys.ts): fails when that
+   * notification is still live and of another intent.
+   */
+  private claimKey(source: string, key: string, intent: Intent): Loaded | null {
+    const latest = this.latestByKey(source, key);
+    assertKeyFree(latest?.n, intent, Date.now());
+    return latest;
+  }
+
+  /** When an inform last alerted (`alerted_at`, written by inform); rows from other send paths fall back to `updatedAt`. */
+  private informAlertedAt(n: Notification): string {
+    const r = this.sql.exec<{ alerted_at: string | null }>("SELECT alerted_at FROM notifications WHERE id = ?", n.id).toArray()[0];
+    return r?.alerted_at ?? n.updatedAt;
   }
 
   /** The latest notification a sender named with this key (keys are unique per `(source, key)`). */
@@ -651,12 +676,15 @@ export class InboxDO extends DurableObject<Env> {
     });
   }
 
-  async list(q: ListNotificationsQuery): Promise<RpcResult<Page<Notification>>> {
+  /** `key` and `intent` filter what MCP list_notifications asks for; REST lists by the other fields. */
+  async list(q: ListNotificationsQuery & { key?: string; intent?: Intent }): Promise<RpcResult<Page<Notification>>> {
     return guard(() => {
       this.consume("read");
       const where: string[] = [];
       const params: SqlStorageValue[] = [];
       if (q.source) (where.push("source = ?"), params.push(q.source));
+      if (q.key) (where.push("key = ?"), params.push(q.key));
+      if (q.intent) (where.push("intent = ?"), params.push(q.intent));
       if (q.severity) (where.push("severity = ?"), params.push(q.severity));
       if (q.status) (where.push("status = ?"), params.push(q.status));
       if (q.threadId) (where.push("thread_id = ?"), params.push(q.threadId));
@@ -762,28 +790,72 @@ export class InboxDO extends DurableObject<Env> {
           : undefined;
       // No awaits from here on, so concurrent reports for the same key can't interleave.
       const source = input.source ?? actor.defaultSource;
-      const row = this.sql
-        .exec<StoredRow>(
-          "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
-          source,
-          input.key,
-        )
-        .toArray()[0];
-      const latest = row ? (JSON.parse(row.data) as Notification) : null;
+      const row = this.claimKey(source, input.key, "progress");
+      const latest = row?.n ?? null;
       const continues = isLiveProgress(latest);
       if (!continues && actor.tokenId) this.checkRate(actor.tokenId);
       this.consume(continues ? "update" : "send", actor.userId);
       const report = reportProgress(latest, input, { id: newId("ntf"), source, now: new Date().toISOString(), targets });
       const n = report.notification;
-      this.save(n, null, continues ? (row!.token_id ?? actor.tokenId) : actor.tokenId);
+      this.save(n, null, continues ? (row!.tokenId ?? actor.tokenId) : actor.tokenId);
       if (continues) {
         this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: report.alert, reason: "update" }]);
       } else {
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       }
+      this.rememberUser(actor.userId);
+      this.trackStale(n);
       return report;
     });
+  }
+
+  /** Keeps a progress's stale deadline in step with it: registered while running, dropped once it can't stop. */
+  private trackStale(n: Notification) {
+    const due = staleDueAt(n);
+    if (due === null) this.scheduler.clear(PROGRESS_STALE, n.id);
+    else this.scheduler.set(PROGRESS_STALE, n.id, due);
+  }
+
+  /**
+   * Stale deadlines that came due: each running progress that got no report for `staleAfter` is marked stopped and
+   * alerts once (not charged to quotas). A ref is only "check this now": one that changed meanwhile is skipped or
+   * re-registered for its real deadline, and one whose check failed is retried a few minutes later (the scheduler
+   * removes due refs before calling this, so nothing else would bring it back).
+   */
+  private stopQuietProgress(refs: string[], now: number) {
+    const userId = this.userId();
+    for (const id of refs) {
+      try {
+        const rec = this.load(id);
+        if (!rec) continue;
+        const stopped = stopIfQuiet(rec.n, now);
+        if (!stopped) {
+          this.trackStale(rec.n);
+          continue;
+        }
+        this.save(stopped, rec.replaceKey, rec.tokenId);
+        const ev: InboxEvent = { type: "notification.updated", notification: stopped, alert: true, reason: "update" };
+        if (userId) this.emit(userId, [ev]);
+        else this.broadcast(ev);
+      } catch (e) {
+        console.error(`stopped reporting: checking ${id} failed; retrying`, e);
+        this.scheduler.set(PROGRESS_STALE, id, now + STALE_RETRY_MS);
+      }
+    }
+  }
+
+  /** The inbox owner's id, kept so work the alarm does on its own (stopped reporting) can push to their devices. */
+  private rememberUser(userId: string) {
+    if (this.knownUserId === userId) return;
+    this.sql.exec("INSERT INTO meta (key, value) VALUES ('user_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", userId);
+    this.knownUserId = userId;
+  }
+
+  private userId(): string | null {
+    this.knownUserId ??=
+      this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'user_id'").toArray()[0]?.value ?? null;
+    return this.knownUserId;
   }
 
   // ─── Ask (RPC) ────────────────────────────────────────────────────────────
@@ -792,7 +864,7 @@ export class InboxDO extends DurableObject<Env> {
   async ask(actor: Actor, input: AskInput): Promise<RpcResult<AskResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      const latest = input.key ? this.latestByKey(input.source ?? actor.defaultSource, input.key)?.n : null;
+      const latest = input.key ? this.claimKey(input.source ?? actor.defaultSource, input.key, "ask")?.n : null;
       if (latest && isOpenAsk(latest, Date.now())) return { outcome: "reused", notification: latest };
       this.consume("send", actor.userId);
       const targets =
@@ -1059,7 +1131,7 @@ export class InboxDO extends DurableObject<Env> {
       this.wake(id);
     }
     if (!events.length) return;
-    const owner = this.owner();
+    const owner = this.userId();
     if (owner) this.emit(owner, events, events.slice(0, MAX_BULK_PUSH));
     else for (const ev of events) this.broadcast(ev);
   }

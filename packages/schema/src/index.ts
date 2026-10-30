@@ -188,6 +188,15 @@ export const ProgressInput = z.object({
   status: ProgressStatus.default("running").describe(
     "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
   ),
+  staleAfter: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minStaleAfter) && durationMs(d) <= durationMs(LIMITS.maxStaleAfter),
+    { error: () => `staleAfter must be between ${LIMITS.minStaleAfter} and ${LIMITS.maxStaleAfter}` },
+  )
+    .optional()
+    .describe(
+      'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
+        'silent step (default "30m", from "1m" to "24h"). A later report revives it.',
+    ),
   body: z.string().max(4000).optional().describe("Detail under the title. Markdown: **bold**, _italic_, `code`, links."),
   url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
   source: z.string().min(1).max(64).optional().describe("Who is reporting (defaults to this connection's name)."),
@@ -383,6 +392,15 @@ export const InformInput = z.object({
     .optional()
     .describe("https URL of an image shown on the card, such as a chart or screenshot."),
   icon: z.string().min(1).max(2048).optional().describe("An emoji or an https image URL shown next to the title."),
+  cooldown: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minCooldown) && durationMs(d) <= durationMs(LIMITS.maxCooldown),
+    { error: () => `cooldown must be between ${LIMITS.minCooldown} and ${LIMITS.maxCooldown}` },
+  )
+    .optional()
+    .describe(
+      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; 1m to 168h). ' +
+        "Sends inside it update the notification silently, or change nothing if the user resolved it.",
+    ),
 });
 export type InformInput = z.infer<typeof InformInput>;
 
@@ -702,9 +720,51 @@ export const LIMITS = {
   maxAskExpiry: MAX_ASK_EXPIRY,
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
+  /** Bounds of a progress's `staleAfter`. */
+  minStaleAfter: "1m",
+  maxStaleAfter: "24h",
   /** wait_for_response holds for an answer at most this long. */
   askWaitSeconds: ASK_WAIT_SECONDS,
+  /** list_notifications (MCP) returns this many items unless asked for more, and at most `maxListPage`. */
+  defaultListPage: 10,
+  maxListPage: 50,
+  /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
+  minCooldown: "1m",
+  maxCooldown: "168h",
 } as const satisfies Record<string, number | Duration>;
+
+// ─── MCP list_notifications ─────────────────────────────────────────────────
+
+export const McpListInput = z.object({
+  key: Key.optional().describe("Only notifications with this key."),
+  intent: Intent.optional().describe("Only this intent: inform, ask or progress."),
+  status: NotificationStatus.optional().describe("active (still on the user's devices) or resolved."),
+  source: z.string().min(1).max(64).optional().describe("Only notifications from this source."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.maxListPage)
+    .default(LIMITS.defaultListPage)
+    .describe(`How many to return, newest first (default ${LIMITS.defaultListPage}, at most ${LIMITS.maxListPage}).`),
+  cursor: z.string().optional().describe("nextCursor from the previous page, to get older notifications."),
+});
+export type McpListInput = z.infer<typeof McpListInput>;
+
+/** One list_notifications item: only what an agent needs, with the age precomputed ("12m") so it needs no date maths. */
+export interface McpListItem {
+  id: string;
+  intent: Intent;
+  key: string | null;
+  title: string;
+  status: NotificationStatus;
+  /** ask: open | answered | expired | withdrawn; progress: running | done | failed | stopped; inform: null. */
+  state: AskState | ProgressState | null;
+  /** An ask's answer; null otherwise. */
+  answer: { option: string | null; text: string | null; device: string | null } | null;
+  createdAt: string;
+  ago: string;
+}
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
 
@@ -816,17 +876,18 @@ export function inferIntent(
   if (n.progress) {
     const p = n.progress;
     const atMax = !p.indeterminate && p.value >= p.max;
-    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it.
-    const prior = (p as Partial<ProgressBlock>).state;
-    const finished = prior === "done" || prior === "failed" ? prior : null;
+    // Re-inferring a stored progress (read, resolve…) keeps how its sender finished it, whether it stopped reporting,
+    // and when it last reported.
+    const prior = p as Partial<ProgressBlock>;
+    const kept = prior.state === "done" || prior.state === "failed" || prior.state === "stopped" ? prior.state : null;
     return {
       ...flat,
       intent: "progress",
       progress: {
         ...p,
-        state: finished ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
-        staleAfter: (p as Partial<ProgressBlock>).staleAfter ?? LIMITS.defaultStaleAfter,
-        lastReportAt: n.updatedAt,
+        state: kept ?? (atMax ? "done" : opts.legacy ? "stopped" : "running"),
+        staleAfter: prior.staleAfter ?? LIMITS.defaultStaleAfter,
+        lastReportAt: prior.lastReportAt ?? n.updatedAt,
       },
     };
   }
@@ -841,6 +902,15 @@ export function inferIntent(
       cooldown: null,
     },
   };
+}
+
+/**
+ * What every client shows for a progress that stopped reporting: "Stopped reporting after <last label or percent>",
+ * e.g. "Stopped reporting after 3/7 checks" or "Stopped reporting after 40%". The stored `label` stays the sender's.
+ */
+export function stoppedReportingLabel(p: { value: number; max: number; label?: string }): string {
+  const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
+  return `Stopped reporting after ${p.label ?? `${Math.round(ratio * 100)}%`}`;
 }
 
 /** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */

@@ -79,7 +79,7 @@ describe("targeted delivery", () => {
     expect(fcm.slice(2).sort()).toEqual(["fcm-phone", "fcm-tablet"]);
   });
 
-  it("MCP send/ask accept targets and explain unknown devices", async () => {
+  it("MCP inform/ask accept targets and explain unknown devices", async () => {
     const cookie = await devLogin();
     await pairDevice(cookie, "Nishkal’s MacBook Pro", "macos");
     const { secret } = await createToken(cookie, "mcp", "Agent");
@@ -90,14 +90,15 @@ describe("targeted delivery", () => {
       return res.body.result as { isError?: boolean; content: { text: string }[] };
     };
 
-    const ok = await tool("send_notification", { title: "Mac only", devices: ["macbook"] });
+    const ok = await tool("inform", { title: "Mac only", devices: ["macbook"] });
     expect(ok.isError).toBeFalsy();
-    expect(JSON.parse(ok.content[0]!.text).targetDeviceIds).toHaveLength(1);
+    const id = /^id: (ntf_\w+)$/m.exec(ok.content[0]!.text)![1];
+    expect((await call("GET", `/api/notifications/${id}`, { cookie })).body.targetDeviceIds).toHaveLength(1);
 
     const asked = await tool("ask", { title: "Mac question?", options: ["Yes"], platforms: ["macos"] });
     expect(asked.isError).toBeFalsy();
 
-    const bad = await tool("send_notification", { title: "Nope", devices: ["pixel"] });
+    const bad = await tool("inform", { title: "Nope", devices: ["pixel"] });
     expect(bad.isError).toBe(true);
     expect(bad.content[0]!.text).toMatch(/no paired device matches "pixel".*MacBook Pro \(macos/);
   });

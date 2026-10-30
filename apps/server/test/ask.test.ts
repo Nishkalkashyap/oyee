@@ -159,17 +159,17 @@ describe("wait_for_response", () => {
 
     const pending = await tool(mcp, "wait_for_response", { id, timeoutSeconds: 1 });
     expect(pending.isError).toBe(false);
-    expect(pending.text).toMatch(/No answer yet: asked \d+s ago/);
+    expect(pending.text).toMatch(new RegExp(`^outcome: pending\\nid: ${id}\\nNo answer yet: asked \\d+s ago`));
     expect(pending.text).toContain(`wait_for_response again with id "${id}"`);
 
     const mac = await pairDevice(cookie, "MacBook Pro", "macos");
     const waiting = tool(mcp, "wait_for_response", { id, timeoutSeconds: 10 });
     await sleep(200);
     await call("POST", `/api/notifications/${id}/respond`, { bearer: mac.token }, { text: "release/1.4" });
-    expect((await waiting).text).toBe('The user replied from MacBook Pro: "release/1.4"');
+    expect((await waiting).text).toBe(`outcome: answered\nid: ${id}\nThe user replied from MacBook Pro: "release/1.4"`);
 
     // Later calls return the stored answer at once.
-    expect((await tool(mcp, "wait_for_response", { id })).text).toBe('The user replied from MacBook Pro: "release/1.4"');
+    expect((await tool(mcp, "wait_for_response", { id })).text).toBe(`outcome: answered\nid: ${id}\nThe user replied from MacBook Pro: "release/1.4"`);
   });
 
   it("reports an answer button with its device", async () => {
@@ -177,7 +177,7 @@ describe("wait_for_response", () => {
     const { id } = await ask(mcp, { title: "Deploy?", options: ["Approve", "Reject"] });
     const phone = await pairDevice(cookie, "Pixel 9");
     await call("POST", `/api/notifications/${id}/respond`, { bearer: phone.token }, { option: "Reject" });
-    expect((await tool(mcp, "wait_for_response", { id })).text).toBe('The user answered "Reject" from Pixel 9.');
+    expect((await tool(mcp, "wait_for_response", { id })).text).toBe(`outcome: answered\nid: ${id}\nThe user answered "Reject" from Pixel 9.`);
   });
 
   it("holds at most 50 seconds", async () => {
@@ -202,7 +202,7 @@ describe("asking again with a key", () => {
     });
     const again = await ask(mcp, { title: "Rotate the staging keys?", options: ["Rotate", "Skip"], key: "rotate-keys" });
     expect(again.id).toBe(first.id);
-    expect(again.text).toMatch(/^Already asked 10m ago, still waiting/);
+    expect(again.text).toMatch(/^outcome: reused\nid: ntf_\w+\nAlready asked 10m ago, still waiting/);
     expect(again.text).toContain(`wait_for_response with id "${first.id}"`);
     await sleep(100);
     expect(messages.filter((m) => m.type === "notification.created")).toHaveLength(1);
@@ -211,7 +211,7 @@ describe("asking again with a key", () => {
     await call("POST", `/api/notifications/${first.id}/respond`, { cookie }, { option: "Skip" });
     const next = await ask(mcp, { title: "Rotate the staging keys?", options: ["Rotate", "Skip"], key: "rotate-keys" });
     expect(next.id).not.toBe(first.id);
-    expect(next.text).toMatch(/^Asked the user/);
+    expect(next.text).toMatch(/^outcome: created\nid: ntf_\w+\nAsked the user/);
     ws.close();
   });
 

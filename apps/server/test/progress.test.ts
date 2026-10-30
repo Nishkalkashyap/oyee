@@ -225,7 +225,7 @@ describe("progress tool schema", () => {
     expect(schema.type).toBe("object");
     expect([...schema.required].sort()).toEqual(["key", "title"]);
     expect(Object.keys(schema.properties).sort()).toEqual(
-      ["body", "devices", "key", "label", "max", "platforms", "source", "status", "title", "url", "value"].sort(),
+      ["body", "devices", "key", "label", "max", "platforms", "source", "staleAfter", "status", "title", "url", "value"].sort(),
     );
     expect(schema.properties.status.enum).toEqual(["running", "done", "failed"]);
     for (const [name, prop] of Object.entries<any>(schema.properties)) expect(prop.description, name).toBeTruthy();

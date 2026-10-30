@@ -6,8 +6,8 @@ devices.
 
 ![Oyee web inbox: a notification from an agent asking a question, with answer buttons and a reply box](docs/screenshots/web-inbox-light.png)
 
-- 🤖 **MCP server URL**: give Claude Code, Codex or any MCP client `send_notification`, `update_notification`, `ask`,
-  `wait_for_response` and more. Target one device (`devices: ["macbook"]`) or all of them.
+- 🤖 **MCP server URL**: give Claude Code, Codex or any MCP client one tool per intent: `inform`, `ask`
+  (+ `wait_for_response`) and `progress`. Target one device (`devices: ["macbook"]`) or all of them.
 - 🪝 **Webhooks**: paste a URL into Home Assistant, Alertmanager, Grafana, AWS SNS, GitHub Actions, cron or curl.
 - 🔄 **Live notifications** that update in place (progress, status), resolve everywhere, and record your answers.
 - 💬 **Two-way**: agents ask, you tap a button or type a reply on any device, and the agent gets the answer.

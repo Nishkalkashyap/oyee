@@ -16,14 +16,15 @@ src/
   routes/api.ts       REST endpoints + WebSocket upgrade
   routes/hook.ts      webhook ingestion
   webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers
-  mcp/server.ts       MCP tools (stateless Streamable HTTP, official SDK)
+  mcp/server.ts       the seven MCP tools + server instructions (stateless Streamable HTTP, official SDK)
+  mcp/text.ts         the shared result shape ("outcome:" / "id:" lines, then words), `ago`, list_notifications items
   mcp/inform.ts       the `inform` tool and its plain-text result
   mcp/ask.ts          `ask` / `wait_for_response` plain-text results ("asked 3m ago", "answered from Pixel 9")
   inbox/do.ts         InboxDO: notifications, tombstones, templates, quotas, push coalescing, WebSockets, waiters, retention
   lib/abuse.ts        per-IP limits: sign-ups per day (D1), failed token attempts (Rate Limiting binding)
   inbox/model.ts      pure card logic (template merge, patching)
-  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create
-  inbox/progress.ts   progress intent rules: key lookup outcome, silent reports, done/failed alerts, MCP result text
+  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create, cooldown outcomes
+  inbox/progress.ts   progress intent rules: key lookup outcome, silent reports, done/failed alerts, stopped reporting, MCP result text
   inbox/ask.ts        pure ask rules: build from AskInput, reuse an open ask by (source, key), first answer wins
   push/fanout.ts      FCM + Web Push fan-out, signed action callbacks
   push/fcm.ts         FCM HTTP v1 (service-account JWT, RS256 via WebCrypto)
@@ -179,7 +180,7 @@ claude mcp add --transport http oyee $H/mcp/oyee_mcp_...              # Claude C
 - **Auth:** the `oyee_session` cookie holds a random id, and D1 stores only its SHA-256 hash. Sessions last 30 days, with sliding renewal. Device, webhook and MCP tokens are also stored as SHA-256 hashes. Webhook and MCP tokens are rejected on `/api/*` (403).
 - **Rate limit:** 60 sends per minute per webhook/MCP token, counted in the InboxDO, returns `429 rate_limited`. Bodies are capped at 64 KiB (`413`).
 - **Sync cursors** are opaque and based on a per-inbox change sequence. Clients must not parse them. `sync` and `?updatedSince=` also accept an ISO timestamp.
-- **Deadlines:** the InboxDO has one alarm, owned by the deadline scheduler (`src/inbox/scheduler.ts`). Each deadline is a `(kind, ref, dueAt)` row; the alarm is always set to the earliest one, and on firing every due ref is handed to its kind's handler. Kinds: the daily prune, and `ask.expiry` (one per open ask, kept in step by `save()`; the handler also sweeps any open ask past `expiresAt`, so an ask whose deadline was lost still expires by the next prune). Alarm-driven pushes need the inbox's user id, which the DO remembers in `meta.owner` (`ctx.id.name` is not set inside `alarm()`).
+- **Deadlines:** the InboxDO has one alarm, owned by the deadline scheduler (`src/inbox/scheduler.ts`). Each deadline is a `(kind, ref, dueAt)` row; the alarm is always set to the earliest one, and on firing every due ref is handed to its kind's handler. Kinds: the daily prune; `ask.expiry` (one per open ask at `ask.expiresAt`, kept in step by `save()`; the handler expires the ask, re-registers a ref that isn't due yet, and also sweeps any open ask past `expiresAt`, so an ask whose deadline was lost still expires by the next prune); and `progress.stale` (one per running progress, at `lastReportAt + staleAfter`; the handler marks it stopped, re-registers a ref that isn't due yet, and retries a failed check 5 minutes later). The alarm pushes to the owner's devices using `meta.user_id`, remembered on every charged call (`ctx.id.name` is not set inside `alarm()`).
 - **Retention:** a daily prune deadline deletes notifications older than 30 days and keeps at most 5,000 per user. It writes tombstones so `sync` reports the deletions.
 - **Action callbacks:** the server POSTs `{ notification, response }` with `X-Oyee-Signature: sha256=<hex HMAC-SHA256(body)>`. The key is the `callbackSecret` returned once by `POST /api/tokens` for the token that created the notification.
 - **Webhook extras:** `?var.<name>=<value>` passes template vars on text/GET hooks. Alertmanager `resolved` with no matching active card records a silent, already-resolved card. SNS `SubscribeURL` is fetched only for `https://sns.<region>.amazonaws.com`.

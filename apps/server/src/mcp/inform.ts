@@ -7,10 +7,11 @@ import type { Actor } from "../inbox/model";
 import { rpc } from "../lib/errors";
 import type { inbox } from "../routes/api";
 import { fail } from "./server";
+import { resultText } from "./text";
 
-/** "outcome: …" and "id: …" lines first (stable to read), then the reason in words. */
+/** In the shared result shape (./text.ts): outcome and id lines, then the reason in words. */
 export function informResultText(r: InformResult): string {
-  return `outcome: ${r.outcome}\nid: ${r.notification.id}\n${r.reason}`;
+  return resultText(r.outcome, r.notification.id, r.reason);
 }
 
 export function registerInformTool(server: McpServer, stub: () => ReturnType<typeof inbox>, actor: Actor) {
@@ -21,7 +22,8 @@ export function registerInformTool(server: McpServer, stub: () => ReturnType<typ
       description:
         "Tell the user something they should know (a build finished, an alert fired, a summary is ready). One-way: " +
         "it has no answer buttons (use ask for a decision). Only `title` is required. Set `key` to update the same " +
-        "notification on later sends instead of creating duplicates.",
+        "notification on later sends instead of creating duplicates; add `cooldown` (such as \"1h\") when you send on a " +
+        "schedule, so the user is alerted at most that often and the card's text stays current silently in between.",
       inputSchema: InformInput,
     },
     async (input): Promise<CallToolResult> => {

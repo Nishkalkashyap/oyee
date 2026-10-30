@@ -30,7 +30,7 @@ const HOUR = 60 * MIN;
 
 const user: User = { id: "usr_mock", email: "demo@oyee.dev", name: "Demo User", avatarUrl: null };
 
-function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, msAgo: number): Notification {
+function base(partial: Partial<FlatNotification> & Pick<Notification, "title"> & { key?: string | null }, msAgo: number): Notification {
   const at = iso(msAgo);
   return inferIntent({
     id: `ntf_${ulid()}`,
@@ -234,6 +234,17 @@ function fixtures(): Notification[] {
       { title: "Running the test suite", source: "claude-code", silent: true, progress: { value: 3, max: 7, label: "3/7 checks", indeterminate: false } },
       2 * MIN,
     ),
+    // A progress whose agent went quiet for longer than its staleAfter: Stopped reporting.
+    base(
+      {
+        title: "Migrating user avatars",
+        body: "Copying avatars to the new bucket.",
+        source: "claude-code",
+        severity: "warning",
+        progress: { value: 40, max: 100, indeterminate: false, state: "stopped", staleAfter: "30m", lastReportAt: iso(52 * MIN) } as FlatNotification["progress"],
+      },
+      70 * MIN,
+    ),
     base(
       {
         title: "CI on main",
@@ -256,11 +267,12 @@ function fixtures(): Notification[] {
       },
       35 * MIN,
     ),
-    // The same periodic alert, several times: the inbox stacks these into one row.
+    // The same periodic alert under one key, several times: the inbox stacks these into one row.
     ...[40, 100, 160, 220].map((min, i) =>
       base(
         {
-          title: "Archiver lag warning",
+          key: "archiver-lag",
+          title: i === 0 ? "Archiver lag warning" : `Archiver lag warning (${i + 1})`,
           body: `Shared backlog ${740 + i * 12} pending; watermark still stalled. No data-loss risk yet.`,
           source: "ai-gateway-archiver",
           severity: "warning",
@@ -577,7 +589,6 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
       source: url.searchParams.get("source") ?? undefined,
       severity: (url.searchParams.get("severity") ?? undefined) as InboxFilters["severity"],
       status: (url.searchParams.get("status") ?? undefined) as InboxFilters["status"],
-      threadId: url.searchParams.get("threadId") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
     };
     const limit = Number(url.searchParams.get("limit") ?? 50);

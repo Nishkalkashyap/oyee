@@ -1,7 +1,7 @@
 import type { IntentNotification } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
-import { inProgress } from "../lib/inbox";
+import { inboxSections } from "../lib/inbox";
 import { progressView, usesProgressCard } from "../lib/progress";
 import { makeNotification } from "./fixtures";
 
@@ -44,6 +44,15 @@ describe("progressView (shared v2 fixtures)", () => {
     });
   });
 
+  it("stopped reporting names the sender's last label, else the percent", () => {
+    const n = fx("progress-stopped");
+    expect(progressView({ ...n, progress: { ...n.progress, value: 3, max: 7, label: "3/7 checks" } })).toMatchObject({
+      stateLabel: "Stopped reporting after 3/7 checks",
+      amount: "3/7 checks",
+    });
+    expect(progressView({ ...n, progress: { ...n.progress, value: 3, max: 7 } }).stateLabel).toBe("Stopped reporting after 43%");
+  });
+
   it("a value past max is clamped to a full bar", () => {
     const n = fx("progress-running-percent");
     expect(progressView({ ...n, progress: { ...n.progress, value: 250 } }).percent).toBe(100);
@@ -72,8 +81,8 @@ describe("inbox section of a progress", () => {
   it("a failed progress has ended, so it isn't In progress even though its bar isn't full", () => {
     const failed = makeNotification({ id: "ntf_x", progress: { value: 4, max: 7, indeterminate: false, state: "failed" } as never });
     expect(failed.intent === "progress" && failed.progress.state).toBe("failed");
-    expect(inProgress(failed)).toBe(false);
-    expect(inProgress(makeNotification({ id: "ntf_r", progress: { value: 4, max: 7, indeterminate: false } }))).toBe(true);
+    expect(inboxSections([failed])[0]!.id).toBe("updates");
+    expect(inboxSections([makeNotification({ id: "ntf_r", progress: { value: 4, max: 7, indeterminate: false } })])[0]!.id).toBe("in-progress");
   });
 });
 

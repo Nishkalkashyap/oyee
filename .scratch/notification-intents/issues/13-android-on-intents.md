@@ -18,3 +18,5 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.
+
+From 08: mirror `stoppedReportingLabel` from @oyee/schema exactly ("Stopped reporting after <label or percent>"); the server does not overwrite `label`.

@@ -59,18 +59,6 @@ describe("intent of webhook sends", () => {
 
 let rpcId = 0;
 
-/** Calls an MCP tool and returns its first text content parsed as JSON. */
-async function tool(path: string, name: string, args: unknown): Promise<any> {
-  const res = await SELF.fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }),
-  });
-  const body = (await res.json()) as { result: { content: { text: string }[]; isError?: boolean } };
-  expect(body.result.isError ?? false).toBe(false);
-  return JSON.parse(body.result.content[0]!.text);
-}
-
 /** Calls the MCP `ask` tool and reads the ask's id from its text result. */
 async function askId(path: string, args: unknown): Promise<string> {
   const res = await SELF.fetch(`${BASE}${path}`, {
@@ -139,36 +127,46 @@ describe("intent of MCP sends", () => {
     const cookie = await devLogin();
     const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
     const id = await askId(mcp, { title: "Still needed?", options: ["Yes"] });
-    const n = await tool(mcp, "resolve_notification", { id });
+    const res = await SELF.fetch(`${BASE}${mcp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name: "resolve", arguments: { id } } }),
+    });
+    expect(((await res.json()) as { result: { isError?: boolean } }).result.isError ?? false).toBe(false);
+    const n = (await call<Notification>("GET", `/api/notifications/${id}`, { cookie })).body;
     expect(n).toMatchObject({ intent: "ask", status: "resolved", ask: { state: "withdrawn", answer: null } });
   });
+});
 
-  it("send_notification with progress is a running progress, done at max", async () => {
+describe("intent of flat REST sends", () => {
+  it("a card with progress is a running progress, done at max", async () => {
     const cookie = await devLogin();
-    const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
-    const sent = await tool(mcp, "send_notification", {
-      title: "Build",
-      replaceKey: "build-42",
-      progress: { value: 2, max: 7, label: "2/7 checks" },
-    });
+    const sent = (
+      await call<any>("POST", "/api/notifications", { cookie }, {
+        title: "Build",
+        replaceKey: "build-42",
+        progress: { value: 2, max: 7, label: "2/7 checks" },
+      })
+    ).body;
     expect(sent).toMatchObject({
       intent: "progress",
       key: "build-42",
       progress: { value: 2, max: 7, label: "2/7 checks", state: "running", staleAfter: "30m", lastReportAt: sent.createdAt },
     });
-    const done = await tool(mcp, "update_notification", { id: sent.id, progress: { value: 7, max: 7 } });
+    const done = (await call<any>("PATCH", `/api/notifications/${sent.id}`, { cookie }, { progress: { value: 7, max: 7 } })).body;
     expect(done).toMatchObject({ intent: "progress", key: "build-42", progress: { value: 7, state: "done" } });
     expect(done.progress.lastReportAt).toBe(done.updatedAt);
   });
 
   it("a card with answer buttons and a progress bar is an ask", async () => {
     const cookie = await devLogin();
-    const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
-    const sent = await tool(mcp, "send_notification", {
-      title: "Canary at 40%",
-      progress: { value: 40 },
-      actions: [{ id: "abort", label: "Abort", resolves: true }],
-    });
+    const sent = (
+      await call<any>("POST", "/api/notifications", { cookie }, {
+        title: "Canary at 40%",
+        progress: { value: 40 },
+        actions: [{ id: "abort", label: "Abort", resolves: true }],
+      })
+    ).body;
     expect(sent).toMatchObject({ intent: "ask", ask: { options: ["Abort"], state: "open" }, progress: { value: 40 } });
   });
 });

@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 02, 05, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Sections are computed from intent and state, not from actions/progress fields
 - [ ] Stacking groups by `(source, key)` when a key exists, otherwise source and title
@@ -18,3 +18,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 From 02: the web service worker (sw.js, mirrored by webpush.ts) still drops link buttons from the browser popup; show inform links there (first two buttons).
 
 From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.
+
+From 08: a stopped row's progress bar in the inbox list is still ink; grey it out.
+
+Resolved: merged into `notification-intents` (branch head 1f16cee). Sections from intent+state; tags/thread/Templates page removed; popup shows ask answers and inform links (first two).
