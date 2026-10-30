@@ -9,10 +9,34 @@ public enum Rendering {
         let ratio = Swift.max(0, Swift.min(1, progress.value / max))
         let filled = Int(jsRound(ratio * 10))
         let bar = String(repeating: "▓", count: filled) + String(repeating: "░", count: 10 - filled)
-        let suffix =
-            progress.label
+        return "\(bar) \(progressAmount(progress))"
+    }
+
+    /// "3/7 checks", "40%" or "3/7": the sender's label, else the percent (max 100) or value/max. Mirrors
+    /// `progressAmount` in packages/schema exactly.
+    public static func progressAmount(_ progress: ProgressBlock) -> String {
+        let max = progress.max
+        let ratio = max > 0 ? Swift.max(0, Swift.min(1, progress.value / max)) : 0
+        return progress.label
             ?? (max == 100 ? "\(Int(jsRound(ratio * 100)))%" : "\(jsNumber(progress.value))/\(jsNumber(max))")
-        return "\(bar) \(suffix)"
+    }
+
+    /// "45s", "12m", "3h", "2d" (elapsed: the largest whole unit, rounded down), or with `span` "40s", "48m", "1h",
+    /// "2h 30m" (to the nearest second under a minute, else the nearest minute). Mirrors `formatDuration` in
+    /// packages/schema exactly.
+    public static func duration(_ seconds: TimeInterval, span: Bool = false) -> String {
+        if span {
+            let s = Swift.max(0, Int(jsRound(seconds)))
+            if s < 60 { return "\(s)s" }
+            let m = Int(jsRound(seconds / 60))
+            if m < 60 { return "\(m)m" }
+            return m % 60 == 0 ? "\(m / 60)h" : "\(m / 60)h \(m % 60)m"
+        }
+        let s = Swift.max(0, Int(seconds.rounded(.down)))
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s / 60)m" }
+        if s < 86_400 { return "\(s / 3600)h" }
+        return "\(s / 86_400)d"
     }
 
     /// "Stopped reporting after 3/7 checks" or "… after 40%". Mirrors `stoppedReportingLabel` in packages/schema

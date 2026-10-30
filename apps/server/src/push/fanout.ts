@@ -1,5 +1,5 @@
 /** Push fan-out (FCM + Web Push) for notification events. WebSocket broadcast happens in the InboxDO. */
-import { WebPushSubscription, type Notification, type PushEventType, type UpdateReason, type WebPushPayload } from "@oyee/schema";
+import { WebPushSubscription, isQuietProgress, type Notification, type PushEventType, type UpdateReason, type WebPushPayload } from "@oyee/schema";
 import type { Env } from "../env";
 import { clearFcmToken, listDevices, removeWebPush, type DeviceRow } from "../db";
 import { byteLength } from "../lib/encoding";
@@ -24,7 +24,7 @@ export function vapidKeys(env: Env): VapidKeys | null {
 
 /** Whether a new notification sounds: everything but a running progress (spec "Alert rules"). */
 export function alertsOnCreate(n: Notification): boolean {
-  return !(n.intent === "progress" && n.progress.state === "running");
+  return !isQuietProgress(n);
 }
 
 function eventInfo(ev: InboxEvent): { id: string; notification: Notification | null; alert: boolean } {

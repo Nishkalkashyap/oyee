@@ -56,11 +56,6 @@ export function buildAsk(
   };
 }
 
-/** An ask with this key is reused while it is still open and unexpired. */
-export function isOpenAsk(n: Notification, now: number): n is AskNotification {
-  return n.intent === "ask" && n.ask.state === "open" && n.status === "active" && Date.parse(n.ask.expiresAt) > now;
-}
-
 /** "Approve · Pixel 9", as every device shows it after "Answered: ". */
 export function describeAnswer(a: AskAnswer): string {
   const what = [a.option, a.text].filter((s): s is string => !!s).join(": ");

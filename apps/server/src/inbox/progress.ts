@@ -8,7 +8,9 @@
  */
 import {
   durationMs,
+  isLiveProgress,
   LIMITS,
+  progressAmount,
   type Severity,
   type Notification,
   type ProgressInput,
@@ -31,11 +33,6 @@ export interface ProgressReport {
 
 /** Running progress has no severity of its own; finishing picks the alert's urgency. */
 const SEVERITY: Record<ProgressStatus, Severity> = { running: "info", done: "success", failed: "warning" };
-
-/** A progress the next report continues: running or stopped, and not resolved by the user. */
-export function isLiveProgress(n: Notification | null | undefined): n is ProgressNotification {
-  return n?.intent === "progress" && n.status === "active" && (n.progress.state === "running" || n.progress.state === "stopped");
-}
 
 /**
  * Applies one report to the latest notification with its key. Omitted fields keep the previous report's value; the
@@ -89,9 +86,6 @@ export function reportProgress(
   };
 }
 
-const amount = (p: ProgressNotification["progress"]) =>
-  p.label ?? (p.max === 100 ? `${Math.round((Math.min(p.value, p.max) / p.max) * 100)}%` : `${p.value}/${p.max}`);
-
 /**
  * What a report did and what to do next. `again` names the next call: "Call progress again" for MCP, "Send again"
  * for webhooks and REST.
@@ -102,9 +96,9 @@ export function progressReason({ notification: n, outcome, revived }: ProgressRe
   const what =
     outcome === "created" ? "appeared without sound" : revived ? "had stopped reporting and is running again" : "was updated silently";
   return p.state === "done" || p.state === "failed"
-    ? `The progress with key ${key} finished as ${p.state} at ${amount(p)} and alerted the user once. It stays in ` +
+    ? `The progress with key ${key} finished as ${p.state} at ${progressAmount(p)} and alerted the user once. It stays in ` +
         `the inbox until read; a later report with key ${key} starts a new progress.`
-    : `The progress with key ${key} ${what} at ${amount(p)}. ${again} with key ${key} to update it; ` +
+    : `The progress with key ${key} ${what} at ${progressAmount(p)}. ${again} with key ${key} to update it; ` +
         `finish with status "done" or "failed" to alert the user once. If no report arrives within ${p.staleAfter}, ` +
         `the user is told it stopped reporting.`;
 }

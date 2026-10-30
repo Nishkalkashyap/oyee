@@ -22,11 +22,31 @@ object Formatting {
         val ratio = if (max > 0) (p.value / max).coerceIn(0.0, 1.0) else 0.0
         val filled = Math.round(ratio * 10).toInt()
         val bar = "▓".repeat(filled) + "░".repeat(10 - filled)
-        val suffix = p.label ?: if (max == 100.0) "${Math.round(ratio * 100)}%" else "${number(p.value)}/${number(max)}"
-        return "$bar $suffix"
+        return "$bar ${progressLabel(p)}"
     }
 
-    /** Short progress description without the bar, e.g. "3/7 checks" / "42%". */
+    /**
+     * Port of `formatDuration` from @oyee/schema. Elapsed (default): the largest whole unit, rounded down: "45s", "12m",
+     * "3h", "2d". Span: to the nearest second under a minute, else the nearest minute: "40s", "48m", "1h", "2h 30m".
+     */
+    fun duration(ms: Long, span: Boolean = false): String {
+        if (span) {
+            val s = maxOf(0L, Math.round(ms / 1000.0))
+            if (s < 60) return "${s}s"
+            val m = Math.round(ms / 60_000.0)
+            if (m < 60) return "${m}m"
+            return if (m % 60 == 0L) "${m / 60}h" else "${m / 60}h ${m % 60}m"
+        }
+        val s = maxOf(0L, Math.floorDiv(ms, 1000L))
+        return when {
+            s < 60 -> "${s}s"
+            s < 3600 -> "${s / 60}m"
+            s < 86_400 -> "${s / 3600}h"
+            else -> "${s / 86_400}d"
+        }
+    }
+
+    /** Port of `progressAmount` from @oyee/schema: the sender's label, else "42%" (max 100) or "3/7". */
     fun progressLabel(p: ProgressBlock): String {
         p.label?.let { return it }
         val ratio = if (p.max > 0) (p.value / p.max).coerceIn(0.0, 1.0) else 0.0

@@ -1,15 +1,11 @@
 /** Tool-result text for `ask` and `wait_for_response` (shape in ./text.ts): no date maths needed, next step included. */
-import type { AskAnswer, McpWaitResult } from "@oyee/schema";
+import { formatDuration, type AskAnswer, type McpWaitResult } from "@oyee/schema";
 import type { AskResult } from "../inbox/ask";
 import { ago, resultText } from "./text";
 
 /** Time left as an agent reads it, to the nearest unit: "40s", "30m", "1h", "23h 59m". */
 export function timeLeft(toIso: string, now = Date.now()): string {
-  const s = Math.max(0, Math.round((Date.parse(toIso) - now) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  return m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  return formatDuration(Date.parse(toIso) - now, "span");
 }
 
 const nextStep = (id: string) => `Call wait_for_response with id "${id}" to get the answer.`;

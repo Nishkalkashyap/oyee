@@ -3,7 +3,7 @@
  * in plain JS (service workers can't import the app bundle); this TS copy powers the in-app preview and the unit
  * tests, which run sw.js and check it shows exactly this. Keep the two in sync.
  */
-import { progressText, type Notification } from "@oyee/schema";
+import { isQuietProgress, progressText, type Notification } from "@oyee/schema";
 import { fieldLines } from "./format";
 import { markdownToPlainText } from "./markdown";
 import { progressView } from "./progress";
@@ -75,7 +75,7 @@ export function webPushPresentation(n: Notification, alert: boolean): WebPushPre
   const image = n.intent === "inform" ? n.inform.image : null;
   const emoji = icon && !/^https?:\/\//i.test(icon) ? `${icon} ` : "";
   // Every severity alerts; only a running progress updates quietly.
-  const silent = n.intent === "progress" && n.progress.state === "running";
+  const silent = isQuietProgress(n);
   return {
     title: `${emoji}${n.title}`,
     options: {

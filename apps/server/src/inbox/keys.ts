@@ -5,10 +5,8 @@
  * progress, answered/expired/withdrawn ask, any inform) the next intent takes the key over. Pure: the InboxDO does the
  * lookup and calls this before an intent's own rules run.
  */
-import type { Intent, Notification } from "@oyee/schema";
+import { isLiveProgress, isOpenAsk, type Intent, type Notification } from "@oyee/schema";
 import { conflict } from "../lib/errors";
-import { isOpenAsk } from "./ask";
-import { isLiveProgress } from "./progress";
 
 /** Throws a conflict when `latest` is live and of an intent other than `intent`. */
 export function assertKeyFree(latest: Notification | null | undefined, intent: Intent, now: number): void {

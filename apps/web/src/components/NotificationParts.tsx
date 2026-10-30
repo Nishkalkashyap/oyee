@@ -1,5 +1,6 @@
 import type { Severity } from "@oyee/schema";
-import { progressLabel, progressPercent, type ProgressLike } from "../lib/format";
+import { progressAmount } from "@oyee/schema";
+import { progressPercent, type ProgressLike } from "../lib/format";
 import { SEVERITY_STYLES } from "../lib/severity";
 import { AlertOctagonIcon, AlertTriangleIcon, CheckCircleIcon, InfoIcon } from "./Icons";
 import { cx } from "./ui";
@@ -41,7 +42,7 @@ export function ProgressBar({
   muted?: boolean;
 }) {
   const pct = progressPercent(progress);
-  const label = progressLabel(progress);
+  const label = progressAmount(progress);
   // Progress is ink, like Gluon's quiet controls; severity already shows in the pill and avatar dot.
   const bar = muted ? "bg-zinc-400 dark:bg-zinc-500" : severity === "critical" ? "bg-red-500" : "bg-foreground";
   return (

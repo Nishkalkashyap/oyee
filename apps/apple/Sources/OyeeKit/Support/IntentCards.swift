@@ -48,7 +48,7 @@ public struct AskCardModel: Hashable, Sendable {
             status = waited < 60 ? "Just asked" : "Waiting \(Self.waited(waited))"
         }
         if state == .open, let left {
-            expiry = left < 30 ? "Expires in under a minute" : "Expires in \(Self.span(left))"
+            expiry = left < 60 ? "Expires in under a minute" : "Expires in \(Self.span(left))"
         } else {
             expiry = nil
         }
@@ -64,19 +64,10 @@ public struct AskCardModel: Hashable, Sendable {
     }
 
     /// "12m", "2h", "3d": how long the ask has been waiting (rounded down).
-    static func waited(_ seconds: TimeInterval) -> String {
-        let m = Int((seconds / 60).rounded(.down))
-        if m < 60 { return "\(m)m" }
-        let h = m / 60
-        return h < 24 ? "\(h)h" : "\(h / 24)d"
-    }
+    static func waited(_ seconds: TimeInterval) -> String { Rendering.duration(seconds) }
 
-    /// "48m", "1h", "2h 30m", to the nearest minute.
-    static func span(_ seconds: TimeInterval) -> String {
-        let m = Int(Rendering.jsRound(seconds / 60))
-        if m < 60 { return "\(m)m" }
-        return m % 60 == 0 ? "\(m / 60)h" : "\(m / 60)h \(m % 60)m"
-    }
+    /// "30s", "48m", "1h", "2h 30m": how long the ask was answerable or has left.
+    static func span(_ seconds: TimeInterval) -> String { Rendering.duration(seconds, span: true) }
 }
 
 /// The progress card and rows.
@@ -97,7 +88,7 @@ public struct ProgressCardModel: Hashable, Sendable {
     public init(_ p: ProgressBlock) {
         state = p.state
         percent = p.fraction * 100
-        amount = p.label ?? (p.max == 100 ? "\(Int(Rendering.jsRound(percent)))%" : "\(Rendering.jsNumber(p.value))/\(Rendering.jsNumber(p.max))")
+        amount = Rendering.progressAmount(p)
         switch p.state {
         case .running: (stateLabel, tone) = ("Running", .ink)
         case .done: (stateLabel, tone) = ("Done", .success)

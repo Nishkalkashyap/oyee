@@ -2,7 +2,7 @@
  * Inform (GLOSSARY.md): pure rules for turning an InformInput into a stored notification, given the latest notification
  * with the same `(source, key)`. The InboxDO does the I/O (lookup, quota, save, broadcast, push).
  */
-import { durationMs, type InformInput, type Notification, type SendOutcome } from "@oyee/schema";
+import { durationMs, formatDuration, type InformInput, type Notification, type SendOutcome } from "@oyee/schema";
 import type { Actor } from "./model";
 
 export interface InformResult {
@@ -118,10 +118,4 @@ export function applyInform(latest: KeyedLatest | null, fresh: InformNotificatio
 }
 
 /** A rough duration for reasons: "45s", "12m", "3h 5m". */
-function span(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  return m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`;
-}
+const span = (ms: number) => formatDuration(ms, "span");

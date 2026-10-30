@@ -4,7 +4,7 @@
  * on the shared v2 fixtures and shared by every list render. Android (InboxSections.kt) and macOS
  * (InboxSections.swift) follow the same rules.
  */
-import type { AskBlock, Notification, ProgressBlock } from "@oyee/schema";
+import { isLiveProgress, isOpenAsk, isQuietProgress, type AskBlock, type Notification, type ProgressBlock } from "@oyee/schema";
 
 /** What the inbox reads: identity plus the intent and its state (the wire notification and the v2 fixtures both fit). */
 export type InboxItem = Pick<Notification, "id" | "source" | "key" | "title"> &
@@ -17,8 +17,8 @@ export type InboxSectionId = "needs-you" | "in-progress" | "updates";
  * counts as expired (as on the ask card), so it leaves Needs you before the server's broadcast arrives.
  */
 function sectionOf(n: InboxItem, now: number): InboxSectionId {
-  if (n.intent === "ask" && n.ask.state === "open" && Date.parse(n.ask.expiresAt) > now) return "needs-you";
-  if (n.intent === "progress" && (n.progress.state === "running" || n.progress.state === "stopped")) return "in-progress";
+  if (isOpenAsk(n, now)) return "needs-you";
+  if (isLiveProgress(n)) return "in-progress";
   return "updates";
 }
 
@@ -75,5 +75,5 @@ export function flatSections<T extends InboxItem>(items: T[]): InboxSection<T>[]
 
 /** Whether a notification arriving while the app is open gets an in-app toast: a running progress appears quietly. */
 export function toastsOnArrival(n: InboxItem): boolean {
-  return !(n.intent === "progress" && n.progress.state === "running");
+  return !isQuietProgress(n);
 }

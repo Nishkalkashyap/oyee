@@ -614,6 +614,59 @@ export const Usage = z.object({
 export type Usage = z.infer<typeof Usage>;
 
 // ─── Display helpers shared by server and web ───────────────────────────────
+// Android (util/Formatting.kt, ui/cards/CardViews.kt) and Swift (Support/Rendering.swift, Support/IntentCards.swift)
+// port these and must produce identical strings; public/sw.js mirrors progressAmount (it can't import).
+
+/** The part of a notification the intent predicates read (a wire notification and an inbox item both fit). */
+type IntentStateLike =
+  | { intent: "inform"; status?: NotificationStatus }
+  | { intent: "ask"; status?: NotificationStatus; ask: { state: AskState; expiresAt: string } }
+  | { intent: "progress"; status?: NotificationStatus; progress: { state: ProgressState } };
+
+/**
+ * An ask the user can still answer: open, not resolved, and not past its expiry (an overdue one already counts as
+ * expired, before the server's broadcast arrives).
+ */
+export function isOpenAsk<T extends IntentStateLike>(n: T | null | undefined, now: number = Date.now()): n is Extract<T, { intent: "ask" }> {
+  return n?.intent === "ask" && n.status !== "resolved" && n.ask.state === "open" && Date.parse(n.ask.expiresAt) > now;
+}
+
+/** A progress that is still going (running or stopped reporting) and not resolved: In progress, and holds its key. */
+export function isLiveProgress<T extends IntentStateLike>(n: T | null | undefined): n is Extract<T, { intent: "progress" }> {
+  return n?.intent === "progress" && n.status !== "resolved" && (n.progress.state === "running" || n.progress.state === "stopped");
+}
+
+/** A running progress: it appears and updates without sound (every other notification alerts). */
+export function isQuietProgress<T extends IntentStateLike>(n: T | null | undefined): n is Extract<T, { intent: "progress" }> {
+  return n?.intent === "progress" && n.progress.state === "running";
+}
+
+/**
+ * A duration as clients and tool results write it. `elapsed` (how long ago, how long waiting): the largest whole
+ * unit, rounded down: "45s", "12m", "3h", "2d". `span` (how long something lasts or has left): to the nearest second
+ * under a minute, else the nearest minute, with hours and their leftover minutes: "40s", "48m", "1h", "2h 30m".
+ */
+export function formatDuration(ms: number, style: "elapsed" | "span" = "elapsed"): string {
+  if (style === "span") {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.round(ms / 60_000);
+    if (m < 60) return `${m}m`;
+    return m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  }
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
+}
+
+/** How far a progress is, as shown next to its bar: the sender's label, else "40%" (max 100) or "3/7". */
+export function progressAmount(p: { value: number; max?: number; label?: string }): string {
+  const max = p.max ?? 100;
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
+  return p.label ?? (max === 100 ? `${Math.round(ratio * 100)}%` : `${p.value}/${max}`);
+}
 
 /**
  * What every client shows for a progress that stopped reporting: "Stopped reporting after <last label or percent>",
@@ -624,11 +677,10 @@ export function stoppedReportingLabel(p: { value: number; max: number; label?: s
   return `Stopped reporting after ${p.label ?? `${Math.round(ratio * 100)}%`}`;
 }
 
-/** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */
+/** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7" (the bar, then `progressAmount`). */
 export function progressText(p: { value: number; max?: number; label?: string }): string {
   const max = p.max ?? 100;
-  const ratio = Math.max(0, Math.min(1, p.value / max));
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
   const filled = Math.round(ratio * 10);
-  const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
-  return `${bar} ${p.label ?? (max === 100 ? `${Math.round(ratio * 100)}%` : `${p.value}/${max}`)}`;
+  return `${"▓".repeat(filled)}${"░".repeat(10 - filled)} ${progressAmount(p)}`;
 }

@@ -1,5 +1,5 @@
 /** What the ask card shows (GLOSSARY.md: Ask, Answer button, Expiry). Pure, so it's tested on the shared v2 fixtures. */
-import type { AskState, Notification } from "@oyee/schema";
+import { formatDuration, type AskState, type Notification } from "@oyee/schema";
 
 export type AskLike = Pick<Extract<Notification, { intent: "ask" }>, "createdAt" | "ask">;
 
@@ -20,21 +20,6 @@ export interface AskView {
   note: string | null;
 }
 
-/** "12m", "2h", "3d": how long the ask has been waiting. */
-function waited(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
-}
-
-/** "48m", "1h", "2h 30m", to the nearest minute. */
-function span(ms: number): string {
-  const m = Math.round(ms / 60_000);
-  if (m < 60) return `${m}m`;
-  return m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
 function statusOf(n: AskLike, state: AskState, now: number): string {
   const { answer } = n.ask;
   if (state === "answered" && answer) {
@@ -44,12 +29,12 @@ function statusOf(n: AskLike, state: AskState, now: number): string {
   if (state === "expired") return "Expired";
   if (state === "withdrawn") return "Withdrawn";
   const ms = now - Date.parse(n.createdAt);
-  return ms < 60_000 ? "Just asked" : `Waiting ${waited(ms)}`;
+  return ms < 60_000 ? "Just asked" : `Waiting ${formatDuration(ms)}`;
 }
 
 function noteOf(n: AskLike, state: AskState): string | null {
   if (state === "expired") {
-    const lifetime = span(Date.parse(n.ask.expiresAt) - Date.parse(n.createdAt));
+    const lifetime = formatDuration(Date.parse(n.ask.expiresAt) - Date.parse(n.createdAt), "span");
     return `Nobody answered within ${lifetime}, so the question was closed on every device.`;
   }
   if (state === "withdrawn") return "The sender withdrew this question before it was answered.";
@@ -66,7 +51,7 @@ export function askView(n: AskLike, now: number = Date.now()): AskView {
     options: n.ask.options.map((label) => ({ label, chosen: n.ask.answer?.option === label })),
     reply: open && n.ask.allowText ? { placeholder: n.ask.replyPlaceholder || "Reply…" } : null,
     status: statusOf(n, state, now),
-    expiry: open ? (left < 30_000 ? "Expires in under a minute" : `Expires in ${span(left)}`) : null,
+    expiry: open ? (left < 60_000 ? "Expires in under a minute" : `Expires in ${formatDuration(left, "span")}`) : null,
     note: noteOf(n, state),
   };
 }

@@ -76,7 +76,9 @@ describe("ask card view", () => {
 
   it("says when an open ask expires, down to the last minute", () => {
     expect(askView(fixture("ask-open"), at("2026-10-30T09:00:20.000Z")).expiry).toBe("Expires in 1h");
-    expect(askView(fixture("ask-open"), at("2026-10-30T09:59:20.000Z")).expiry).toBe("Expires in 1m");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:58:30.000Z")).expiry).toBe("Expires in 2m");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:59:01.000Z")).expiry).toBe("Expires in under a minute");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:59:20.000Z")).expiry).toBe("Expires in under a minute");
     expect(askView(fixture("ask-open"), at("2026-10-30T09:59:45.000Z")).expiry).toBe("Expires in under a minute");
   });
 
@@ -86,6 +88,11 @@ describe("ask card view", () => {
       expiry: null,
       note: "Nobody answered within 1h, so the question was closed on every device.",
     });
+    const short = fixture("ask-expired");
+    const brief = { ...short, ask: { ...short.ask, expiresAt: new Date(Date.parse(short.createdAt) + 30_000).toISOString() } };
+    expect(askView(brief, at("2026-10-30T09:30:00.000Z")).note).toBe(
+      "Nobody answered within 30s, so the question was closed on every device.",
+    );
     expect(askView(fixture("ask-withdrawn"), at("2026-10-30T09:30:00.000Z"))).toMatchObject({
       state: "withdrawn",
       expiry: null,

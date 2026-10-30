@@ -10,13 +10,6 @@ export function progressPercent(p: ProgressLike): number {
   return Math.max(0, Math.min(100, (v / max) * 100));
 }
 
-/** The label shown next to a progress bar: explicit label, else "42%" (max 100) or "3/7". */
-export function progressLabel(p: ProgressLike): string {
-  if (p.label) return p.label;
-  const max = p.max && p.max > 0 ? p.max : 100;
-  return max === 100 ? `${Math.round(progressPercent(p))}%` : `${p.value}/${max}`;
-}
-
 /** `Label: value` lines, as appended to system-notification text (protocol §9). */
 export function fieldLines(fields: readonly Field[] | null | undefined): string[] {
   return (fields ?? []).map((f) => `${f.label}: ${f.value}`);

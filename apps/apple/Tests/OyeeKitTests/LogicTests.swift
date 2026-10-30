@@ -153,6 +153,35 @@ struct RenderingTests {
         #expect(Rendering.progressText(ProgressBlock(value: 12.5)) == "▓░░░░░░░░░ 13%")
     }
 
+    /// Same cases and strings as `progressAmount` in packages/schema/test/schema.test.ts.
+    @Test func progressAmountMatchesSchema() {
+        #expect(Rendering.progressAmount(ProgressBlock(value: 3, max: 7, label: "3/7 checks")) == "3/7 checks")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 40, max: 100)) == "40%")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 42)) == "42%")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 33.4)) == "33%")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 250)) == "100%")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 3, max: 7)) == "3/7")
+        #expect(Rendering.progressAmount(ProgressBlock(value: 2.5, max: 20)) == "2.5/20")
+    }
+
+    /// Same cases and strings as `formatDuration` in packages/schema/test/schema.test.ts.
+    @Test func durationMatchesSchema() {
+        let m: TimeInterval = 60
+        let h: TimeInterval = 3600
+        #expect(Rendering.duration(45) == "45s")
+        #expect(Rendering.duration(12 * m + 59) == "12m")
+        #expect(Rendering.duration(2 * h + 59 * m) == "2h")
+        #expect(Rendering.duration(49 * h) == "2d")
+        #expect(Rendering.duration(-5) == "0s")
+        #expect(Rendering.duration(40, span: true) == "40s")
+        #expect(Rendering.duration(59.6, span: true) == "1m")
+        #expect(Rendering.duration(48 * m + 20, span: true) == "48m")
+        #expect(Rendering.duration(h, span: true) == "1h")
+        #expect(Rendering.duration(2 * h + 30 * m, span: true) == "2h 30m")
+        #expect(Rendering.duration(24 * h - 30, span: true) == "24h")
+        #expect(Rendering.duration(168 * h, span: true) == "168h")
+    }
+
     @Test func systemTextPerIntent() throws {
         // Same text as the browser popup (apps/web/src/lib/webpush.ts webPushBody).
         let inform = try v2("inform-full")

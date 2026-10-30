@@ -39,19 +39,10 @@ data class AskView(
 )
 
 /** "12m", "2h", "3d": how long the ask has been waiting. */
-private fun waited(ms: Long): String {
-    val m = ms / 60_000
-    if (m < 60) return "${m}m"
-    val h = m / 60
-    return if (h < 24) "${h}h" else "${h / 24}d"
-}
+private fun waited(ms: Long): String = Formatting.duration(ms)
 
-/** "48m", "1h", "2h 30m", to the nearest minute. */
-private fun span(ms: Long): String {
-    val m = Math.round(ms / 60_000.0)
-    if (m < 60) return "${m}m"
-    return if (m % 60 == 0L) "${m / 60}h" else "${m / 60}h ${m % 60}m"
-}
+/** "30s", "48m", "1h", "2h 30m": how long the ask was answerable or has left. */
+private fun span(ms: Long): String = Formatting.duration(ms, span = true)
 
 private fun millis(iso: String?): Long? = Formatting.epochMillis(iso)
 
@@ -91,7 +82,7 @@ fun askView(n: Notification, now: Instant = Instant.now()): AskView {
         status = status,
         expiry = when {
             !open || left == null -> null
-            left < 30_000 -> "Expires in under a minute"
+            left < 60_000 -> "Expires in under a minute"
             else -> "Expires in ${span(left)}"
         },
         note = note,

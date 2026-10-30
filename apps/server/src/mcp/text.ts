@@ -3,15 +3,11 @@
  * shape: an "outcome: …" line and an "id: …" line (stable for a model to read back), then what happened and the next
  * step in words. Listing tools (list_notifications, list_devices) return compact JSON.
  */
-import type { McpListItem, Notification } from "@oyee/schema";
+import { formatDuration, type McpListItem, type Notification } from "@oyee/schema";
 
 /** Elapsed time as an agent reads it: "45s", "12m", "3h", "2d". */
 export function ago(fromIso: string, now = Date.now()): string {
-  const s = Math.max(0, Math.floor((now - Date.parse(fromIso)) / 1000));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86_400)}d`;
+  return formatDuration(now - Date.parse(fromIso));
 }
 
 export function resultText(outcome: string, id: string, message: string): string {

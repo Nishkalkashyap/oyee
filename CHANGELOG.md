@@ -35,6 +35,12 @@
   result now also says when the ask expires). Resolving an open ask withdraws it ("Withdrawn"). Answers to an
   expired or withdrawn ask get `409`. The web ask card shows when an open ask expires and explains why a closed one
   can't be answered.
+- Durations, progress amounts and the intent rules behind them ("open ask", "live progress", "quiet running
+  progress") are display helpers in `@oyee/schema` (`formatDuration`, `progressAmount`, `isOpenAsk`,
+  `isLiveProgress`, `isQuietProgress`) that the server and the web share, so tool results and cards say "12m",
+  "2h 30m" and "3/7" the same way. An ask's last minute now reads "Expires in under a minute" (it said "1m" from
+  30 s on), an ask shorter than a minute says "Nobody answered within 30s", and an empty progress label is shown as
+  sent instead of falling back to the percent.
 - Web inbox on intents: **Needs you** lists open asks (answer buttons and Reply right in the list), **In progress**
   running or stopped progress, **Updates** everything else. Notifications with the same key from the same source stack
   as one row (without a key: same source and title). Tag chips, tag search, the thread filter and the Templates page
@@ -139,6 +145,9 @@
   once answered (from any device), expired or withdrawn (an answer that arrives too late is dropped, not retried); a
   running progress updates silently with native progress, and done, failed and stopped alert once. The Debug
   notification channel is deleted on upgrade; tags, threads and `silent` are gone.
+- Android and macOS word durations and progress amounts exactly like the web (ports of `formatDuration` and
+  `progressAmount` from `@oyee/schema`, tested on the same cases): an ask's last minute reads "Expires in under a
+  minute".
 
 ## 0.2.11
 - Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;

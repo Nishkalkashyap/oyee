@@ -6,6 +6,8 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   ClientMessage,
+  isLiveProgress,
+  isOpenAsk,
   LIMITS,
   type AskInput,
   QUOTAS,
@@ -29,9 +31,9 @@ import { newId } from "../lib/ids";
 import { listDevices } from "../db";
 import { fanoutPush, type InboxEvent } from "../push/fanout";
 import { resolveTargets, searchText, type Actor } from "./model";
-import { isLiveProgress, reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
+import { reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
-import { answerAsk, buildAsk, expireAsk, expiryDue, isOpenAsk, waitResult, withdrawIfOpen, type AskResult } from "./ask";
+import { answerAsk, buildAsk, expireAsk, expiryDue, waitResult, withdrawIfOpen, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
 import { assertKeyFree } from "./keys";
 import { fromStored } from "./legacy";

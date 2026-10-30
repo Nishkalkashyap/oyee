@@ -25,21 +25,23 @@ function stripMarkdown(s) {
     .trim();
 }
 
+/** = progressAmount in @oyee/schema: the sender's label, else "40%" (max 100) or "3/7". */
 function progressAmount(p) {
-  const max = p.max || 100;
-  const ratio = Math.max(0, Math.min(1, p.value / max));
-  return p.label || (max === 100 ? Math.round(ratio * 100) + "%" : p.value + "/" + max);
+  const max = p.max ?? 100;
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
+  return p.label ?? (max === 100 ? Math.round(ratio * 100) + "%" : p.value + "/" + max);
 }
 
-/** ≈ stoppedReportingLabel in @oyee/schema: the sender's label, else always the percent. */
+/** = stoppedReportingLabel in @oyee/schema: the sender's label, else always the percent. */
 function stoppedLabel(p) {
   const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
-  return "Stopped reporting after " + (p.label || Math.round(ratio * 100) + "%");
+  return "Stopped reporting after " + (p.label ?? Math.round(ratio * 100) + "%");
 }
 
+/** = progressText in @oyee/schema. */
 function progressText(p) {
-  const max = p.max || 100;
-  const ratio = Math.max(0, Math.min(1, p.value / max));
+  const max = p.max ?? 100;
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
   const filled = Math.round(ratio * 10);
   return "▓".repeat(filled) + "░".repeat(10 - filled) + " " + progressAmount(p);
 }
@@ -92,7 +94,7 @@ async function show(n, alert) {
   const icon = n.intent === "inform" ? n.inform.icon : null;
   const image = n.intent === "inform" ? n.inform.image : null;
   const isEmoji = icon && !/^https?:\/\//i.test(icon);
-  // Every severity alerts; only a running progress updates quietly.
+  // Every severity alerts; only a running progress updates quietly (= isQuietProgress in @oyee/schema).
   const silent = n.intent === "progress" && n.progress.state === "running";
   const options = {
     tag: n.id,

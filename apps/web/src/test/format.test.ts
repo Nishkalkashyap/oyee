@@ -3,7 +3,6 @@ import {
   fieldLines,
   formatCountdown,
   formatPairingCode,
-  progressLabel,
   progressPercent,
   relativeTime,
 } from "../lib/format";
@@ -16,12 +15,6 @@ describe("progress formatting", () => {
     expect(progressPercent({ value: -5 })).toBe(0);
     expect(progressPercent({ value: Number.NaN })).toBe(0);
     expect(progressPercent({ value: 5, max: 0 })).toBe(5); // invalid max falls back to 100
-  });
-
-  it("labels: explicit label, else % for max 100, else value/max", () => {
-    expect(progressLabel({ value: 3, max: 7, label: "3/7 checks" })).toBe("3/7 checks");
-    expect(progressLabel({ value: 42.4 })).toBe("42%");
-    expect(progressLabel({ value: 3, max: 7 })).toBe("3/7");
   });
 });
 

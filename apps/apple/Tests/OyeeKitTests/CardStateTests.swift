@@ -30,6 +30,11 @@ struct CardStateTests {
         #expect(AskCardModel(n, now: asked.addingTimeInterval(20)).status == "Just asked")
         #expect(AskCardModel(n, now: asked.addingTimeInterval(20)).expiry == "Expires in 1h")
         #expect(AskCardModel(n, now: asked.addingTimeInterval(3540 + 45)).expiry == "Expires in under a minute")
+        #expect(AskCardModel(n, now: asked.addingTimeInterval(3541)).expiry == "Expires in under a minute")
+        #expect(AskCardModel(n, now: asked.addingTimeInterval(3510)).expiry == "Expires in 2m")
+        #expect(AskCardModel.span(30) == "30s")
+        #expect(AskCardModel.span(59.6) == "1m")
+        #expect(AskCardModel.waited(2 * 3600 + 59 * 60) == "2h")
         var long = n
         long.content = .ask(AskBlock(options: ["Go"], expiresAt: asked.addingTimeInterval(150 * 60)))
         #expect(AskCardModel(long, now: asked).expiry == "Expires in 2h 30m")

@@ -3,7 +3,7 @@
  * (protocol §9). They're illustrations, not pixel-perfect replicas.
  */
 import { useState, type ReactNode } from "react";
-import type { Notification } from "@oyee/schema";
+import { isQuietProgress as quiet, type Notification } from "@oyee/schema";
 import { askView } from "../lib/ask";
 import { SEVERITY_STYLES } from "../lib/severity";
 import { webPushActions, webPushBody, webPushPresentation } from "../lib/webpush";
@@ -35,8 +35,6 @@ const emojiOf = (n: Notification) => {
   const icon = iconOf(n);
   return icon && !/^https?:/.test(icon) ? icon : null;
 };
-/** Every severity alerts; only a running progress updates quietly. */
-const quiet = (n: Notification) => n.intent === "progress" && n.progress.state === "running";
 
 /** Android's buttons (at most 3): an open ask's answers and inline reply, an inform's links then Resolve, a progress's Resolve. */
 function androidButtons(n: Notification): string[] {
