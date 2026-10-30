@@ -170,6 +170,13 @@ export class InboxDO extends DurableObject<Env> {
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
     this.migrateToIntents();
+    this.migrateAlertedAt();
+  }
+
+  /** Inform cooldown: when each notification last alerted, measured per key (inbox/inform.ts). */
+  private migrateAlertedAt() {
+    const columns = this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray();
+    if (!columns.some((c) => c.name === "alerted_at")) this.sql.exec("ALTER TABLE notifications ADD COLUMN alerted_at TEXT");
   }
 
   /**
@@ -466,7 +473,6 @@ export class InboxDO extends DurableObject<Env> {
   async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("send", actor.userId);
       const targets =
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
@@ -474,18 +480,31 @@ export class InboxDO extends DurableObject<Env> {
       const now = new Date().toISOString();
       const fresh = buildInform(newId("ntf"), input, actor, now, targets);
       const latest = fresh.key ? this.latestByKey(fresh.source, fresh.key) : null;
-      const result = applyInform(latest?.n ?? null, fresh, now);
+      const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
+      if (result.outcome === "suppressed") return result;
+      // a new notification counts as a send, a silent update as an update (spec "Quotas")
+      this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
       const n = result.notification;
       if (n.id === fresh.id) {
         this.save(n, null, actor.tokenId);
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       } else {
+        const alert = result.outcome === "alerted";
         this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
+      }
+      if (result.outcome !== "updated_silently") {
+        this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
       }
       return result;
     });
+  }
+
+  /** When an inform last alerted (`alerted_at`, written by inform); rows from other send paths fall back to `updatedAt`. */
+  private informAlertedAt(n: Notification): string {
+    const r = this.sql.exec<{ alerted_at: string | null }>("SELECT alerted_at FROM notifications WHERE id = ?", n.id).toArray()[0];
+    return r?.alerted_at ?? n.updatedAt;
   }
 
   /** The latest notification a sender named with this key (keys are unique per `(source, key)`). */
