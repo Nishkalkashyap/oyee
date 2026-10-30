@@ -33,9 +33,8 @@ in one open-source, self-hostable package that we fully control.
 - The Home page shows what sends to you and the devices it reaches. **Add** creates an **MCP server URL** or a
   **webhook**: a scoped, revocable token and shows copy-paste snippets (Claude Code, Codex, generic MCP JSON, curl, Home Assistant YAML).
 - **Pair devices** (Android, iOS, macOS) with a short pairing code / QR / deep link. The browser can also enable Web Push.
-- **Inbox** (web + every client): list, filter (source, severity, status, thread, text), paginate, and act on notifications live.
-- **Templates**: named presets with `{{variables}}`, written once in a platform-neutral card schema and rendered
-  natively by each client.
+- **Inbox** (web + every client): sectioned by intent (Needs you, In progress, Updates), filter (source, severity,
+  status, text), paginate, and act on notifications live.
 - **MCP tools** (one per intent, docs/protocol.md §5): `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
   `list_notifications`, `list_devices`.
 
@@ -43,13 +42,13 @@ in one open-source, self-hostable package that we fully control.
 
 | Concept | Meaning |
 |---|---|
-| **Notification (card)** | A live object: title, body, severity, fields, progress, image, actions, reply box, status. Has a `version` that increments on every change. |
+| **Notification** | A live object: shared fields (title, body, severity, url, status) plus exactly one **intent** block. Has a `version` that increments on every change. |
+| **Intent** | `inform` (something to know: rows, image, icon, link buttons), `ask` (a question with answer buttons and/or a reply box, which expires) or `progress` (long-running work that can stop reporting). See GLOSSARY.md and docs/adr/0001. |
 | **Source** | Who sent it ("aws-monitor", "home-assistant"). Defaults to the token's label. |
-| **Thread** | Optional `threadId` that groups related notifications (e.g. one agent run). |
-| **Severity** | `debug` · `info` · `success` · `warning` · `critical`. Controls sound/importance on each platform. |
+| **Key** | Optional name per source; sending again with it updates that notification (with an inform `cooldown` against repeat alerts). |
+| **Severity** | `info` · `success` · `warning` · `critical`. Every severity alerts; the receiver decides what to mute. |
 | **Status** | `active` or `resolved`. Resolving removes the system notification from every device. |
-| **Response** | A user's tap on an action button and/or a typed reply. Delivered to waiting MCP `wait_for_response` calls and optional callback webhooks. |
-| **Template** | Named, reusable partial card with `{{var}}` placeholders. |
+| **Answer** | The first answer to an ask (a button's label or typed text), from any device. Delivered to waiting MCP `wait_for_response` calls. |
 | **Token** | `webhook` (send-only, via `/hook/<token>`), `mcp` (MCP tools), `device` (a paired client). Stored hashed and revocable. |
 
 ## 3. Delivery strategy per platform (decided)
@@ -73,7 +72,7 @@ in one open-source, self-hostable package that we fully control.
    │  serves the SPA (apps/web build) from Workers static assets                           │
    │                                                                                       │
    │   D1 (global): users, sessions, tokens, devices, pairing codes                        │
-   │   InboxDO (one per user, SQLite storage): notifications, templates, responses,        │
+   │   InboxDO (one per user, SQLite storage): notifications (one intent each), alarms,    │
    │            hibernatable WebSockets, MCP wait_for_response waiters, retention alarm    │
    │   Fan-out: WebSocket broadcast + FCM HTTP v1 + Web Push (VAPID, aes128gcm)            │
    └───────────────────────────────────────────────────────────────────────────────────────┘
@@ -87,10 +86,10 @@ in one open-source, self-hostable package that we fully control.
 oyee/
 ├── PLAN.md                 ← this file
 ├── README.md
-├── docs/protocol.md        ← THE contract: REST API, WebSocket protocol, FCM payload, card schema, auth
+├── docs/protocol.md        ← THE contract: REST API, WebSocket protocol, FCM payload, intent schema, auth
 ├── packages/schema/        ← @oyee/schema: TypeScript types + zod schemas for the contract (source of truth for TS)
 ├── apps/server/            ← @oyee/server: Cloudflare Worker + Durable Objects + D1 (Hono, MCP, webhooks, push)
-├── apps/web/               ← @oyee/web: React + Vite SPA (inbox, connect, devices, templates); built into server assets
+├── apps/web/               ← @oyee/web: React + Vite SPA (inbox, home, send); built into server assets
 ├── apps/android/           ← Kotlin + Jetpack Compose app (Gradle; not a pnpm package)
 └── apps/apple/             ← Swift: OyeeKit package (shared) + macOS menu-bar app + iOS app (XcodeGen; not a pnpm package)
 ```
@@ -115,48 +114,46 @@ oyee/
 - **Webhook**: `POST|GET https://<host>/hook/<webhook-token>`. Accepts:
   - JSON matching the send schema,
   - `text/plain` body (becomes `body`), with title/severity/etc. from query params or ntfy-style headers
-    (`Title`/`X-Title`, `Priority`/`X-Priority` 1–5, `Tags`/`X-Tags`, `Click`/`X-Click`),
+    (`Title`/`X-Title`, `Priority`/`X-Priority` 1–5, `Click`/`X-Click`),
   - auto-detected **Prometheus Alertmanager**, **Grafana**, and **AWS SNS** payloads (SNS subscription confirmation is handled automatically).
 - **Web composer + REST** `POST /api/notifications` for manual sends and tests.
 
-### 5.2 Live updates and two-way actions
-- `PATCH /api/notifications/:id` (agents use `progress` or a keyed `inform` instead) patches any field and increments `version`. Clients replace the system notification in place.
-  The update is silent unless `alert: true` is set.
-- Actions: up to 3 buttons. Each one either **opens a URL**, **records a response** (default), and/or **calls a callback URL**
-  (the server POSTs the response JSON). With `resolves: true`, tapping it also resolves the notification.
-- Reply: an optional text box (Android `RemoteInput`, Apple `UNTextInputNotificationAction`, web: opens the inbox).
-- `ask` = send + `wait_for_response` (long-poll ≤ 55 s per call, repeatable) for human-in-the-loop agents.
+### 5.2 Live updates and two-way answers
+- Sending again with a notification's `key` updates it in place and increments `version`: a keyed inform alerts
+  again unless inside its `cooldown`, a progress report updates silently until it finishes. Clients replace the system
+  notification in place.
+- Informs carry up to 3 link buttons (they open a URL; nothing is sent back).
+- `ask` = up to 3 answer buttons and/or a reply box (Android `RemoteInput`, Apple `UNTextInputNotificationAction`,
+  web: opens the inbox), then `wait_for_response` (long-poll ≤ 50 s per call, repeatable) for human-in-the-loop
+  agents. The first answer closes it everywhere; it expires after `expiresIn`.
 
 ### 5.3 Cross-device sync
 - Read / resolve / respond / delete on any device is broadcast to all others, which clear or update their system notification.
 - Reconnecting clients catch up with `sync` (by `updatedAt` cursor).
 
-### 5.4 Templates
-- Stored per user: `{ name, description, card }`, where `card` is a partial card containing `{{var}}` / `{{var|fallback}}` placeholders.
-- Send with `{ template: "aws-alarm", vars: {...}, ...overrides }`. The server renders the template, then applies explicit overrides.
-- The web editor shows a live preview mock for Android, iOS, macOS and web.
+### 5.4 Templates (removed)
+- Templates were dropped with the flat card (protocol v2): senders send the fields themselves.
 
-### 5.5 Rendering per platform (best effort from one schema)
+### 5.5 Rendering per platform (best effort from one schema; details in docs/protocol.md §9)
 
-| Card field | Android | macOS / iOS | Web Push | In-app inbox (all) |
+| Field | Android | macOS / iOS | Web Push | In-app inbox (all) |
 |---|---|---|---|---|
 | title / body | ✅ BigTextStyle | ✅ | ✅ | ✅ markdown subset |
-| severity | channel per severity | sound / interruption level | `requireInteraction` for critical | color + icon |
-| fields | appended to big text | appended to body | appended to body | key/value grid |
-| progress | `ProgressStyle` (36+) / `setProgress` | text in body; live bar in menu bar & inbox | text | progress bar |
-| image | BigPictureStyle | attachment (downloaded) | `image` | inline |
-| actions | ✅ up to 3 | ✅ dynamic categories | ✅ up to 2 | ✅ |
-| reply | RemoteInput | text-input action | opens inbox | text box |
-| threadId / source | `setGroup` | `threadIdentifier` | `tag` | grouping |
+| severity | channel per severity | relevance score | `requireInteraction` for critical | color + icon |
+| inform rows | appended to big text | appended to body | appended to body | key/value grid |
+| progress | `ProgressStyle` (36+) / `setProgress` | text in body; live bar in menu bar & inbox | text | progress card |
+| inform image | BigPictureStyle | attachment (downloaded) | `image` | inline |
+| inform links / ask answers | ✅ up to 3 | ✅ dynamic categories | ✅ up to 2 | ✅ |
+| ask reply | RemoteInput | text-input action | opens inbox | text box |
+| source | `setGroup` | `threadIdentifier` | `tag` | grouping |
 
 ### 5.6 Security
 - Tokens are random and 32+ bytes, prefixed (`oyee_wh_`, `oyee_mcp_`, `oyee_dev_`), stored as SHA-256 hashes, shown in plaintext once, and revocable.
-- Scopes: session = everything; `mcp` = notification + template tools; `webhook` = send only; `device` = read/act on notifications, register its own push transport, open a WebSocket.
+- Scopes: session = everything; `mcp` = notification tools; `webhook` = send only; `device` = read/act on notifications, register its own push transport, open a WebSocket.
 - Optional `ALLOWED_EMAILS` allowlist so an instance can be private.
-- Per-account daily quotas (1,000 sends, 5,000 updates, 1,000 replies, 20,000 reads), per-minute bursts, 60 sends/min
-  per token, caps on devices/tokens/templates, coalesced update pushes, per-IP sign-up and failed-auth limits, and
+- Per-account daily quotas (1,000 sends, 5,000 updates, 1,000 answers, 20,000 reads), per-minute bursts, 60 sends/min
+  per token, caps on devices/tokens, coalesced update pushes, per-IP sign-up and failed-auth limits, and
   payload size limits (docs/protocol.md §3.1).
-- Callback URLs are called server-side with a signed `X-Oyee-Signature` (HMAC-SHA256 with a per-token secret).
 - `DEV_LOGIN=true` enables a local-only login bypass for development and tests. It must never be enabled in production.
 
 ### 5.7 Retention
@@ -168,7 +165,7 @@ oyee/
 |---|---|
 | `PUBLIC_URL` | e.g. `https://oyee.example.workers.dev` (used in snippets, OAuth redirect, deep links) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth (web app sign-in) |
-| `SESSION_SECRET` | HMAC key for session cookies and callback signatures |
+| `SESSION_SECRET` | HMAC key for session cookies and the per-IP sign-up counters |
 | `ALLOWED_EMAILS` | optional comma-separated allowlist |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push |
 | `FCM_SERVICE_ACCOUNT_JSON` | Firebase service account for FCM HTTP v1 (same project as the Android `google-services.json`) |
@@ -226,10 +223,14 @@ oyee/
 - Apple: `swift build` + `swift test` for OyeeKit succeed; the macOS `.app` bundle script succeeds. The iOS project is
   generated by XcodeGen and is unverified until Xcode is installed.
 
-## 10. Status (2026-10-29)
+## 10. Status (2026-10-30)
 
-M1 is implemented. Live at **https://oyee.app**. Latest app release: **v0.2.5** (GitHub Releases). Operating
+M1 is implemented. Live at **https://oyee.app**. Latest app release: **v0.2.11** (GitHub Releases). Operating
 procedures: [docs/operations.md](docs/operations.md).
+
+**Notification intents (protocol v2)** are implemented on every client and the flat card is removed
+(docs/protocol.md, `.scratch/notification-intents/`). Not yet released or deployed: app 0.3.0 has to ship before the
+server deploy, because 0.2.x app builds only read the flat card.
 
 ### Platforms
 
@@ -247,10 +248,12 @@ procedures: [docs/operations.md](docs/operations.md).
 - Android and macOS don't show quota usage yet (web shows it in the account menu); they show the server's 429 message.
 - The release workflow doesn't retry a `macos-15` job that GitHub cancels in the queue (re-run manually).
 - The Android update flow via DownloadManager (0.2.4+) has only been exercised by the maintainer's phone.
-- Security hardening: an Origin check on cookie-authenticated POSTs; SSRF filtering for action callback URLs.
+- Security hardening: an Origin check on cookie-authenticated POSTs.
 - Web Push payload has no `alert` flag, so the browser re-alerts on visible updates.
 - Android pins libraries compatible with compileSdk 36; bumping to 37 unlocks the newer AndroidX/Compose/OkHttp/Coil.
-- Apple: no notification service extension; there is no templates UI and no device-rename UI.
+- Apple: no notification service extension and no device-rename UI.
+- Per-source mute settings: with `debug` and `silent` gone every severity alerts, so the receiver should be able to
+  mute or quiet a noisy source per device (spec: the receiver decides what to mute).
 - The web inbox's `E` / `J` / `K` shortcuts aren't on macOS (plain-letter shortcuts would fire while typing a reply).
 - The new inbox layout (sections, stacks, Resolve in the card footer) is unverified on the iOS app, which isn't built
   in CI.

@@ -29,7 +29,8 @@ Explore the UI with fixtures and simulated live updates:
 - open `http://localhost:5173/?mock=1` (sticky; `?mock=0` exits), or
 - run `VITE_MOCK=1 pnpm --filter @oyee/web dev`.
 
-The mock layer (`src/lib/mock.ts`) is lazy-loaded and isn't part of the main bundle.
+The mock layer (`src/lib/mock.ts`) is lazy-loaded and isn't part of the main bundle. Its fixtures are protocol v2
+intents (informs, asks in every state, progress in every state) and a deploy progress that advances on its own.
 
 ## Scripts
 
@@ -54,18 +55,19 @@ src/
   lib/snippets.ts            Claude Code / Codex / JSON / curl / Home Assistant / Alertmanager / Grafana / GH Actions
   lib/composer.ts            Send page: inform/progress form → intent send body, preview notification, presets
   lib/inform.ts              the inform card's view model (severity, rows, ≤ 3 safe link buttons, tap target)
-  lib/progress.ts            the progress card's view model (state label, amount, percent, tone) and which cards use it
+  lib/progress.ts            the progress card's view model (state label, amount, percent, tone)
   lib/ask.ts                 the ask card's view model (answer buttons, reply box, "Waiting 12m" / "Answered: Approve · Pixel 9")
   lib/inbox.ts               inbox sections by intent (Needs you / In progress / Updates) and stacking by (source, key)
   lib/useWebPush.ts          this browser as a push target (on / off / blocked / unavailable)
-  components/                NotificationCard (InformCard for informs, ProgressCard for progress), AskCard, PlatformPreviews, CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
+  components/                NotificationCard (picks InformCard, AskCard or ProgressCard by intent), PlatformPreviews (per intent), CreateTokenDialog, PairDialog (lazy), Layout, UI primitives
   pages/                     Landing (signed-out `/` and `/login`), Home (`/`), Inbox (+ detail), Send
 public/sw.js                 service worker: push → showNotification / close, notificationclick → answer / read / open
 ```
 
 ## Inbox
 
-- **Sections** (Active view, no search) come from the intent and its state only: *Needs you* (open asks, answerable
+- **Sections** (Active view, no search) come from the intent and its state only: *Needs you* (open asks not yet past
+  their expiry, answerable
   right in the list with their answer buttons or Reply), *In progress* (running or stopped progress), *Updates*
   (everything else: informs, answered / expired / withdrawn asks, done or failed progress). Headers only show when
   there's more than one section.
@@ -76,7 +78,7 @@ public/sw.js                 service worker: push → showNotification / close, 
 - **Resolve**: in the card footer of the conversation, on row hover (mouse), by swiping a row right (touch), or with
   `E`. `J` / `K` move through the list. After resolving the open item, wide screens open the next one; phones go
   back to the list. There's no un-resolve API, so there's no undo.
-- Search (titles, text, source and an inform's rows) is behind the header's search button; source / severity filters
+- Search (titles, text, source, an inform's rows, an ask's answer buttons, a progress's label) is behind the header's search button; source / severity filters
   (set from the conversation header or the URL) show as dismissible pills. There are no tags, threads or templates. Resolved items are one row at the end of the list (`?status=resolved`).
 
 ## Home

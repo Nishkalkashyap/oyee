@@ -1,6 +1,19 @@
 # Changelog
 
 ## Unreleased (server and web)
+- **Protocol v2: the flat card is removed.** Every notification is exactly one intent (inform, ask or progress) with
+  its block; the v1 card fields (`actions`, `reply`, the card-level `progress`, `icon`/`image`/`fields` outside the
+  inform block, `threadId`, `tags`, `silent`, `template`, `responses`) are no longer sent. The `debug` severity is
+  gone: stored debug notifications became `info`. Templates (`/api/templates`), `PATCH /api/notifications/:id`,
+  action callbacks and the token's callback signing secret are deleted. A send that still uses a removed field
+  (`replaceKey`, `template`, `vars`, `actions`, `reply`, `progress`, `threadId`, `tags`, `silent`, or severity
+  `debug`) gets `400` naming what to use instead; `?threadId=` on webhooks too. Respond takes `{ "option" }` or
+  `{ "text" }` and only on asks. The list endpoint drops `threadId`. Each inbox converts its stored notifications
+  once (v1 cards to the intent they resemble). docs/protocol.md is rewritten as protocol v2. **App builds before
+  0.3.0 read the flat fields, so release 0.3.0 before deploying this.**
+- Web: cards, mock mode, the Send preview and the landing demo are intent-only; the token snippets use `key`,
+  `cooldown` and progress intents. An open ask past its expiry leaves Needs you right away. Search also matches an
+  ask's answer buttons and a progress's label, as on the server.
 - Webhooks and REST send intents, with the same field names as the MCP tools: a JSON body is an inform by default or
   `{ "intent": "progress", "key": …, "value": … }`, and `?intent=progress` with `key`, `value`, `max`, `label` and
   `status` works for plain-text, GET and header sends. They go through the same inbox operations as agents, so `key`,
@@ -8,9 +21,7 @@
   `reason` next to `id` and `version`. `intent: "ask"` gets `400`: asks are for agents over MCP. Alertmanager and
   Grafana produce informs keyed by the group (a `debug` severity label becomes info) and the group's resolution
   resolves that inform; SNS produces an inform. `?replaceKey=` and `?template=` are no longer accepted (`400`
-  pointing to `key`); `threadId`, `tags` and ntfy `Tags` are ignored, and ntfy priority 1 is info. JSON bodies that
-  still use v1-only fields (`actions`, `reply`, `progress`, `replaceKey`, …) keep working until the flat card is
-  removed.
+  pointing to `key`); ntfy `Tags` are ignored, and ntfy priority 1 is info.
 - `POST /api/notifications` takes the same intent-tagged body and answers `{ id, version, outcome, reason,
   notification }`. The web Send page composes an inform (severity, key, cooldown, icon, image, rows, link buttons) or
   a progress (key, value, max, label, status, staleAfter); thread, tags, silent, actions, reply and templates are gone
@@ -41,13 +52,13 @@
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
   who answered from which device, or how long ago it asked. The first answer from any device closes the ask
-  everywhere; later answers get `409` (this also applies to v1 cards with answer buttons). Respond accepts
+  everywhere; later answers get `409`. Respond accepts
   `{ "option": "<label>" }`. The web inbox shows a purpose-built ask card: waiting time, buttons and reply box while
   open, "Answered: Approve · Pixel 9" once answered.
 - MCP: new `inform` tool for one-way notifications (title, markdown body, severity, url, up to 3 link buttons, up to
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
-  in plain text. The older tools keep working for now.
+  in plain text.
 - MCP: `inform` takes a `cooldown` (such as `"1h"`, 1m to 168h) alongside its key, so a cron agent alerts the user at
   most once per cooldown: sends inside it update the card's text silently (`updated_silently`), and if the user
   resolved it inside the cooldown nothing changes (`suppressed`, with when it was resolved and when the cooldown
@@ -62,10 +73,8 @@
 - Stopped reporting: a running progress that gets no report for `staleAfter` (default 30m, `progress` tool input, 1m
   to 24h) alerts once at warning and shows "Stopped reporting after 40%" (its last label or percent). The next report
   brings it back as running, silently. The web progress card says how long it went quiet and that a report revives it.
-- Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
-  `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
-  sends get the intent they most resemble and existing notifications are converted once; the flat card fields are
-  unchanged, so current app builds keep working.
+- Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP has `intent`
+  (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1).
 - Web: a simpler landing page that reads like a README. One line on what Oyee does, the two setup commands, a card
   you can answer to see the reply go back, and sign-in. The integration grid, feature tiles, platform previews and
   setup tabs are gone (downloads are in Help and the pairing dialog).
@@ -74,15 +83,15 @@
   row to turn on Web Push or explain that it's blocked. `/devices` redirects to Home; the apps and docs now say
   "Home → Connect a device".
 - Web inbox: **Needs you** (questions, answerable from the list), **In progress** and **Updates** sections; repeats of
-  the same thread or source + title stack into one row with a count. Resolve sits in the card's footer, appears on row
+  the same key or source + title stack into one row with a count. Resolve sits in the card's footer, appears on row
   hover, works by swiping a row right on touch screens, and with `E` (`J` / `K` move). The filter chips, status tabs
   and severity menu are gone: search sits behind a button, filters show as removable pills and Resolved is a row at
   the end of the list.
 - Web inbox: blue means unread and nothing else. Info notifications no longer get a blue dot on the avatar (only
   critical and warning get a coloured mark), so read rows stop looking unread.
-- Rate limits per account: 1,000 notifications, 5,000 updates and 1,000 replies a day, with per-minute burst limits,
+- Rate limits per account: 1,000 notifications, 5,000 updates and 1,000 answers a day, with per-minute burst limits,
   `429` + `Retry-After` when exceeded, and an inbox notice at 80% and 100%. Today's usage is in the web account menu.
-- At most 10 devices, 20 tokens and 100 templates per account. Push notifications for rapid updates (progress bars)
+- At most 10 devices and 20 tokens per account. Push notifications for rapid updates (progress bars)
   are coalesced to one per 2 seconds per notification.
 - Per-IP limits on new accounts and failed token attempts.
 - Web: Help button in the sidebar with downloads for every platform and links to the docs.
@@ -97,7 +106,10 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## Unreleased (apps, next release)
+## Unreleased (apps, next release: 0.3.0)
+- **Protocol v2 only.** The apps read nothing but the intent blocks, so they keep working once the server stops
+  sending the flat card (and 0.2.x builds don't: release this before that server deploy). An ask that takes text
+  without a reply placeholder shows the app's own "Reply…". Android drops indeterminate progress.
 - macOS on intents: the Mac app reads the intent-shaped notification and draws one card per intent. An **inform**
   shows its icon, severity, body, rows and up to three link buttons. An **ask** says how long it has waited and when
   it expires, with its answer buttons (answering sends `{ "option" }`) and the reply box as the conversation's

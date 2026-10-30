@@ -1,8 +1,8 @@
 # Oyee
 
 **One inbox for AI agents, scripts and webhooks.** Send a notification with one HTTP call or one MCP tool call, and
-receive it on Android, macOS and the web, with live-updating progress, action buttons, inline replies and sync across
-devices.
+receive it on Android, macOS and the web, with live-updating progress, link and answer buttons, inline replies and sync
+across devices.
 
 ![Oyee web inbox: a notification from an agent asking a question, with answer buttons and a reply box](docs/screenshots/web-inbox-light.png)
 
@@ -11,7 +11,7 @@ devices.
 - 🪝 **Webhooks**: paste a URL into Home Assistant, Alertmanager, Grafana, AWS SNS, GitHub Actions, cron or curl.
 - 🔄 **Live notifications** that update in place (progress, status), resolve everywhere, and record your answers.
 - 💬 **Two-way**: agents ask, you tap a button or type a reply on any device, and the agent gets the answer.
-- 🧩 **Templates**: one platform-neutral card schema, rendered natively everywhere.
+- 🧩 **Three intents**: inform, ask and progress, each drawn natively on every platform. Every severity alerts.
 
 Free and open source (MIT).
 

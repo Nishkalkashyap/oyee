@@ -126,8 +126,7 @@ Notes:
 
 ## Notifications
 
-The app reads the notification's `intent` and its `inform` / `ask` / `progress` block (protocol v2); the v1 flat card
-fields the server still sends are ignored. What each intent offers and how it alerts is decided in one pure place,
+The app reads the notification's `intent` and its `inform` / `ask` / `progress` block (protocol v2). What each intent offers and how it alerts is decided in one pure place,
 `notify/NotificationPlan.kt` (unit-tested); `NotificationRenderer` turns that into a system notification.
 
 - **Channels:** `oyee.critical`, `oyee.warning`, `oyee.info`, `oyee.success`. Critical and warning are high
