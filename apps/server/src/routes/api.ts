@@ -6,11 +6,7 @@ import {
   RegisterWebDeviceInput,
   RenameDeviceInput,
   RespondInput,
-  SendNotificationInput,
-  TemplateName,
-  UpdateNotificationInput,
   UpdateSelfDeviceInput,
-  UpsertTemplateInput,
   LIMITS,
   type PairingCode,
   type ServerConfig,
@@ -43,7 +39,7 @@ import { badRequest, conflict, notFound, parseOrThrow, rpc, unauthorized } from 
 import { readJson } from "../lib/http";
 import { formatPairingCode, newPairingCode, normalizePairingCode } from "../lib/ids";
 import { parseServiceAccount } from "../push/fcm";
-import { isFlatCard, parseIntentSend, sendIntent } from "./send";
+import { parseIntentSend, sendIntent } from "./send";
 
 export const inbox = (env: Env, userId: string) => env.INBOX.get(env.INBOX.idFromName(userId));
 
@@ -105,11 +101,10 @@ api.post("/tokens", sessionOnly, async (c) => {
   if ((await countTokens(c.env.DB, principal(c).user.id)) >= LIMITS.maxTokensPerUser) {
     throw conflict(`You can have at most ${LIMITS.maxTokensPerUser} tokens: delete one first`);
   }
-  const { token, secret, callbackSecret } = await createToken(c.env.DB, principal(c).user.id, input);
+  const { token, secret } = await createToken(c.env.DB, principal(c).user.id, input);
   const base = publicUrl(c.env, c.req.raw);
   const url = input.kind === "webhook" ? `${base}/hook/${secret}` : `${base}/mcp/${secret}`;
-  // `callbackSecret` is an extension: the HMAC key for X-Oyee-Signature on action callbacks sent via this token.
-  return c.json({ token, secret, url, callbackSecret }, 201);
+  return c.json({ token, secret, url }, 201);
 });
 
 api.delete("/tokens/:id", sessionOnly, async (c) => {
@@ -199,10 +194,7 @@ api.get("/notifications", async (c) => {
 api.post("/notifications", sessionOnly, async (c) => {
   const body = await readJson(c, z.unknown());
   const p = principal(c);
-  const stub = inbox(c.env, p.user.id);
-  // Protocol v1 flat cards keep the old path (and answer) until the flat card is removed (ticket 15).
-  if (isFlatCard(body)) return c.json(await rpc(stub.send(actorFor(p), parseOrThrow(SendNotificationInput, body))), 201);
-  const sent = await sendIntent(stub, actorFor(p), parseIntentSend(body));
+  const sent = await sendIntent(inbox(c.env, p.user.id), actorFor(p), parseIntentSend(body));
   return c.json(sent, sent.outcome === "created" ? 201 : 200);
 });
 
@@ -214,12 +206,6 @@ api.post("/notifications/read-all", async (c) => {
 
 api.get("/notifications/:id", async (c) => {
   return c.json(await rpc(inbox(c.env, principal(c).user.id).get(c.req.param("id"))));
-});
-
-api.patch("/notifications/:id", sessionOnly, async (c) => {
-  const input = await readJson(c, UpdateNotificationInput);
-  const p = principal(c);
-  return c.json(await rpc(inbox(c.env, p.user.id).update(actorFor(p), c.req.param("id"), input)));
 });
 
 api.post("/notifications/:id/respond", async (c) => {
@@ -245,32 +231,3 @@ api.delete("/notifications/:id", async (c) => {
 });
 
 api.get("/sources", async (c) => c.json({ items: await rpc(inbox(c.env, principal(c).user.id).sources()) }));
-
-// Templates
-const templateName = (raw: string) => parseOrThrow(TemplateName, raw);
-
-api.get("/templates", async (c) => c.json({ items: await rpc(inbox(c.env, principal(c).user.id).listTemplates()) }));
-
-api.get("/templates/:name", async (c) => {
-  return c.json(await rpc(inbox(c.env, principal(c).user.id).getTemplate(templateName(c.req.param("name")))));
-});
-
-api.put("/templates/:name", sessionOnly, async (c) => {
-  const name = templateName(c.req.param("name"));
-  const input = await readJson(c, UpsertTemplateInput);
-  return c.json(await rpc(inbox(c.env, principal(c).user.id).upsertTemplate(name, input)));
-});
-
-api.delete("/templates/:name", sessionOnly, async (c) => {
-  await rpc(inbox(c.env, principal(c).user.id).deleteTemplate(templateName(c.req.param("name"))));
-  return c.body(null, 204);
-});
-
-api.post("/templates/:name/preview", sessionOnly, async (c) => {
-  const name = templateName(c.req.param("name"));
-  const input = await readJson(
-    c,
-    z.object({ vars: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}) }),
-  );
-  return c.json(await rpc(inbox(c.env, principal(c).user.id).previewTemplate(name, input.vars)));
-});

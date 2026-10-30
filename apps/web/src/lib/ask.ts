@@ -1,7 +1,7 @@
 /** What the ask card shows (GLOSSARY.md: Ask, Answer button, Expiry). Pure, so it's tested on the shared v2 fixtures. */
-import type { AskState, IntentNotification, Notification } from "@oyee/schema";
+import type { AskState, Notification } from "@oyee/schema";
 
-export type AskLike = Pick<Extract<IntentNotification, { intent: "ask" }>, "createdAt" | "ask">;
+export type AskLike = Pick<Extract<Notification, { intent: "ask" }>, "createdAt" | "ask">;
 
 export interface AskView {
   /** The ask's state; an open ask past its expiry already counts as `expired` (the server's broadcast follows). */
@@ -54,14 +54,6 @@ function noteOf(n: AskLike, state: AskState): string | null {
   }
   if (state === "withdrawn") return "The sender withdrew this question before it was answered.";
   return null;
-}
-
-/**
- * Whether to draw the ask card. While v1 cards still arrive (until ticket 15), one inferred as an ask may also carry a
- * progress bar, fields, an image or link buttons; those keep the generic card so nothing is hidden.
- */
-export function showsAsAsk(n: Notification): n is Extract<Notification, { intent: "ask" }> {
-  return n.intent === "ask" && !n.progress && n.fields.length === 0 && !n.image && n.actions.every((a) => !a.url);
 }
 
 export function askView(n: AskLike, now: number = Date.now()): AskView {

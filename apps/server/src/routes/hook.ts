@@ -1,15 +1,15 @@
 /** POST|GET /hook/:token — webhook ingestion (docs/protocol.md §4). Every payload becomes an intent. */
-import { SendNotificationInput, type IntentSendInput } from "@oyee/schema";
+import type { IntentSendInput } from "@oyee/schema";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../app";
 import { findTokenBySecret } from "../db";
 import { authFailure } from "../lib/abuse";
-import { badRequest, parseOrThrow, rpc, unauthorized } from "../lib/errors";
+import { badRequest, rpc, unauthorized } from "../lib/errors";
 import { readBodyText } from "../lib/http";
 import type { Actor } from "../inbox/model";
 import { fromAlertmanager, fromSns, fromTextRequest, isAlertmanager, isGrafana, isSns, type HookAction } from "../webhook/adapters";
 import { inbox } from "./api";
-import { isFlatCard, parseIntentSend, sendIntent } from "./send";
+import { parseIntentSend, sendIntent } from "./send";
 
 export const hook = new Hono<AppEnv>();
 
@@ -32,7 +32,6 @@ async function parseHook(c: Context<AppEnv>): Promise<HookAction> {
     if (isSns(body, snsType)) return fromSns(body);
     if (isAlertmanager(body)) return fromAlertmanager(body, isGrafana(body) ? "grafana" : "alertmanager");
     if (isGrafana(body)) return fromAlertmanager(body, "grafana");
-    if (isFlatCard(body)) return { kind: "flat", input: parseOrThrow(SendNotificationInput, body) };
     return { kind: "send", input: parseIntentSend(body) };
   }
   return { kind: "send", input: fromTextRequest(query, c.req.raw.headers, text) };
@@ -41,12 +40,11 @@ async function parseHook(c: Context<AppEnv>): Promise<HookAction> {
 const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined);
 
 /** `?devices=macbook,pixel` / `?platforms=android` target devices for any payload type (JSON bodies may also set them). */
-function withQueryTargets<T extends IntentSendInput | SendNotificationInput>(input: T, query: Record<string, string>): T {
+function withQueryTargets(input: IntentSendInput, query: Record<string, string>): IntentSendInput {
   const devices = input.devices ?? list(query.devices);
   const platforms = input.platforms ?? list(query.platforms);
   if (!devices && !platforms) return input;
-  const targeted = { ...input, devices, platforms };
-  return ("intent" in input ? parseIntentSend(targeted) : parseOrThrow(SendNotificationInput, targeted)) as T;
+  return parseIntentSend({ ...input, devices, platforms });
 }
 
 hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
@@ -66,10 +64,6 @@ hook.on(["GET", "POST", "PUT"], "/:token", async (c) => {
     case "send": {
       const { notification: _, ...result } = await sendIntent(stub, actor, withQueryTargets(action.input, c.req.query()));
       return c.json(result);
-    }
-    case "flat": {
-      const n = await rpc(stub.send(actor, withQueryTargets(action.input, c.req.query()), { titleFallback: true }));
-      return c.json({ id: n.id, version: n.version });
     }
     case "resolve": {
       const n = await rpc(stub.resolveInformByKey(actor, action.input));

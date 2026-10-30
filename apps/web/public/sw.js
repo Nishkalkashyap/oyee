@@ -31,8 +31,13 @@ function progressAmount(p) {
   return p.label || (max === 100 ? Math.round(ratio * 100) + "%" : p.value + "/" + max);
 }
 
+/** ≈ stoppedReportingLabel in @oyee/schema: the sender's label, else always the percent. */
+function stoppedLabel(p) {
+  const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
+  return "Stopped reporting after " + (p.label || Math.round(ratio * 100) + "%");
+}
+
 function progressText(p) {
-  if (p.indeterminate) return p.label || "In progress…";
   const max = p.max || 100;
   const ratio = Math.max(0, Math.min(1, p.value / max));
   const filled = Math.round(ratio * 10);
@@ -50,7 +55,7 @@ function bodyText(n) {
   if (n.intent === "inform") for (const f of n.inform.fields || []) parts.push(f.label + ": " + f.value);
   if (n.intent === "progress") {
     const p = n.progress;
-    if (p.state === "stopped") parts.push("Stopped reporting after " + progressAmount(p));
+    if (p.state === "stopped") parts.push(stoppedLabel(p));
     else if (PROGRESS_ENDED[p.state]) parts.push(PROGRESS_ENDED[p.state] + " · " + progressAmount(p));
     else parts.push(progressText(p));
   }

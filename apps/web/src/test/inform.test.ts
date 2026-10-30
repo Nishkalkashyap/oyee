@@ -1,12 +1,12 @@
 /** The inform card's view model, read from the shared protocol v2 fixtures. */
-import { IntentNotification } from "@oyee/schema";
+import { Notification } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import raw from "../../../../packages/schema/fixtures/notifications.v2.json";
 import { informView, type InformNotification } from "../lib/inform";
 
 const fixtures = raw as Record<string, unknown>;
 const inform = (name: string) => {
-  const n = IntentNotification.parse(fixtures[name]);
+  const n = Notification.parse(fixtures[name]);
   if (n.intent !== "inform") throw new Error(`${name} is not an inform`);
   return n;
 };
@@ -81,10 +81,5 @@ describe("informView", () => {
     const link = (i: number) => ({ label: `L${i}`, url: `https://example.com/${i}` });
     const n = { ...base, inform: { ...base.inform, links: [1, 2, 3, 4].map(link) } } as InformNotification;
     expect(informView(n).links.map((l) => l.label)).toEqual(["L1", "L2", "L3"]);
-  });
-
-  it("shows a flat card's debug severity as info (debug is gone from intents)", () => {
-    const n: InformNotification = { ...inform("inform-minimal"), severity: "debug" };
-    expect(informView(n)).toMatchObject({ severity: "info", severityLabel: "Info" });
   });
 });

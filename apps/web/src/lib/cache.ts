@@ -46,8 +46,14 @@ export function matchesFilters(n: Notification, f: InboxFilters | undefined): bo
   if (f.q) {
     const q = f.q.trim().toLowerCase();
     if (q) {
-      const rows = n.intent === "inform" ? n.inform.fields : [];
-      const hay = [n.title, n.body ?? "", n.source, ...rows.map((x) => `${x.label} ${x.value}`)]
+      // As the server's search: an inform's rows, an ask's answer buttons, a progress's label.
+      const extra =
+        n.intent === "inform"
+          ? n.inform.fields.map((x) => `${x.label} ${x.value}`)
+          : n.intent === "ask"
+            ? n.ask.options
+            : [n.progress.label ?? ""];
+      const hay = [n.title, n.body ?? "", n.source, ...extra]
         .join("\n")
         .toLowerCase();
       if (!hay.includes(q)) return false;

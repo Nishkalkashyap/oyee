@@ -66,15 +66,17 @@ are forward-only, so fix schema mistakes with a new migration.
 3. Rename the file to something descriptive and change the matching `tag` in `migrations/meta/_journal.json`.
 4. Run the tests (they apply all migrations), commit, `pnpm deploy`.
 
-Per-user data (notifications, templates, quota counters) lives in each user's InboxDO SQLite instead. Its tables are
+Per-user data (notifications, deadlines, quota counters) lives in each user's InboxDO SQLite instead. Its tables are
 created with `CREATE TABLE IF NOT EXISTS` in `InboxDO.migrate()` (`apps/server/src/inbox/do.ts`). Add new tables
-there, and never drop or rename existing ones.
+there. Changing an existing table needs a one-time, versioned step (`meta.schema`, see `migrateToV2()`, which
+converted stored rows to protocol v2 and dropped the thread, replace-key and templates storage); it runs when each
+inbox first wakes after the deploy, so it must be idempotent and must not need the network.
 
 ### 2.2 Secrets
 - Rotate one: `pnpm --dir apps/server exec wrangler secret put NAME`, then update `secrets/prod-secrets.json`.
 - Re-upload all of them (e.g. after recreating the Worker):
   `pnpm --dir apps/server exec wrangler secret bulk ../../secrets/prod-secrets.json`.
-- Consequences: a new `SESSION_SECRET` signs everyone out and changes callback signatures. A new VAPID key pair means
+- Consequences: a new `SESSION_SECRET` signs everyone out and resets the per-IP sign-up counters. A new VAPID key pair means
   every browser has to re-enable notifications. Google and Firebase credentials can be regenerated in their consoles.
 
 ### 2.3 Domains
@@ -158,7 +160,7 @@ Builds without `OYEE_VERSION` (macOS) and debug builds (Android) never update th
 
 ## 5. Limits (abuse protection)
 
-Per-account daily quotas, per-minute bursts, caps on devices/tokens/templates, coalesced update pushes, and per-IP
+Per-account daily quotas, per-minute bursts, caps on devices/tokens, coalesced update pushes, and per-IP
 limits on sign-ups and failed auth. The numbers and behaviour are in [protocol.md §3.1](protocol.md#31-limits).
 The values are in `LIMITS` / `QUOTAS` in `packages/schema/src/index.ts`, and the per-IP failure limit is also in
 `ratelimits` in `wrangler.jsonc`. Counters live in each user's InboxDO (`usage` table) and in D1 `ip_counters`

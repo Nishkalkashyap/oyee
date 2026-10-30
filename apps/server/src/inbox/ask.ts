@@ -1,21 +1,11 @@
 /**
  * Ask (GLOSSARY.md): a question an agent sends and polls the answer of. Pure logic used by the InboxDO: building the
- * stored ask, deciding whether an ask can be reused by key, recording the first answer, expiring it (Expiry) and
- * what wait_for_response reports.
+ * stored ask, deciding whether an ask can be reused by key, recording the first answer, expiring it (Expiry),
+ * withdrawing it, and what wait_for_response reports.
  */
-import {
-  LIMITS,
-  durationMs,
-  isLinkAction,
-  type AskAnswer,
-  type AskInput,
-  type McpWaitResult,
-  type Notification,
-  type RespondInput,
-  type Response as OyeeResponse,
-} from "@oyee/schema";
+import { LIMITS, durationMs, type AskAnswer, type AskInput, type McpWaitResult, type Notification, type RespondInput } from "@oyee/schema";
 import { badRequest, conflict } from "../lib/errors";
-import { appendResponse, type Actor } from "./model";
+import type { Actor } from "./model";
 
 export type AskNotification = Extract<Notification, { intent: "ask" }>;
 
@@ -63,23 +53,6 @@ export function buildAsk(
       answer: null,
       state: "open",
     },
-    // The flat v1 card, so app builds that don't know intents yet still show answer buttons (removed in ticket 15).
-    threadId: null,
-    icon: null,
-    image: null,
-    fields: [],
-    progress: null,
-    actions: options.map((label, i) => ({
-      id: `option_${i + 1}`,
-      label,
-      style: i === 0 ? "primary" : "default",
-      resolves: true,
-    })),
-    reply: allowText ? { placeholder: REPLY_PLACEHOLDER, buttonLabel: "Send" } : null,
-    tags: [],
-    silent: false,
-    template: null,
-    responses: [],
   };
 }
 
@@ -94,16 +67,13 @@ export function describeAnswer(a: AskAnswer): string {
   return a.deviceName ? `${what} · ${a.deviceName}` : what;
 }
 
+const optionList = (n: AskNotification) => n.ask.options.map((o) => `"${o}"`).join(", ");
+
 /**
  * Records the first answer (an option, text, or both) from any device: it sets the answer, resolves the ask and marks
- * it read. A later answer is a conflict. Also appends the v1 `responses` entry for older app builds and callbacks.
+ * it read. A later answer is a conflict.
  */
-export function answerAsk(
-  n: AskNotification,
-  input: RespondInput,
-  actor: Actor,
-  now: string,
-): { n: AskNotification; response: OyeeResponse; action: Notification["actions"][number] | undefined } {
+export function answerAsk(n: AskNotification, input: RespondInput, actor: Actor, now: string): AskNotification {
   if (n.ask.answer) {
     throw conflict(`This ask was already answered: ${describeAnswer(n.ask.answer)}`);
   }
@@ -111,57 +81,33 @@ export function answerAsk(
   if (n.ask.state === "expired" || Date.parse(n.ask.expiresAt) <= Date.parse(now)) {
     throw conflict("This ask expired before it was answered");
   }
-  const answerButtons = n.actions.filter((a) => !isLinkAction(a));
-  let action: Notification["actions"][number] | undefined;
-  if (input.option !== undefined) {
-    action = answerButtons.find((a) => a.label === input.option);
-    if (!action) {
-      throw badRequest(`option: "${input.option}" is not an answer to this ask (${n.ask.options.map((o) => `"${o}"`).join(", ") || "it takes text only"})`);
-    }
-  } else if (input.actionId !== undefined) {
-    action = answerButtons.find((a) => a.id === input.actionId);
-    if (!action) throw badRequest(`actionId: unknown action "${input.actionId}"`);
+  if (input.option !== undefined && !n.ask.options.includes(input.option)) {
+    throw badRequest(`option: "${input.option}" is not an answer to this ask (${optionList(n) || "it takes text only"})`);
   }
   if (input.text !== undefined && !n.ask.allowText) {
-    throw badRequest(`text: this ask takes one of its answer buttons (${n.ask.options.map((o) => `"${o}"`).join(", ")})`);
+    throw badRequest(`text: this ask takes one of its answer buttons (${optionList(n)})`);
   }
   const answer: AskAnswer = {
-    option: action?.label ?? null,
+    option: input.option ?? null,
     text: input.text ?? null,
     deviceId: actor.deviceId,
     deviceName: actor.deviceName,
     at: now,
   };
-  const response: OyeeResponse = {
-    actionId: action?.id ?? null,
-    text: answer.text,
-    deviceId: answer.deviceId,
-    deviceName: answer.deviceName,
-    at: now,
-  };
   return {
-    n: {
-      ...n,
-      responses: appendResponse(n, response),
-      version: n.version + 1,
-      updatedAt: now,
-      readAt: n.readAt ?? now,
-      status: "resolved",
-      resolvedAt: n.resolvedAt ?? now,
-      ask: { ...n.ask, answer, state: "answered" },
-    },
-    response,
-    action,
+    ...n,
+    version: n.version + 1,
+    updatedAt: now,
+    readAt: n.readAt ?? now,
+    status: "resolved",
+    resolvedAt: n.resolvedAt ?? now,
+    ask: { ...n.ask, answer, state: "answered" },
   };
 }
 
-/** The answer wait_for_response reports: the ask's answer, or a v1 response on a card that isn't an ask. */
-export function answerOf(n: Notification): AskAnswer | null {
-  if (n.intent === "ask") return n.ask.answer;
-  const last = n.responses[n.responses.length - 1];
-  if (!last) return null;
-  const option = last.actionId === null ? null : (n.actions.find((a) => a.id === last.actionId)?.label ?? last.actionId);
-  return { option, text: last.text, deviceId: last.deviceId, deviceName: last.deviceName, at: last.at };
+/** Resolving an ask that is still open withdraws it: it can no longer be answered. Closed asks keep their state. */
+export function withdrawIfOpen(n: AskNotification): AskNotification {
+  return n.ask.state === "open" ? { ...n, ask: { ...n.ask, state: "withdrawn" } } : n;
 }
 
 /** When the scheduler should expire this ask, or null once it is answered, expired or withdrawn. */
@@ -187,11 +133,9 @@ export function expireAsk(n: Notification, now: number): AskNotification | null 
   };
 }
 
-/** What wait_for_response reports for this notification right now. An ask past its expiry counts as expired. */
-export function waitResult(n: Notification, now: number): McpWaitResult {
-  const answer = answerOf(n);
-  if (answer) return { status: "answered", answer, askedAt: n.createdAt };
-  if (n.intent !== "ask") return { status: "pending", askedAt: n.createdAt, expiresAt: null };
+/** What wait_for_response reports for this ask right now. An ask past its expiry counts as expired. */
+export function waitResult(n: AskNotification, now: number): McpWaitResult {
+  if (n.ask.answer) return { status: "answered", answer: n.ask.answer, askedAt: n.createdAt };
   const { state, expiresAt } = n.ask;
   const status =
     state === "withdrawn" ? "withdrawn" : state === "expired" || Date.parse(expiresAt) <= now ? "expired" : "pending";

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { IntentSendInput, IntentSeverity, ProgressStatus, type Field, type LinkButton } from "@oyee/schema";
+import { IntentSendInput, Severity, ProgressStatus, type Field, type LinkButton } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { buildSendInput, COMPOSER_PRESETS, emptyComposer, previewNotification, type ComposerIntent, type ComposerState } from "../lib/composer";
 import { useDevices, useSendNotification } from "../lib/queries";
@@ -124,8 +124,8 @@ export function SendPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               {!progress && (
                 <FormField label="Severity" htmlFor="c-sev">
-                  <Select id="c-sev" value={s.severity} onChange={(e) => set("severity", e.target.value as IntentSeverity)}>
-                    {IntentSeverity.options.map((sv) => (
+                  <Select id="c-sev" value={s.severity} onChange={(e) => set("severity", e.target.value as Severity)}>
+                    {Severity.options.map((sv) => (
                       <option key={sv} value={sv}>
                         {SEVERITY_STYLES[sv].label}
                       </option>

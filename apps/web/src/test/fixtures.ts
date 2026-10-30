@@ -1,32 +1,28 @@
-import { inferIntent, type FlatNotification, type Notification } from "@oyee/schema";
+import type { Notification } from "@oyee/schema";
 
-export function makeNotification(p: Partial<FlatNotification> & { id: string }): Notification {
+type Shared = Omit<Extract<Notification, { intent: "inform" }>, "intent" | "inform">;
+
+/** A plain inform (override any shared field); spread in an intent block for an ask or a progress. */
+export function makeNotification(p: Partial<Shared> & { id: string }): Notification {
   const at = p.createdAt ?? "2026-10-28T10:00:00.000Z";
-  return inferIntent({
+  return {
     source: "test",
-    threadId: null,
+    key: null,
     title: `Title ${p.id}`,
     body: null,
     severity: "info",
     status: "active",
-    icon: null,
-    image: null,
     url: null,
-    fields: [],
-    progress: null,
-    actions: [],
-    reply: null,
-    tags: [],
-    silent: false,
-    template: null,
     version: 1,
     createdAt: at,
     updatedAt: at,
     readAt: null,
     resolvedAt: null,
-    responses: [],
+    targetDeviceIds: null,
     ...p,
-  });
+    intent: "inform",
+    inform: { links: [], fields: [], image: null, icon: null, cooldown: null },
+  };
 }
 
 /** createdAt N minutes after 10:00. */

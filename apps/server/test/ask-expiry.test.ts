@@ -179,22 +179,16 @@ describe("when an ask expires", () => {
     expect(next.id).not.toBe(first.id);
   });
 
-  it("expires every due ask in one firing, including asks sent as a flat card", async () => {
+  it("expires every due ask in one firing", async () => {
     const { cookie, mcp, stub } = await setup();
     const a = await ask(mcp, { title: "First?", expiresIn: "2h" });
     const b = await ask(mcp, { title: "Second?", expiresIn: "3h" });
-    const flat = await call<Notification>(
-      "POST",
-      "/api/notifications",
-      { cookie },
-      { title: "Old style?", actions: [{ id: "ok", label: "OK", resolves: true }] },
-    );
-    expect(flat.body.intent).toBe("ask");
+    const c = await ask(mcp, { title: "Third?", options: ["OK"] });
     const later = await ask(mcp, { title: "Not yet?", expiresIn: "4h" });
-    for (const id of [a.id, b.id, flat.body.id]) await backdateExpiry(stub, id);
+    for (const id of [a.id, b.id, c.id]) await backdateExpiry(stub, id);
 
     await runDurableObjectAlarm(stub);
-    for (const id of [a.id, b.id, flat.body.id]) {
+    for (const id of [a.id, b.id, c.id]) {
       expect(await get(cookie, id), id).toMatchObject({ status: "resolved", ask: { state: "expired" } });
     }
     const open = await get(cookie, later.id);

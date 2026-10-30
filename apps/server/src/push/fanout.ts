@@ -1,15 +1,8 @@
 /** Push fan-out (FCM + Web Push) for notification events. WebSocket broadcast happens in the InboxDO. */
-import {
-  WebPushSubscription,
-  type Notification,
-  type PushEventType,
-  type Response as OyeeResponse,
-  type UpdateReason,
-  type WebPushPayload,
-} from "@oyee/schema";
+import { WebPushSubscription, type Notification, type PushEventType, type UpdateReason, type WebPushPayload } from "@oyee/schema";
 import type { Env } from "../env";
-import { clearFcmToken, getTokenCallbackSecret, listDevices, removeWebPush, type DeviceRow } from "../db";
-import { byteLength, hmacSha256, toHex } from "../lib/encoding";
+import { clearFcmToken, listDevices, removeWebPush, type DeviceRow } from "../db";
+import { byteLength } from "../lib/encoding";
 import { buildFcmData, parseServiceAccount, sendFcm } from "./fcm";
 import { sendWebPush, type VapidKeys } from "./webpush";
 
@@ -29,11 +22,16 @@ export function vapidKeys(env: Env): VapidKeys | null {
   };
 }
 
+/** Whether a new notification sounds: everything but a running progress (spec "Alert rules"). */
+export function alertsOnCreate(n: Notification): boolean {
+  return !(n.intent === "progress" && n.progress.state === "running");
+}
+
 function eventInfo(ev: InboxEvent): { id: string; notification: Notification | null; alert: boolean } {
   switch (ev.type) {
     case "notification.created":
-      // A `silent` card (e.g. the first report of a running progress) appears without sound.
-      return { id: ev.notification.id, notification: ev.notification, alert: !ev.notification.silent };
+      // The first report of a running progress appears without sound; every other new notification alerts.
+      return { id: ev.notification.id, notification: ev.notification, alert: alertsOnCreate(ev.notification) };
     case "notification.updated":
       return { id: ev.notification.id, notification: ev.notification, alert: ev.alert };
     case "notification.deleted":
@@ -104,48 +102,4 @@ export async function fanoutPush(env: Env, userId: string, events: InboxEvent[],
     }
   }
   await Promise.all(tasks);
-}
-
-// ─── Action callbacks ───────────────────────────────────────────────────────
-
-export async function signCallback(secret: string, body: string): Promise<string> {
-  return `sha256=${toHex(await hmacSha256(secret, body))}`;
-}
-
-/**
- * Key used to sign callbacks: the sending token's callback secret, or (for notifications created from the web app)
- * a per-user key derived from SESSION_SECRET.
- */
-export async function callbackSecretFor(env: Env, userId: string, tokenId: string | null): Promise<string> {
-  if (tokenId) {
-    const s = await getTokenCallbackSecret(env.DB, tokenId);
-    if (s) return s;
-  }
-  return toHex(await hmacSha256(env.SESSION_SECRET || "oyee-dev-secret", `callback:${userId}`));
-}
-
-export async function sendActionCallback(
-  env: Env,
-  userId: string,
-  tokenId: string | null,
-  callback: { url: string; headers?: Record<string, string> },
-  notification: Notification,
-  response: OyeeResponse,
-): Promise<void> {
-  const body = JSON.stringify({ notification, response });
-  const signature = await signCallback(await callbackSecretFor(env, userId, tokenId), body);
-  const headers: Record<string, string> = {
-    ...(callback.headers ?? {}),
-    "Content-Type": "application/json",
-    "User-Agent": "Oyee/0.1 (+https://github.com/oyee)",
-    "X-Oyee-Signature": signature,
-    "X-Oyee-Notification-Id": notification.id,
-  };
-  try {
-    const res = await fetch(callback.url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });
-    await res.arrayBuffer().catch(() => undefined);
-    if (!res.ok) console.warn(`callback ${callback.url} → ${res.status}`);
-  } catch (e) {
-    console.warn(`callback ${callback.url} failed`, e);
-  }
 }

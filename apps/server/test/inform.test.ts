@@ -100,7 +100,7 @@ describe("MCP inform", () => {
     ws.close();
   });
 
-  it("carries body, severity, url, rows, image, icon and link buttons, and the flat card for older apps", async () => {
+  it("carries body, severity, url, rows, image, icon and link buttons", async () => {
     const { cookie, path } = await setup();
     const r = await inform(path, {
       title: "Deploy finished",
@@ -131,16 +131,6 @@ describe("MCP inform", () => {
         image: "https://ci.example.com/chart.png",
         icon: "🚀",
       },
-      // flat card, so app builds from before intents still draw it
-      icon: "🚀",
-      image: "https://ci.example.com/chart.png",
-      fields: [{ label: "Region", value: "eu-west-1" }],
-      actions: [
-        { label: "PR", url: "https://github.com/acme/api/pull/7", resolves: false },
-        { label: "Build log", url: "https://ci.example.com/runs/42/log", resolves: false },
-      ],
-      reply: null,
-      progress: null,
     });
   });
 

@@ -4,17 +4,20 @@
  * on the shared v2 fixtures and shared by every list render. Android (InboxSections.kt) and macOS
  * (InboxSections.swift) follow the same rules.
  */
-import type { AskBlock, IntentNotification, ProgressBlock } from "@oyee/schema";
+import type { AskBlock, Notification, ProgressBlock } from "@oyee/schema";
 
 /** What the inbox reads: identity plus the intent and its state (the wire notification and the v2 fixtures both fit). */
-export type InboxItem = Pick<IntentNotification, "id" | "source" | "key" | "title"> &
-  ({ intent: "inform" } | { intent: "ask"; ask: Pick<AskBlock, "state"> } | { intent: "progress"; progress: Pick<ProgressBlock, "state"> });
+export type InboxItem = Pick<Notification, "id" | "source" | "key" | "title"> &
+  ({ intent: "inform" } | { intent: "ask"; ask: Pick<AskBlock, "state" | "expiresAt"> } | { intent: "progress"; progress: Pick<ProgressBlock, "state"> });
 
 export type InboxSectionId = "needs-you" | "in-progress" | "updates";
 
-/** Which section a notification belongs in: decided by its intent and state only. */
-function sectionOf(n: InboxItem): InboxSectionId {
-  if (n.intent === "ask" && n.ask.state === "open") return "needs-you";
+/**
+ * Which section a notification belongs in: decided by its intent and state only. An open ask past its expiry already
+ * counts as expired (as on the ask card), so it leaves Needs you before the server's broadcast arrives.
+ */
+function sectionOf(n: InboxItem, now: number): InboxSectionId {
+  if (n.intent === "ask" && n.ask.state === "open" && Date.parse(n.ask.expiresAt) > now) return "needs-you";
   if (n.intent === "progress" && (n.progress.state === "running" || n.progress.state === "stopped")) return "in-progress";
   return "updates";
 }
@@ -42,11 +45,11 @@ const TITLES: Record<InboxSectionId, string> = { "needs-you": "Needs you", "in-p
  * Splits a createdAt-desc list into sections, in the order Needs you, In progress, Updates; empty sections are
  * dropped. Only Updates stacks repeats: an open ask or a live progress is always its own row.
  */
-export function inboxSections<T extends InboxItem>(items: T[]): InboxSection<T>[] {
+export function inboxSections<T extends InboxItem>(items: T[], now: number = Date.now()): InboxSection<T>[] {
   const stacks: Record<InboxSectionId, InboxStack<T>[]> = { "needs-you": [], "in-progress": [], updates: [] };
   const byKey = new Map<string, InboxStack<T>>();
   for (const n of items) {
-    const id = sectionOf(n);
+    const id = sectionOf(n, now);
     if (id !== "updates") {
       stacks[id].push({ key: n.id, items: [n] });
       continue;

@@ -1,6 +1,6 @@
 /**
  * InboxDO — one per user (`idFromName(userId)`), SQLite-backed.
- * Holds notifications (+ tombstones for sync), templates, per-token and per-account quota counters, hibernatable WebSockets and
+ * Holds notifications (+ tombstones for sync), per-token and per-account quota counters, hibernatable WebSockets and
  * in-memory `wait_for_response` waiters. Every mutation is broadcast over WebSocket and fanned out to push transports.
  */
 import { DurableObject } from "cloudflare:workers";
@@ -9,7 +9,6 @@ import {
   LIMITS,
   type AskInput,
   QUOTAS,
-  type FlatNotification,
   type InformInput,
   type Intent,
   type ListNotificationsQuery,
@@ -19,40 +18,23 @@ import {
   type ProgressInput,
   type QuotaKind,
   type RespondInput,
-  type SendNotificationInput,
   type ServerMessage,
   type SourceSummary,
-  type Template,
-  type TemplateCard,
-  type UpdateNotificationInput,
-  type UpsertTemplateInput,
   type Usage,
-  inferIntent,
-  renderTemplateValue,
 } from "@oyee/schema";
 import type { Env } from "../env";
-import { ApiError, badRequest, conflict, notFound, rateLimited, type RpcResult } from "../lib/errors";
+import { ApiError, badRequest, notFound, rateLimited, type RpcResult } from "../lib/errors";
 import { b64urlDecodeString, b64urlEncode } from "../lib/encoding";
 import { newId } from "../lib/ids";
 import { listDevices } from "../db";
-import { fanoutPush, sendActionCallback, type InboxEvent } from "../push/fanout";
-import {
-  applyPatch,
-  assertUniqueActionIds,
-  buildNotification,
-  replaceContent,
-  resolveSendInput,
-  respondToCard,
-  resolveTargets,
-  searchText,
-  type Actor,
-  type SendOptions,
-} from "./model";
+import { fanoutPush, type InboxEvent } from "../push/fanout";
+import { resolveTargets, searchText, type Actor } from "./model";
 import { isLiveProgress, reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
-import { answerAsk, buildAsk, expireAsk, expiryDue, isOpenAsk, waitResult, type AskResult } from "./ask";
+import { answerAsk, buildAsk, expireAsk, expiryDue, isOpenAsk, waitResult, withdrawIfOpen, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
 import { assertKeyFree } from "./keys";
+import { fromStored } from "./legacy";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -63,7 +45,6 @@ const WARN_KINDS: QuotaKind[] = ["send", "update", "respond"];
 
 interface StoredRow {
   data: string;
-  replace_key: string | null;
   token_id: string | null;
   seq: number;
   [k: string]: SqlStorageValue;
@@ -71,9 +52,13 @@ interface StoredRow {
 
 interface Loaded {
   n: Notification;
-  replaceKey: string | null;
   tokenId: string | null;
 }
+
+const article = (intent: Intent) => (intent === "inform" ? "an inform" : `a ${intent}`);
+
+/** Storage schema version in `meta.schema`: 1 = intents next to the flat card, 2 = intents only (protocol v2). */
+const STORAGE_SCHEMA = 2;
 
 type Cursor = { b: string } | { s: number };
 
@@ -158,10 +143,11 @@ export class InboxDO extends DurableObject<Env> {
         source TEXT NOT NULL,
         severity TEXT NOT NULL,
         status TEXT NOT NULL,
-        thread_id TEXT,
-        replace_key TEXT,
+        intent TEXT,
+        key TEXT,
         read_at TEXT,
         token_id TEXT,
+        alerted_at TEXT,
         search TEXT NOT NULL,
         data TEXT NOT NULL
       );
@@ -170,59 +156,63 @@ export class InboxDO extends DurableObject<Env> {
       CREATE INDEX IF NOT EXISTS ntf_updated ON notifications(updated_at);
       CREATE INDEX IF NOT EXISTS ntf_source ON notifications(source, id);
       CREATE INDEX IF NOT EXISTS ntf_status ON notifications(status, id);
-      CREATE INDEX IF NOT EXISTS ntf_thread ON notifications(thread_id, id);
       CREATE INDEX IF NOT EXISTS ntf_severity ON notifications(severity, id);
-      CREATE INDEX IF NOT EXISTS ntf_replace ON notifications(replace_key, status);
       CREATE TABLE IF NOT EXISTS tombstones (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, deleted_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS tomb_seq ON tombstones(seq);
-      CREATE TABLE IF NOT EXISTS templates (name TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS rate_limits (token_id TEXT NOT NULL, win INTEGER NOT NULL, count INTEGER NOT NULL,
         PRIMARY KEY (token_id, win));
       CREATE TABLE IF NOT EXISTS usage (kind TEXT NOT NULL, period TEXT NOT NULL, win INTEGER NOT NULL,
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
-    this.migrateToIntents();
-    this.migrateAlertedAt();
-  }
-
-  /** Inform cooldown: when each notification last alerted, measured per key (inbox/inform.ts). */
-  private migrateAlertedAt() {
-    const columns = this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray();
-    if (!columns.some((c) => c.name === "alerted_at")) this.sql.exec("ALTER TABLE notifications ADD COLUMN alerted_at TEXT");
+    this.migrateToV2();
   }
 
   /**
-   * Notifications carry their intent (protocol v2): adds the `intent` and `key` columns and converts rows stored
-   * before intents existed, once (recorded as `meta.schema = 1`; rows that already have an intent are left alone).
-   * Old rows' senders can no longer act on them, so an unanswered ask becomes expired and an unfinished progress
-   * stopped (see inferIntent). Converted rows get a new `seq` so clients that sync by cursor receive the new shape.
+   * Protocol v2 storage, once per inbox (recorded as `meta.schema`). Inboxes created before intents get the `intent`,
+   * `key` and `alerted_at` columns; every stored row becomes a v2 notification (inbox/legacy.ts: a flat card turns into
+   * the intent it most resembles, flat fields and the `debug` severity go); then the thread and replace-key columns and
+   * the templates table are dropped. Rows whose meaning changed (no intent before, or `debug`) get a new `seq` so
+   * clients that sync by cursor receive them again.
    */
-  private migrateToIntents() {
+  private migrateToV2() {
     const schema = this.sql.exec<{ value: number }>("SELECT value FROM meta WHERE key = 'schema'").toArray()[0]?.value ?? 0;
-    if (schema >= 1) return;
+    if (schema >= STORAGE_SCHEMA) return;
     const columns = new Set(
       this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray().map((c) => c.name),
     );
-    if (!columns.has("intent")) this.sql.exec("ALTER TABLE notifications ADD COLUMN intent TEXT");
-    if (!columns.has("key")) this.sql.exec("ALTER TABLE notifications ADD COLUMN key TEXT");
-    this.sql.exec("CREATE INDEX IF NOT EXISTS ntf_key ON notifications(source, key)");
-    const legacy = this.sql
+    for (const c of ["intent", "key", "alerted_at"]) {
+      if (!columns.has(c)) this.sql.exec(`ALTER TABLE notifications ADD COLUMN ${c} TEXT`);
+    }
+    const rows = this.sql
       .exec<{ id: string; data: string; replace_key: string | null }>(
-        "SELECT id, data, replace_key FROM notifications WHERE intent IS NULL",
+        `SELECT id, data, ${columns.has("replace_key") ? "replace_key" : "NULL AS replace_key"} FROM notifications`,
       )
       .toArray();
-    for (const r of legacy) {
-      const n = inferIntent({ ...(JSON.parse(r.data) as FlatNotification), key: r.replace_key }, { legacy: true });
+    for (const r of rows) {
+      const old = JSON.parse(r.data) as { intent?: string; severity?: string };
+      const n = fromStored(old, r.replace_key);
+      const changed = old.intent === undefined || old.severity !== n.severity;
       this.sql.exec(
-        "UPDATE notifications SET intent = ?, key = ?, data = ?, seq = ? WHERE id = ?",
+        "UPDATE notifications SET intent = ?, key = ?, severity = ?, search = ?, data = ?, seq = COALESCE(?, seq) WHERE id = ?",
         n.intent,
         n.key,
+        n.severity,
+        searchText(n),
         JSON.stringify(n),
-        this.nextSeq(),
+        changed ? this.nextSeq() : null,
         r.id,
       );
     }
-    this.sql.exec("INSERT INTO meta (key, value) VALUES ('schema', 1) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+    this.sql.exec("DROP INDEX IF EXISTS ntf_thread");
+    this.sql.exec("DROP INDEX IF EXISTS ntf_replace");
+    if (columns.has("thread_id")) this.sql.exec("ALTER TABLE notifications DROP COLUMN thread_id");
+    if (columns.has("replace_key")) this.sql.exec("ALTER TABLE notifications DROP COLUMN replace_key");
+    this.sql.exec("DROP TABLE IF EXISTS templates");
+    this.sql.exec("CREATE INDEX IF NOT EXISTS ntf_key ON notifications(source, key)");
+    this.sql.exec(
+      "INSERT INTO meta (key, value) VALUES ('schema', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      STORAGE_SCHEMA,
+    );
   }
 
   // ─── Storage helpers ──────────────────────────────────────────────────────
@@ -236,11 +226,8 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   private load(id: string): Loaded | null {
-    const rows = this.sql
-      .exec<StoredRow>("SELECT data, replace_key, token_id, seq FROM notifications WHERE id = ?", id)
-      .toArray();
-    const r = rows[0];
-    return r ? { n: JSON.parse(r.data) as Notification, replaceKey: r.replace_key, tokenId: r.token_id } : null;
+    const r = this.sql.exec<StoredRow>("SELECT data, token_id, seq FROM notifications WHERE id = ?", id).toArray()[0];
+    return r ? { n: JSON.parse(r.data) as Notification, tokenId: r.token_id } : null;
   }
 
   private mustLoad(id: string): Loaded {
@@ -249,14 +236,13 @@ export class InboxDO extends DurableObject<Env> {
     return r;
   }
 
-  private save(n: Notification, replaceKey: string | null, tokenId: string | null) {
+  private save(n: Notification, tokenId: string | null) {
     this.sql.exec(
-      `INSERT INTO notifications (id, seq, created_at, updated_at, source, severity, status, thread_id, replace_key,
-         read_at, token_id, search, data, intent, key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO notifications (id, seq, created_at, updated_at, source, severity, status, read_at, token_id, search,
+         data, intent, key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET seq = excluded.seq, updated_at = excluded.updated_at, source = excluded.source,
-         severity = excluded.severity, status = excluded.status, thread_id = excluded.thread_id,
-         replace_key = excluded.replace_key, read_at = excluded.read_at, token_id = excluded.token_id,
+         severity = excluded.severity, status = excluded.status, read_at = excluded.read_at, token_id = excluded.token_id,
          search = excluded.search, data = excluded.data, intent = excluded.intent, key = excluded.key`,
       n.id,
       this.nextSeq(),
@@ -265,8 +251,6 @@ export class InboxDO extends DurableObject<Env> {
       n.source,
       n.severity,
       n.status,
-      n.threadId,
-      replaceKey,
       n.readAt,
       tokenId,
       searchText(n),
@@ -419,86 +403,35 @@ export class InboxDO extends DurableObject<Env> {
     this.ensurePrune();
     if (userId) this.rememberUser(userId); // so the alarm can push asks it expires
     if (userId && WARN_KINDS.includes(kind) && (used === Math.ceil(q.perDay * 0.8) || used === q.perDay)) {
-      this.ctx.waitUntil(this.postQuotaNotice(userId, kind, used));
+      // After the current operation, so the notice never interleaves with the send that crossed the threshold.
+      this.ctx.waitUntil(Promise.resolve().then(() => this.postQuotaNotice(userId, kind, used)));
     }
   }
 
-  private async postQuotaNotice(userId: string, kind: QuotaKind, used: number) {
+  /** An inform from Oyee itself (source "oyee", keyed per quota), not charged to the quota it warns about. */
+  private postQuotaNotice(userId: string, kind: QuotaKind, used: number) {
     const q = QUOTAS[kind];
     const limit = q.perDay.toLocaleString("en-US");
     const full = used >= q.perDay;
     const actor: Actor = { userId, deviceId: null, deviceName: null, tokenId: null, defaultSource: "oyee" };
-    const input = resolveSendInput({
-      title: full ? `Daily limit reached: ${q.label.toLowerCase()}` : `80% of today's ${q.label.toLowerCase()} used`,
-      body: full
-        ? `You've used all ${limit} for today. More are rejected until 00:00 UTC.`
-        : `${used.toLocaleString("en-US")} of ${limit} used today. The limit resets at 00:00 UTC.`,
-      severity: full ? "critical" : "warning",
-      source: "oyee",
-      replaceKey: `oyee-quota-${kind}`,
-    }, null);
-    await this.store(actor, input, null);
-  }
-
-  private getTemplateRow(name: string): Template | null {
-    const r = this.sql.exec<{ data: string }>("SELECT data FROM templates WHERE name = ?", name).toArray()[0];
-    return r ? (JSON.parse(r.data) as Template) : null;
+    this.storeInform(
+      actor,
+      {
+        title: full ? `Daily limit reached: ${q.label.toLowerCase()}` : `80% of today's ${q.label.toLowerCase()} used`,
+        body: full
+          ? `You've used all ${limit} for today. More are rejected until 00:00 UTC.`
+          : `${used.toLocaleString("en-US")} of ${limit} used today. The limit resets at 00:00 UTC.`,
+        severity: full ? "critical" : "warning",
+        key: `oyee-quota-${kind}`,
+      },
+      null,
+      false,
+    );
   }
 
   // ─── Notifications (RPC) ──────────────────────────────────────────────────
 
-  async send(actor: Actor, input: SendNotificationInput, opts: SendOptions = {}): Promise<RpcResult<Notification>> {
-    return guard(async () => {
-      if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("send", actor.userId);
-      let template: Template | null = null;
-      if (input.template) {
-        template = this.getTemplateRow(input.template);
-        if (!template) throw badRequest(`template: unknown template "${input.template}"`);
-      }
-      const resolved = resolveSendInput(input, template, opts);
-      const targets =
-        resolved.devices?.length || resolved.platforms?.length
-          ? resolveTargets(await listDevices(this.env.DB, actor.userId), resolved)
-          : null;
-      return this.store(actor, resolved, targets);
-    });
-  }
-
-  /** Creates the notification, or replaces the active one with the same replaceKey. No quota checks. */
-  private async store(
-    actor: Actor,
-    resolved: ReturnType<typeof resolveSendInput>,
-    targets: string[] | null,
-  ): Promise<Notification> {
-    const now = new Date().toISOString();
-    const fresh = buildNotification(newId("ntf"), resolved, actor, now, targets);
-    assertUniqueActionIds(fresh.actions);
-    const replaceKey = resolved.replaceKey ?? null;
-
-    if (replaceKey) {
-      const row = this.sql
-        .exec<StoredRow>(
-          "SELECT data, replace_key, token_id, seq FROM notifications WHERE replace_key = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
-          replaceKey,
-        )
-        .toArray()[0];
-      if (row) {
-        const existing = JSON.parse(row.data) as Notification;
-        const n = replaceContent(existing, fresh, now);
-        this.save(n, replaceKey, actor.tokenId ?? row.token_id);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
-        return n;
-      }
-    }
-
-    this.save(fresh, replaceKey, actor.tokenId);
-    this.emit(actor.userId, [{ type: "notification.created", notification: fresh }]);
-    this.ensurePrune();
-    return fresh;
-  }
-
-  /** Inform (inbox/inform.ts): creates the notification, or updates and re-alerts the active one with its key. */
+  /** Inform (inbox/inform.ts): creates the notification, or updates the one with its key (alerting or silently). */
   async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
@@ -506,28 +439,35 @@ export class InboxDO extends DurableObject<Env> {
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
-      const now = new Date().toISOString();
-      const fresh = buildInform(newId("ntf"), input, actor, now, targets);
-      const latest = fresh.key ? this.claimKey(fresh.source, fresh.key, "inform") : null;
-      const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
-      if (result.outcome === "suppressed") return result;
-      // a new notification counts as a send, a silent update as an update (spec "Quotas")
-      this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
-      const n = result.notification;
-      if (n.id === fresh.id) {
-        this.save(n, null, actor.tokenId);
-        this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
-        this.ensurePrune();
-      } else {
-        const alert = result.outcome === "alerted";
-        this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
-      }
-      if (result.outcome !== "updated_silently") {
-        this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
-      }
-      return result;
+      return this.storeInform(actor, input, targets, true);
     });
+  }
+
+  /**
+   * Applies an inform to its key and stores, broadcasts and pushes the result. `charge`: a new notification counts as a
+   * send and a silent update as an update (spec "Quotas"); Oyee's own notices aren't charged.
+   */
+  private storeInform(actor: Actor, input: InformInput, targets: string[] | null, charge: boolean): InformResult {
+    const now = new Date().toISOString();
+    const fresh = buildInform(newId("ntf"), input, actor, now, targets);
+    const latest = fresh.key ? this.claimKey(fresh.source, fresh.key, "inform") : null;
+    const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
+    if (result.outcome === "suppressed") return result;
+    if (charge) this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
+    const n = result.notification;
+    if (n.id === fresh.id) {
+      this.save(n, actor.tokenId);
+      this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
+      this.ensurePrune();
+    } else {
+      const alert = result.outcome === "alerted";
+      this.save(n, actor.tokenId ?? latest!.tokenId);
+      this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
+    }
+    if (result.outcome !== "updated_silently") {
+      this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
+    }
+    return result;
   }
 
   /**
@@ -540,7 +480,7 @@ export class InboxDO extends DurableObject<Env> {
     return latest;
   }
 
-  /** When an inform last alerted (`alerted_at`, written by inform); rows from other send paths fall back to `updatedAt`. */
+  /** When an inform last alerted (`alerted_at`, written by inform); rows without one fall back to `updatedAt`. */
   private informAlertedAt(n: Notification): string {
     const r = this.sql.exec<{ alerted_at: string | null }>("SELECT alerted_at FROM notifications WHERE id = ?", n.id).toArray()[0];
     return r?.alerted_at ?? n.updatedAt;
@@ -550,38 +490,24 @@ export class InboxDO extends DurableObject<Env> {
   private latestByKey(source: string, key: string): Loaded | null {
     const r = this.sql
       .exec<StoredRow>(
-        "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
+        "SELECT data, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
         source,
         key,
       )
       .toArray()[0];
-    return r ? { n: JSON.parse(r.data) as Notification, replaceKey: r.replace_key, tokenId: r.token_id } : null;
+    return r ? { n: JSON.parse(r.data) as Notification, tokenId: r.token_id } : null;
   }
 
-  async update(actor: Actor, id: string, patch: UpdateNotificationInput): Promise<RpcResult<Notification>> {
-    return guard(() => {
-      this.consume("update", actor.userId);
-      const rec = this.mustLoad(id);
-      const n = applyPatch(rec.n, patch, new Date().toISOString());
-      this.save(n, rec.replaceKey, rec.tokenId);
-      this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: patch.alert ?? false, reason: "update" }]);
-      return n;
-    });
-  }
-
+  /** The first answer to an open ask, from any device (inbox/ask.ts). Only asks can be answered. */
   async respond(actor: Actor, id: string, input: RespondInput): Promise<RpcResult<Notification>> {
     return guard(() => {
       this.consume("respond", actor.userId);
       const rec = this.mustLoad(id);
-      const now = new Date().toISOString();
-      const { n, response, action } =
-        rec.n.intent === "ask" ? answerAsk(rec.n, input, actor, now) : respondToCard(rec.n, input, actor, now);
-      this.save(n, rec.replaceKey, rec.tokenId);
+      if (rec.n.intent !== "ask") throw badRequest(`This notification is ${article(rec.n.intent)}, not an ask: only asks take answers`);
+      const n = answerAsk(rec.n, input, actor, new Date().toISOString());
+      this.save(n, rec.tokenId);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "responded" }]);
       this.wake(id);
-      if (action?.callback) {
-        this.ctx.waitUntil(sendActionCallback(this.env, actor.userId, rec.tokenId, action.callback, n, response));
-      }
       return n;
     });
   }
@@ -593,7 +519,7 @@ export class InboxDO extends DurableObject<Env> {
       this.consume("update", actor.userId);
       const now = new Date().toISOString();
       const n: Notification = { ...rec.n, readAt: now, version: rec.n.version + 1, updatedAt: now };
-      this.save(n, rec.replaceKey, rec.tokenId);
+      this.save(n, rec.tokenId);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "read" }]);
       return n;
     });
@@ -605,11 +531,11 @@ export class InboxDO extends DurableObject<Env> {
       const rows = (
         source
           ? this.sql.exec<StoredRow>(
-              "SELECT data, replace_key, token_id, seq FROM notifications WHERE read_at IS NULL AND source = ? ORDER BY id DESC",
+              "SELECT data, token_id, seq FROM notifications WHERE read_at IS NULL AND source = ? ORDER BY id DESC",
               source,
             )
           : this.sql.exec<StoredRow>(
-              "SELECT data, replace_key, token_id, seq FROM notifications WHERE read_at IS NULL ORDER BY id DESC",
+              "SELECT data, token_id, seq FROM notifications WHERE read_at IS NULL ORDER BY id DESC",
             )
       ).toArray();
       const now = new Date().toISOString();
@@ -617,7 +543,7 @@ export class InboxDO extends DurableObject<Env> {
       for (const r of rows) {
         const old = JSON.parse(r.data) as Notification;
         const n: Notification = { ...old, readAt: now, version: old.version + 1, updatedAt: now };
-        this.save(n, r.replace_key, r.token_id);
+        this.save(n, r.token_id);
         events.push({ type: "notification.updated", notification: n, alert: false, reason: "read" });
       }
       this.emit(actor.userId, events, events.slice(0, MAX_BULK_PUSH));
@@ -628,20 +554,16 @@ export class InboxDO extends DurableObject<Env> {
   async resolve(actor: Actor, id: string): Promise<RpcResult<Notification>> {
     return guard(() => {
       const rec = this.mustLoad(id);
-      if (rec.n.status !== "resolved") this.consume("update", actor.userId);
-      return this.resolveLoaded(actor, rec);
+      if (rec.n.status === "resolved") return rec.n;
+      this.consume("update", actor.userId);
+      const now = new Date().toISOString();
+      const resolved: Notification = { ...rec.n, version: rec.n.version + 1, updatedAt: now, status: "resolved", resolvedAt: now };
+      const n = resolved.intent === "ask" ? withdrawIfOpen(resolved) : resolved;
+      this.save(n, rec.tokenId);
+      this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
+      this.wake(n.id); // a withdrawn ask ends its waits
+      return n;
     });
-  }
-
-  private resolveLoaded(actor: Actor, rec: Loaded, patch?: UpdateNotificationInput): Notification {
-    if (rec.n.status === "resolved" && !patch) return rec.n;
-    const now = new Date().toISOString();
-    const base = patch ? applyPatch(rec.n, patch, now) : { ...rec.n, version: rec.n.version + 1, updatedAt: now };
-    const n = inferIntent({ ...base, status: "resolved", resolvedAt: rec.n.resolvedAt ?? now });
-    this.save(n, rec.replaceKey, rec.tokenId);
-    this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
-    this.wake(n.id); // a withdrawn ask ends its waits
-    return n;
   }
 
   /**
@@ -668,7 +590,7 @@ export class InboxDO extends DurableObject<Env> {
         status: "resolved",
         resolvedAt: now,
       };
-      this.save(n, active?.replaceKey ?? null, actor.tokenId ?? active?.tokenId ?? null);
+      this.save(n, actor.tokenId ?? active?.tokenId ?? null);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "resolved" }]);
       if (!active) this.ensurePrune();
       return n;
@@ -702,7 +624,6 @@ export class InboxDO extends DurableObject<Env> {
       if (q.intent) (where.push("intent = ?"), params.push(q.intent));
       if (q.severity) (where.push("severity = ?"), params.push(q.severity));
       if (q.status) (where.push("status = ?"), params.push(q.status));
-      if (q.threadId) (where.push("thread_id = ?"), params.push(q.threadId));
       if (q.q) (where.push("instr(search, ?) > 0"), params.push(q.q.toLowerCase()));
 
       const cursor = decodeCursor(q.cursor);
@@ -722,7 +643,7 @@ export class InboxDO extends DurableObject<Env> {
         }
         const rows = this.sql
           .exec<StoredRow>(
-            `SELECT data, seq, replace_key, token_id FROM notifications ${where.length ? "WHERE " + where.join(" AND ") : ""}
+            `SELECT data, seq, token_id FROM notifications ${where.length ? "WHERE " + where.join(" AND ") : ""}
              ORDER BY seq ASC LIMIT ?`,
             ...params,
             limit + 1,
@@ -738,7 +659,7 @@ export class InboxDO extends DurableObject<Env> {
       if (cursor && "b" in cursor) (where.push("id < ?"), params.push(cursor.b));
       const rows = this.sql
         .exec<StoredRow & { id: string }>(
-          `SELECT id, data, seq, replace_key, token_id FROM notifications ${where.length ? "WHERE " + where.join(" AND ") : ""}
+          `SELECT id, data, seq, token_id FROM notifications ${where.length ? "WHERE " + where.join(" AND ") : ""}
            ORDER BY id DESC LIMIT ?`,
           ...params,
           limit + 1,
@@ -772,22 +693,26 @@ export class InboxDO extends DurableObject<Env> {
   async waitForResponse(id: string, timeoutSeconds: number): Promise<RpcResult<McpWaitResult>> {
     return guard(() => {
       this.consume("read");
-      const current = waitResult(this.mustLoad(id).n, Date.now());
+      const asked = this.mustLoad(id).n;
+      if (asked.intent !== "ask") throw badRequest(`${id} is ${article(asked.intent)}, not an ask: only asks have answers`);
+      const current = waitResult(asked, Date.now());
       if (current.status !== "pending") return current;
       const ms = Math.max(1, Math.min(LIMITS.askWaitSeconds, timeoutSeconds)) * 1000;
+      const now = () => {
+        const latest = this.load(id)?.n;
+        return latest?.intent === "ask" ? waitResult(latest, Date.now()) : current;
+      };
       return new Promise<McpWaitResult>((resolve) => {
         const set = this.waiters.get(id) ?? new Set();
         this.waiters.set(id, set);
         const timer = setTimeout(() => {
           set.delete(fn);
           if (set.size === 0 && this.waiters.get(id) === set) this.waiters.delete(id);
-          const latest = this.load(id)?.n;
-          resolve(latest ? waitResult(latest, Date.now()) : current);
+          resolve(now());
         }, ms);
         const fn = () => {
           clearTimeout(timer);
-          const latest = this.load(id)?.n;
-          resolve(latest ? waitResult(latest, Date.now()) : current);
+          resolve(now());
         };
         set.add(fn);
       });
@@ -812,7 +737,7 @@ export class InboxDO extends DurableObject<Env> {
       this.consume(continues ? "update" : "send", actor.userId);
       const report = reportProgress(latest, input, { id: newId("ntf"), source, now: new Date().toISOString(), targets });
       const n = report.notification;
-      this.save(n, null, continues ? (row!.tokenId ?? actor.tokenId) : actor.tokenId);
+      this.save(n, continues ? (row!.tokenId ?? actor.tokenId) : actor.tokenId);
       if (continues) {
         this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: report.alert, reason: "update" }]);
       } else {
@@ -849,7 +774,7 @@ export class InboxDO extends DurableObject<Env> {
           this.trackStale(rec.n);
           continue;
         }
-        this.save(stopped, rec.replaceKey, rec.tokenId);
+        this.save(stopped, rec.tokenId);
         const ev: InboxEvent = { type: "notification.updated", notification: stopped, alert: true, reason: "update" };
         if (userId) this.emit(userId, [ev]);
         else this.broadcast(ev);
@@ -887,74 +812,10 @@ export class InboxDO extends DurableObject<Env> {
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
       const n = buildAsk(newId("ntf"), input, actor, new Date().toISOString(), targets);
-      this.save(n, null, actor.tokenId);
+      this.save(n, actor.tokenId);
       this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
       this.ensurePrune();
       return { outcome: "created", notification: n };
-    });
-  }
-
-  // ─── Templates (RPC) ──────────────────────────────────────────────────────
-
-  async listTemplates(): Promise<RpcResult<Template[]>> {
-    return guard(() => {
-      this.consume("read");
-      return this.sql
-        .exec<{ data: string }>("SELECT data FROM templates ORDER BY name")
-        .toArray()
-        .map((r) => JSON.parse(r.data) as Template);
-    });
-  }
-
-  async getTemplate(name: string): Promise<RpcResult<Template>> {
-    return guard(() => {
-      this.consume("read");
-      const t = this.getTemplateRow(name);
-      if (!t) throw notFound(`Template "${name}" not found`);
-      return t;
-    });
-  }
-
-  async upsertTemplate(name: string, input: UpsertTemplateInput): Promise<RpcResult<Template>> {
-    return guard(() => {
-      if (input.card.actions) assertUniqueActionIds(input.card.actions);
-      const existing = this.getTemplateRow(name);
-      if (!existing) {
-        const { count } = this.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM templates").one();
-        if (count >= LIMITS.maxTemplatesPerUser) {
-          throw conflict(`You can have at most ${LIMITS.maxTemplatesPerUser} templates: delete one first`);
-        }
-      }
-      const now = new Date().toISOString();
-      const t: Template = {
-        id: existing?.id ?? newId("tpl"),
-        name,
-        description: input.description ?? (existing && input.description === undefined ? existing.description : null),
-        card: input.card,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-      };
-      this.sql.exec(
-        "INSERT INTO templates (name, data) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET data = excluded.data",
-        name,
-        JSON.stringify(t),
-      );
-      return t;
-    });
-  }
-
-  async deleteTemplate(name: string): Promise<RpcResult<void>> {
-    return guard(() => {
-      const r = this.sql.exec("DELETE FROM templates WHERE name = ?", name);
-      if (r.rowsWritten === 0) throw notFound(`Template "${name}" not found`);
-    });
-  }
-
-  async previewTemplate(name: string, vars: Record<string, string | number | boolean>): Promise<RpcResult<TemplateCard & { template: string }>> {
-    return guard(() => {
-      const t = this.getTemplateRow(name);
-      if (!t) throw notFound(`Template "${name}" not found`);
-      return { ...renderTemplateValue(t.card, vars), template: name };
     });
   }
 
@@ -1141,7 +1002,7 @@ export class InboxDO extends DurableObject<Env> {
         this.trackExpiry(rec.n);
         continue;
       }
-      this.save(n, rec.replaceKey, rec.tokenId);
+      this.save(n, rec.tokenId);
       events.push({ type: "notification.updated", notification: n, alert: false, reason: "resolved" });
       this.wake(id);
     }

@@ -116,7 +116,7 @@ describe("applyEventsToPages", () => {
 
 describe("matchesFilters", () => {
   // inform-full: alertmanager, critical, "Disk 95% full on db-1", rows Host: db-1 / Used: 95%.
-  const n = { ...(fixtures["inform-full"] as unknown as Notification), tags: ["prod"], threadId: "t1" };
+  const n = fixtures["inform-full"] as unknown as Notification;
   it("matches every filter dimension", () => {
     expect(matchesFilters(n, {})).toBe(true);
     expect(matchesFilters(n, { source: "alertmanager", severity: "critical", status: "active" })).toBe(true);
@@ -124,13 +124,17 @@ describe("matchesFilters", () => {
     expect(matchesFilters(n, { severity: "info" })).toBe(false);
     expect(matchesFilters(n, { status: "resolved" })).toBe(false);
   });
-  it("searches title, body, source and an inform's rows case-insensitively, not tags", () => {
+  it("searches title, body, source and an inform's rows case-insensitively", () => {
     expect(matchesFilters(n, { q: "DISK 95" })).toBe(true);
     expect(matchesFilters(n, { q: "/var" })).toBe(true);
     expect(matchesFilters(n, { q: "alertman" })).toBe(true);
     expect(matchesFilters(n, { q: "host db-1" })).toBe(true);
     expect(matchesFilters(n, { q: "prod" })).toBe(false);
     expect(matchesFilters(n, { q: "nope" })).toBe(false);
+  });
+  it("searches an ask's answer buttons and a progress's label, like the server", () => {
+    expect(matchesFilters(fixtures["ask-open"] as unknown as Notification, { q: "reject" })).toBe(true);
+    expect(matchesFilters(fixtures["progress-running"] as unknown as Notification, { q: "3/7 checks" })).toBe(true);
   });
 });
 

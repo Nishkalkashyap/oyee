@@ -77,8 +77,6 @@ describe("stopped reporting", () => {
         severity: "warning",
         status: "active",
         readAt: null,
-        // older app builds read the flat `silent`: this one should sound
-        silent: false,
         progress: { value: 40, max: 100, state: "stopped" },
       },
     });
@@ -112,7 +110,6 @@ describe("stopped reporting", () => {
       notification: {
         id: r.id,
         severity: "info",
-        silent: true,
         // the sender's label survived the stop
         progress: { value: 3, max: 7, label: "3/7 checks", state: "running" },
       },
@@ -207,7 +204,7 @@ describe("stopped reporting", () => {
     const stop = await eventually(() => sent.find((m) => m.data.alert === "true"));
     expect(stop.data).toMatchObject({ type: "notification.updated", id: r.id });
     expect(stop.android.priority).toBe("HIGH");
-    expect(JSON.parse(stop.data.notification!)).toMatchObject({ silent: false, progress: { state: "stopped" } });
+    expect(JSON.parse(stop.data.notification!)).toMatchObject({ progress: { state: "stopped" } });
     ws.close();
   });
 

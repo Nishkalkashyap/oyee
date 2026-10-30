@@ -1,11 +1,10 @@
-import type { IntentNotification } from "@oyee/schema";
+import type { Notification } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
 import { inboxSections } from "../lib/inbox";
-import { progressView, usesProgressCard } from "../lib/progress";
-import { makeNotification } from "./fixtures";
+import { progressView } from "../lib/progress";
 
-type ProgressFixture = Extract<IntentNotification, { intent: "progress" }>;
+type ProgressFixture = Extract<Notification, { intent: "progress" }>;
 const fx = (name: keyof typeof fixtures) => fixtures[name] as unknown as ProgressFixture;
 
 describe("progressView (shared v2 fixtures)", () => {
@@ -59,30 +58,10 @@ describe("progressView (shared v2 fixtures)", () => {
   });
 });
 
-describe("usesProgressCard", () => {
-  it("draws progress sent with the progress tool as a progress card", () => {
-    const n = makeNotification({ id: "ntf_p", progress: { value: 2, max: 5, indeterminate: false } });
-    expect(n.intent).toBe("progress");
-    expect(usesProgressCard(n)).toBe(true);
-  });
-
-  it("keeps the generic card for informs, asks and flat progress cards with parts a progress card has no room for", () => {
-    const bar = { value: 2, max: 5, indeterminate: false };
-    expect(usesProgressCard(makeNotification({ id: "ntf_i" }))).toBe(false);
-    expect(usesProgressCard(makeNotification({ id: "ntf_f", progress: bar, fields: [{ label: "Env", value: "prod" }] }))).toBe(false);
-    expect(
-      usesProgressCard(makeNotification({ id: "ntf_l", progress: bar, actions: [{ id: "log", label: "Log", url: "https://ci.example.com", style: "default", resolves: false }] })),
-    ).toBe(false);
-    expect(usesProgressCard(makeNotification({ id: "ntf_x", progress: { value: 0, max: 100, indeterminate: true } }))).toBe(false);
-  });
-});
-
 describe("inbox section of a progress", () => {
   it("a failed progress has ended, so it isn't In progress even though its bar isn't full", () => {
-    const failed = makeNotification({ id: "ntf_x", progress: { value: 4, max: 7, indeterminate: false, state: "failed" } as never });
-    expect(failed.intent === "progress" && failed.progress.state).toBe("failed");
-    expect(inboxSections([failed])[0]!.id).toBe("updates");
-    expect(inboxSections([makeNotification({ id: "ntf_r", progress: { value: 4, max: 7, indeterminate: false } })])[0]!.id).toBe("in-progress");
+    expect(inboxSections([fx("progress-failed")])[0]!.id).toBe("updates");
+    expect(inboxSections([fx("progress-running")])[0]!.id).toBe("in-progress");
   });
 });
 

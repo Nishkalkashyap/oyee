@@ -14,23 +14,34 @@ export const ASK_REJECTED =
   'intent: "ask" is for agents over MCP, which poll for the answer with wait_for_response. ' +
   'Webhooks and REST send "inform" (the default) or "progress".';
 
+/**
+ * Protocol v1 card fields that no intent has, with what to send instead. A body (or query parameter) using one is
+ * rejected rather than silently ignored: dropping `replaceKey` would turn updates into duplicates, dropping `actions`
+ * would lose buttons the sender expects.
+ */
+export const REMOVED_FIELDS: Record<string, string> = {
+  replaceKey: "replaceKey is no longer supported: use key (a later send with the same key updates the notification)",
+  template: "template is no longer supported: send the fields themselves (title, body, severity…)",
+  vars: "vars (templates) is no longer supported: send the fields themselves (title, body, severity…)",
+  actions:
+    'actions is no longer supported: use links ([{"label", "url"}], up to 3) for link buttons; questions with answer ' +
+    "buttons are asks, which agents send over MCP",
+  reply: "reply is no longer supported: questions that take a typed answer are asks, which agents send over MCP",
+  progress: 'progress is no longer a card field: send {"intent": "progress", "key", "title", "value", "max"}',
+  threadId: "threadId is no longer supported: use key to update one notification, or source to group them",
+  tags: "tags are no longer supported: use source to group notifications, or fields for structured facts",
+  silent: "silent is no longer supported: every severity alerts (the receiver decides what to mute)",
+};
+
 /** Validates a send body: `intent` defaults to inform; ask is rejected with a message saying where it belongs. */
 export function parseIntentSend(body: unknown): IntentSendInput {
   if (!isObj(body)) return parseOrThrow(IntentSendInput, body);
   const intent = body.intent ?? "inform";
   if (intent === "ask") throw badRequest(ASK_REJECTED);
   if (intent !== "inform" && intent !== "progress") throw badRequest('intent: expected "inform" or "progress"');
+  for (const [field, message] of Object.entries(REMOVED_FIELDS)) if (body[field] !== undefined) throw badRequest(message);
+  if (body.severity === "debug") throw badRequest('severity: "debug" is no longer supported: use "info" (every severity alerts)');
   return parseOrThrow(IntentSendInput, { ...body, intent });
-}
-
-/**
- * Protocol v1 card fields that no intent has. A body without `intent` that uses any of them still takes the flat send
- * path until the flat card is removed (ticket 15); everything else is an intent.
- */
-const FLAT_ONLY = ["actions", "reply", "progress", "template", "vars", "tags", "threadId", "silent", "replaceKey"];
-
-export function isFlatCard(body: unknown): boolean {
-  return isObj(body) && body.intent === undefined && FLAT_ONLY.some((k) => body[k] !== undefined);
 }
 
 export type IntentSent = IntentSendResult & { notification: Notification };

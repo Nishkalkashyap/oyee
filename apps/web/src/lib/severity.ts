@@ -1,6 +1,6 @@
 import type { Severity } from "@oyee/schema";
 
-export const SEVERITIES: Severity[] = ["critical", "warning", "success", "info", "debug"];
+export const SEVERITIES: Severity[] = ["critical", "warning", "success", "info"];
 
 export interface SeverityStyle {
   label: string;
@@ -55,14 +55,5 @@ export const SEVERITY_STYLES: Record<Severity, SeverityStyle> = {
     border: "border-l-blue-500",
     bar: "bg-blue-500",
     ring: "ring-blue-500/40",
-  },
-  debug: {
-    label: "Debug",
-    dot: "bg-zinc-400",
-    text: "text-zinc-500 dark:text-zinc-400",
-    soft: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
-    border: "border-l-zinc-400",
-    bar: "bg-zinc-400",
-    ring: "ring-zinc-400/40",
   },
 };

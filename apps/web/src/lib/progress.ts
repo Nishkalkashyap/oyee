@@ -1,4 +1,4 @@
-import { stoppedReportingLabel, type IntentNotification, type Notification, type ProgressState } from "@oyee/schema";
+import { stoppedReportingLabel, type Notification, type ProgressState } from "@oyee/schema";
 import { progressLabel, progressPercent } from "./format";
 
 /** What the progress card and rows show for a progress notification. */
@@ -16,18 +16,9 @@ export interface ProgressView {
 
 const TONE: Record<ProgressState, ProgressView["tone"]> = { running: "ink", done: "success", failed: "warning", stopped: "muted" };
 
-export function progressView(n: Pick<Extract<IntentNotification, { intent: "progress" }>, "progress">): ProgressView {
+export function progressView(n: Pick<Extract<Notification, { intent: "progress" }>, "progress">): ProgressView {
   const p = n.progress;
   const amount = progressLabel(p);
   const stateLabel = { running: "Running", done: "Done", failed: "Failed", stopped: stoppedReportingLabel(p) }[p.state];
   return { state: p.state, stateLabel, amount, percent: progressPercent(p), tone: TONE[p.state] };
-}
-
-/**
- * Whether the inbox draws this notification with the progress card. During the expand phase older flat senders can
- * still put fields, buttons, an image or an indeterminate bar on a card inferred as progress; those keep the generic
- * card until the flat card is removed, so nothing they sent disappears.
- */
-export function usesProgressCard(n: Notification): n is Extract<Notification, { intent: "progress" }> {
-  return n.intent === "progress" && !n.progress.indeterminate && !n.fields.length && !n.actions.length && !n.image && !n.reply;
 }

@@ -142,16 +142,6 @@ export function CreateTokenDialog({ kind, onClose }: { kind: TokenKind | null; o
             </span>
           </div>
           <CopyField value={result.url} />
-          {result.callbackSecret && (
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">Callback signing secret</div>
-              <CopyField value={result.callbackSecret} />
-              <p className="mt-1.5 text-xs text-zinc-500">
-                Used to verify <code>X-Oyee-Signature: sha256=&lt;hmac-sha256(body)&gt;</code> on action callback requests.
-                Also shown only once.
-              </p>
-            </div>
-          )}
           <SnippetTabs snippets={kind === "mcp" ? mcpSnippets(result.url) : webhookSnippets(result.url)} />
           <div className="flex justify-end">
             <Button variant="primary" onClick={close}>

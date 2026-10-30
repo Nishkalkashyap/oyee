@@ -46,7 +46,7 @@ describe("WebSocket", () => {
     const cookie = await devLogin();
     const dev = await pairDevice(cookie, "MacBook", "macos");
     const a = await call("POST", "/api/notifications", { cookie }, { title: "one" });
-    const b = await call("POST", "/api/notifications", { cookie }, { title: "two" });
+    const b = await call("POST", "/api/notifications", { cookie }, { title: "two", key: "two" });
     await call("POST", `/api/notifications/${a.body.id}/resolve`, { cookie });
 
     const { ws, messages, next } = await connect({}, `?token=${dev.token}`);
@@ -63,7 +63,7 @@ describe("WebSocket", () => {
 
     // cursor → changes since then, including deletions
     const from = messages.length;
-    await call("PATCH", `/api/notifications/${b.body.id}`, { cookie }, { title: "two (edited)", alert: true });
+    await call("POST", "/api/notifications", { cookie }, { title: "two (edited)", key: "two" });
     await call("DELETE", `/api/notifications/${a.body.id}`, { cookie });
     expect((await next("notification.updated", from)).alert).toBe(true);
     ws.send(JSON.stringify({ type: "sync", since: first.cursor }));

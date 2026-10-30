@@ -47,21 +47,17 @@ export function mcpSnippets(url: string): Snippet[] {
 }
 
 export function webhookSnippets(url: string): Snippet[] {
-  const jsonBody = {
-    title: "Deploy prod-api",
-    body: "Rolling out **v1.4.2** to `prod`",
-    severity: "info",
-    threadId: "deploy-142",
-    replaceKey: "deploy-142",
-    progress: { value: 3, max: 7, label: "3/7 pods" },
+  const informBody = {
+    title: "Disk 95% full on db-1",
+    body: "Free space is **below 5%**.",
+    severity: "warning",
+    key: "disk/db-1",
+    cooldown: "15m",
     fields: [
-      { label: "Region", value: "us-east-1" },
-      { label: "Commit", value: "a1b2c3d" },
+      { label: "Host", value: "db-1" },
+      { label: "Used", value: "95%" },
     ],
-    actions: [
-      { id: "rollback", label: "Roll back", style: "destructive" },
-      { id: "logs", label: "Open logs", url: "https://example.com/logs" },
-    ],
+    links: [{ label: "Dashboard", url: "https://grafana.example.com/d/disk" }],
   };
 
   return [
@@ -73,37 +69,36 @@ export function webhookSnippets(url: string): Snippet[] {
       code: [
         `curl -d "Backup finished in 4m12s" ${shellQuote(withQuery(url, { title: "Backup", severity: "success" }))}`,
         "",
-        "# or with headers (Priority 1-5 maps to debug…critical)",
-        `curl -H "Title: Disk almost full" -H "Priority: 4" -H "Tags: nas,storage" \\`,
+        "# or with headers (Priority 1-3 is info, 4 warning, 5 critical)",
+        `curl -H "Title: Disk almost full" -H "Priority: 4" \\`,
         `  -d "/volume1 is at 92%" ${shellQuote(url)}`,
       ].join("\n"),
     },
     {
       id: "curl-json",
-      title: "curl: JSON card",
+      title: "curl: JSON inform",
       language: "bash",
       description:
-        "Full card: fields, progress and actions. Sending again with the same replaceKey updates the active notification in place.",
-      code: `curl -X POST ${shellQuote(url)} \\\n  -H "Content-Type: application/json" \\\n  -d ${shellQuote(JSON.stringify(jsonBody, null, 2))}`,
+        "Rows and link buttons. Sending again with the same key updates that notification in place; cooldown keeps a repeat from alerting again within 15 minutes.",
+      code: `curl -X POST ${shellQuote(url)} \\\n  -H "Content-Type: application/json" \\\n  -d ${shellQuote(JSON.stringify(informBody, null, 2))}`,
     },
     {
       id: "curl-query",
       title: "curl: query params (GET)",
       language: "bash",
       description: "Everything in the URL, for tools that can only call a link.",
-      code: `curl ${shellQuote(
-        withQuery(url, { title: "Hello from curl", body: "It works!", severity: "warning", tags: "test,cli" }),
-      )}`,
+      code: `curl ${shellQuote(withQuery(url, { title: "Hello from curl", body: "It works!", severity: "warning", key: "hello" }))}`,
     },
     {
       id: "curl-progress",
       title: "curl: live progress",
       language: "bash",
-      description: "A loop that updates one notification in place with replaceKey.",
+      description: "Reports one progress under its key, quietly; status done finishes it and alerts once.",
       code: [
         "for i in 1 2 3 4 5; do",
+        `  status=running; [ $i = 5 ] && status=done`,
         `  curl -s -X POST ${shellQuote(url)} -H "Content-Type: application/json" \\`,
-        `    -d "{\\"title\\":\\"Nightly job\\",\\"replaceKey\\":\\"nightly\\",\\"progress\\":{\\"value\\":$i,\\"max\\":5}}"`,
+        `    -d "{\\"intent\\":\\"progress\\",\\"key\\":\\"nightly\\",\\"title\\":\\"Nightly job\\",\\"value\\":$i,\\"max\\":5,\\"status\\":\\"$status\\"}"`,
         "  sleep 2",
         "done",
       ].join("\n"),

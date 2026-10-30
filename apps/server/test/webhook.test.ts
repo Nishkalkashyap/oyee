@@ -170,7 +170,16 @@ describe("webhook: text and GET", () => {
     expect((await call("GET", `/hook/${secret}?intent=progress&key=backup&value=lots`, null)).body.error.message).toMatch(/value/);
   });
 
-  it("rejects ?intent=ask and the removed replaceKey and template parameters", async () => {
+  it("rejects protocol v1 card fields in JSON bodies instead of dropping them", async () => {
+    const { secret } = await setup();
+    const actions = await call("POST", `/hook/${secret}`, null, { title: "Scale?", actions: [{ id: "ok", label: "OK" }] });
+    expect(actions.status).toBe(400);
+    expect(actions.body.error.message).toMatch(/use links/);
+    const rk = await call("POST", `/hook/${secret}`, null, { title: "x", replaceKey: "a" });
+    expect(rk.body.error.message).toMatch(/use key/);
+  });
+
+  it("rejects ?intent=ask and the removed replaceKey, template and threadId parameters", async () => {
     const { secret } = await setup();
     const ask = await call("GET", `/hook/${secret}?intent=ask&title=Deploy%3F`, null);
     expect(ask.status).toBe(400);
@@ -179,6 +188,7 @@ describe("webhook: text and GET", () => {
     expect(rk.status).toBe(400);
     expect(rk.body.error.message).toMatch(/use key/);
     expect((await call("GET", `/hook/${secret}?template=t`, null)).status).toBe(400);
+    expect((await call("GET", `/hook/${secret}?title=x&threadId=t`, null)).status).toBe(400);
   });
 
   it("rate limits per token", async () => {

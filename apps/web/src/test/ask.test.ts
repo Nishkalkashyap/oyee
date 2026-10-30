@@ -1,12 +1,11 @@
-import { IntentNotification } from "@oyee/schema";
+import { Notification } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
-import { askView, showsAsAsk, type AskLike } from "../lib/ask";
-import { makeNotification } from "./fixtures";
+import { askView, type AskLike } from "../lib/ask";
 
 /** A shared protocol v2 fixture (packages/schema/fixtures), decoded the way the web reads the wire. */
 function fixture(name: keyof typeof fixtures): AskLike {
-  const n = IntentNotification.parse(fixtures[name]);
+  const n = Notification.parse(fixtures[name]);
   if (n.intent !== "ask") throw new Error(`${name} is not an ask`);
   return n;
 }
@@ -29,6 +28,11 @@ describe("ask card view", () => {
       expiry: "Expires in 48m",
       note: null,
     });
+  });
+
+  it("an ask that takes text without a placeholder shows the app's own", () => {
+    const v = askView(fixture("ask-open-text-no-placeholder"), at("2026-10-30T09:12:00.000Z"));
+    expect(v).toMatchObject({ open: true, options: [], reply: { placeholder: "Reply…" } });
   });
 
   it("a fresh ask is just asked", () => {
@@ -97,26 +101,5 @@ describe("ask card view", () => {
       status: "Expired",
       expiry: null,
     });
-  });
-});
-
-describe("which notifications get the ask card", () => {
-  const question = { id: "q", actions: [{ id: "option_1", label: "Yes", style: "primary" as const, resolves: true }] };
-
-  it("asks do", () => {
-    expect(showsAsAsk(makeNotification(question))).toBe(true);
-    expect(showsAsAsk(makeNotification({ id: "r", reply: { placeholder: "Why?" } }))).toBe(true);
-  });
-
-  it("other intents don't", () => {
-    expect(showsAsAsk(makeNotification({ id: "i" }))).toBe(false);
-  });
-
-  it("v1 cards inferred as asks keep the full card while they carry what the ask card can't show", () => {
-    expect(showsAsAsk(makeNotification({ ...question, progress: { value: 2, max: 7, indeterminate: false } }))).toBe(false);
-    expect(showsAsAsk(makeNotification({ ...question, fields: [{ label: "Env", value: "prod" }] }))).toBe(false);
-    expect(showsAsAsk(makeNotification({ ...question, image: "https://example.com/chart.png" }))).toBe(false);
-    const link = { id: "log", label: "Log", style: "default" as const, url: "https://ci.example.com", resolves: false };
-    expect(showsAsAsk(makeNotification({ ...question, actions: [...question.actions, link] }))).toBe(false);
   });
 });

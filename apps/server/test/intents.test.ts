@@ -1,12 +1,19 @@
-/** Every notification carries its intent (expand step): flat sends get an inferred intent block. */
+/** Every notification is one intent (protocol v2): what each sender produces, and how stored rows are converted. */
 import { Notification, type ServerMessage } from "@oyee/schema";
 import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { encodeCursor, type InboxDO } from "../src/inbox/do";
 import { BASE, call, createToken, devLogin, eventually, pairDevice } from "./helpers";
 
-describe("intent of flat sends", () => {
-  it("a plain card from the web composer is an inform", async () => {
+/** The keys of a v2 notification of this intent: shared fields plus its one block, nothing from the flat card. */
+const v2Keys = (intent: string) =>
+  [
+    "id", "intent", "source", "key", "title", "body", "severity", "status", "url", "version", "createdAt", "updatedAt",
+    "readAt", "resolvedAt", "targetDeviceIds", intent,
+  ].sort();
+
+describe("intent of REST and webhook sends", () => {
+  it("a plain body from the web composer is an inform", async () => {
     const cookie = await devLogin();
     const r = await call<{ notification: Notification }>("POST", "/api/notifications", { cookie }, { title: "Backup done" });
     expect(r.status).toBe(201);
@@ -16,36 +23,8 @@ describe("intent of flat sends", () => {
       title: "Backup done",
       inform: { links: [], fields: [], image: null, icon: null, cooldown: null },
     });
+    expect(Object.keys(r.body.notification).sort()).toEqual(v2Keys("inform"));
     expect(Notification.safeParse(r.body.notification).error).toBeUndefined();
-  });
-});
-
-describe("intent of webhook sends", () => {
-  it("link actions become links and replaceKey becomes the key", async () => {
-    const cookie = await devLogin();
-    const hook = new URL((await createToken(cookie, "webhook", "CI", "ci")).url).pathname;
-    const sent = await call("POST", hook, null, {
-      title: "Deploy finished",
-      replaceKey: "deploy-prod",
-      icon: "🚀",
-      fields: [{ label: "Env", value: "prod" }],
-      actions: [{ id: "log", label: "Build log", url: "https://ci.example.com/42" }],
-    });
-    expect(sent.status).toBe(200);
-    const n = (await call<Notification>("GET", `/api/notifications/${sent.body.id}`, { cookie })).body;
-    expect(n).toMatchObject({
-      intent: "inform",
-      key: "deploy-prod",
-      source: "ci",
-      inform: {
-        links: [{ label: "Build log", url: "https://ci.example.com/42" }],
-        fields: [{ label: "Env", value: "prod" }],
-        icon: "🚀",
-        cooldown: null,
-      },
-      // the flat card is still there for older app builds
-      actions: [{ id: "log", label: "Build log", url: "https://ci.example.com/42" }],
-    });
   });
 
   it("a plain-text body with ntfy headers is an inform", async () => {
@@ -94,11 +73,12 @@ describe("intent of MCP sends", () => {
       intent: "ask",
       ask: { options: ["Approve", "Reject"], allowText: false, replyPlaceholder: null, answer: null, state: "open" },
     });
+    expect(Object.keys(asked).sort()).toEqual(v2Keys("ask"));
     if (asked.intent !== "ask") throw new Error("not an ask");
     expect(Date.parse(asked.ask.expiresAt) - Date.parse(asked.createdAt)).toBe(3_600_000);
 
     const phone = await pairDevice(cookie, "Pixel 9");
-    await call("POST", `/api/notifications/${id}/respond`, { bearer: phone.token }, { actionId: "option_1" });
+    await call("POST", `/api/notifications/${id}/respond`, { bearer: phone.token }, { option: "Approve" });
     const update = await eventually(() =>
       messages.find((m) => m.type === "notification.updated" && m.reason === "responded"),
     );
@@ -138,40 +118,7 @@ describe("intent of MCP sends", () => {
   });
 });
 
-describe("intent of flat REST sends", () => {
-  it("a card with progress is a running progress, done at max", async () => {
-    const cookie = await devLogin();
-    const sent = (
-      await call<any>("POST", "/api/notifications", { cookie }, {
-        title: "Build",
-        replaceKey: "build-42",
-        progress: { value: 2, max: 7, label: "2/7 checks" },
-      })
-    ).body;
-    expect(sent).toMatchObject({
-      intent: "progress",
-      key: "build-42",
-      progress: { value: 2, max: 7, label: "2/7 checks", state: "running", staleAfter: "30m", lastReportAt: sent.createdAt },
-    });
-    const done = (await call<any>("PATCH", `/api/notifications/${sent.id}`, { cookie }, { progress: { value: 7, max: 7 } })).body;
-    expect(done).toMatchObject({ intent: "progress", key: "build-42", progress: { value: 7, state: "done" } });
-    expect(done.progress.lastReportAt).toBe(done.updatedAt);
-  });
-
-  it("a card with answer buttons and a progress bar is an ask", async () => {
-    const cookie = await devLogin();
-    const sent = (
-      await call<any>("POST", "/api/notifications", { cookie }, {
-        title: "Canary at 40%",
-        progress: { value: 40 },
-        actions: [{ id: "abort", label: "Abort", resolves: true }],
-      })
-    ).body;
-    expect(sent).toMatchObject({ intent: "ask", ask: { options: ["Abort"], state: "open" }, progress: { value: 40 } });
-  });
-});
-
-// ─── Notifications stored before intents existed ────────────────────────────
+// ─── Notifications stored before protocol v2 ───────────────────────────────
 
 const T0 = "2026-10-01T10:00:00.000Z";
 const T1 = "2026-10-01T10:05:00.000Z";
@@ -206,7 +153,9 @@ function legacyCard(id: string, over: Record<string, unknown>) {
   };
 }
 
-const LEGACY_ROWS: [card: ReturnType<typeof legacyCard>, replaceKey: string | null][] = [
+type StoredRow = [data: Record<string, unknown>, replaceKey: string | null];
+
+const LEGACY_ROWS: StoredRow[] = [
   [
     legacyCard("ntf_01LEGACYINFORM00000000000", {
       severity: "debug",
@@ -236,52 +185,95 @@ const LEGACY_ROWS: [card: ReturnType<typeof legacyCard>, replaceKey: string | nu
   ],
 ];
 
-/** Recreates the user's inbox table as it was before intents, with LEGACY_ROWS in it, then restarts the inbox. */
-async function seedLegacyInbox(userId: string) {
+/** Rows stored while both protocols overlapped (storage schema 1): the intent block next to the flat card. */
+const OVERLAP_ROWS: StoredRow[] = [
+  [
+    legacyCard("ntf_01OVERLAPDEBUG000000000", {
+      intent: "inform",
+      key: "noisy",
+      severity: "debug",
+      inform: { links: [], fields: [], image: null, icon: null, cooldown: null },
+    }),
+    "noisy",
+  ],
+  [
+    legacyCard("ntf_01OVERLAPPROGRESS000000", {
+      intent: "progress",
+      key: "import",
+      silent: true,
+      progress: { value: 3, max: 7, state: "running", staleAfter: "30m", lastReportAt: T1, indeterminate: false },
+    }),
+    null,
+  ],
+];
+
+/**
+ * Recreates the user's inbox table as storage schema `schema` left it (0: before intents, 1: intents next to the flat
+ * card) with `rows` in it, then restarts the inbox so it migrates.
+ */
+async function seedOldInbox(userId: string, schema: 0 | 1, rows: StoredRow[]) {
   const id = env.INBOX.idFromName(userId);
   await runInDurableObject(env.INBOX.get(id), (_inst: InboxDO, state) => {
     const sql = state.storage.sql;
-    sql.exec("DELETE FROM meta WHERE key = 'schema'");
-    sql.exec("UPDATE meta SET value = ? WHERE key = 'seq'", LEGACY_ROWS.length);
+    if (schema === 0) sql.exec("DELETE FROM meta WHERE key = 'schema'");
+    else sql.exec("INSERT INTO meta (key, value) VALUES ('schema', 1) ON CONFLICT(key) DO UPDATE SET value = 1");
+    sql.exec("UPDATE meta SET value = ? WHERE key = 'seq'", rows.length);
     sql.exec("DROP TABLE notifications");
     sql.exec(`CREATE TABLE notifications (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL, source TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, thread_id TEXT,
-      replace_key TEXT, read_at TEXT, token_id TEXT, search TEXT NOT NULL, data TEXT NOT NULL)`);
-    LEGACY_ROWS.forEach(([n, replaceKey], i) => {
+      replace_key TEXT, read_at TEXT, token_id TEXT, search TEXT NOT NULL, data TEXT NOT NULL
+      ${schema === 1 ? ", intent TEXT, key TEXT, alerted_at TEXT" : ""})`);
+    sql.exec("CREATE INDEX ntf_thread ON notifications(thread_id, id)");
+    sql.exec("CREATE INDEX ntf_replace ON notifications(replace_key, status)");
+    sql.exec("CREATE TABLE IF NOT EXISTS templates (name TEXT PRIMARY KEY, data TEXT NOT NULL)");
+    rows.forEach(([n, replaceKey], i) => {
       sql.exec(
         `INSERT INTO notifications (id, seq, created_at, updated_at, source, severity, status, thread_id, replace_key,
            read_at, token_id, search, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, '', ?)`,
-        n.id,
+        n.id as string,
         i + 1,
-        n.createdAt,
-        n.updatedAt,
-        n.source,
-        n.severity,
-        n.status,
-        n.threadId,
+        n.createdAt as string,
+        n.updatedAt as string,
+        n.source as string,
+        n.severity as string,
+        n.status as string,
+        n.threadId as string,
         replaceKey,
         JSON.stringify(n),
       );
+      if (schema === 1) sql.exec("UPDATE notifications SET intent = ?, key = ? WHERE id = ?", n.intent as string, n.key as string, n.id as string);
     });
   });
   await runInDurableObject(env.INBOX.get(id), (_inst: InboxDO, state) => state.abort("restart")).catch(() => undefined);
 }
 
-describe("notifications stored before intents", () => {
-  it("are converted once to the intent they most resemble", async () => {
+async function inboxTables(userId: string) {
+  return runInDurableObject(env.INBOX.get(env.INBOX.idFromName(userId)), (_inst: InboxDO, state) => ({
+    tables: state.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map((r) => r.name),
+    columns: state.storage.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray().map((r) => r.name),
+  }));
+}
+
+describe("notifications stored before protocol v2", () => {
+  it("flat cards become the intent they most resemble, with nothing of the flat card left", async () => {
     const cookie = await devLogin();
     const me = (await call("GET", "/api/me", { cookie })).body;
-    await seedLegacyInbox(me.id);
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
 
     const list = await call<{ items: Notification[] }>("GET", "/api/notifications", { cookie });
     expect(list.status).toBe(200);
     const byId = new Map(list.body.items.map((n) => [n.id, n]));
     expect(byId.size).toBe(LEGACY_ROWS.length);
-    for (const n of list.body.items) expect(Notification.safeParse(n).error).toBeUndefined();
+    for (const n of list.body.items) {
+      expect(Notification.safeParse(n).error).toBeUndefined();
+      expect(Object.keys(n).sort(), n.id).toEqual(v2Keys(n.intent));
+    }
 
     expect(byId.get("ntf_01LEGACYINFORM00000000000")).toMatchObject({
       intent: "inform",
       key: "deploy",
+      severity: "info", // debug is gone
+      version: 2,
       inform: {
         links: [{ label: "Open PR", url: "https://github.com/o/r/pull/1" }],
         fields: [{ label: "Env", value: "prod" }],
@@ -289,11 +281,6 @@ describe("notifications stored before intents", () => {
         icon: "🚀",
         cooldown: null,
       },
-      // flat fields untouched for older app builds
-      severity: "debug",
-      tags: ["old"],
-      threadId: "t-1",
-      version: 2,
     });
     expect(byId.get("ntf_01LEGACYANSWERED000000000")).toMatchObject({
       intent: "ask",
@@ -314,16 +301,54 @@ describe("notifications stored before intents", () => {
       key: "build",
       progress: { value: 5, max: 5, state: "done", lastReportAt: T1 },
     });
-    expect(byId.get("ntf_01LEGACYPROGRESSHALF00000")).toMatchObject({
-      intent: "progress",
-      progress: { value: 2, max: 5, label: "2/5", state: "stopped", staleAfter: "30m", lastReportAt: T1 },
-    });
+    expect(byId.get("ntf_01LEGACYPROGRESSHALF00000")).toEqual(
+      expect.objectContaining({
+        intent: "progress",
+        progress: { value: 2, max: 5, label: "2/5", state: "stopped", staleAfter: "30m", lastReportAt: T1 },
+      }),
+    );
+
+    // Severity filters and search read the converted rows; thread, replace-key and template storage is gone.
+    const info = await call<{ items: Notification[] }>("GET", "/api/notifications?severity=info", { cookie });
+    expect(info.body.items.map((n) => n.id)).toContain("ntf_01LEGACYINFORM00000000000");
+    const q = await call<{ items: Notification[] }>("GET", "/api/notifications?q=env", { cookie });
+    expect(q.body.items.map((n) => n.id)).toEqual(["ntf_01LEGACYINFORM00000000000"]);
+    const { tables, columns } = await inboxTables(me.id);
+    expect(tables).not.toContain("templates");
+    expect(columns).not.toContain("thread_id");
+    expect(columns).not.toContain("replace_key");
+  });
+
+  it("rows from the overlap lose their flat fields and debug; only changed ones are synced again", async () => {
+    const cookie = await devLogin();
+    const me = (await call("GET", "/api/me", { cookie })).body;
+    await seedOldInbox(me.id, 1, OVERLAP_ROWS);
+
+    const list = (await call<{ items: Notification[] }>("GET", "/api/notifications", { cookie })).body.items;
+    for (const n of list) expect(Object.keys(n).sort(), n.id).toEqual(v2Keys(n.intent));
+    expect(list.find((n) => n.id === "ntf_01OVERLAPDEBUG000000000")).toMatchObject({ intent: "inform", key: "noisy", severity: "info" });
+    expect(list.find((n) => n.id === "ntf_01OVERLAPPROGRESS000000")).toEqual(
+      expect.objectContaining({
+        intent: "progress",
+        progress: { value: 3, max: 7, state: "running", staleAfter: "30m", lastReportAt: T1 },
+      }),
+    );
+
+    // A client that had synced everything before the upgrade gets the row whose severity changed, not the other.
+    const cursor = encodeCursor({ s: OVERLAP_ROWS.length });
+    const sync = await call<{ items: Notification[] }>("GET", `/api/notifications?updatedSince=${cursor}`, { cookie });
+    expect(sync.body.items.map((n) => n.id)).toEqual(["ntf_01OVERLAPDEBUG000000000"]);
+
+    // Keys keep working on converted rows.
+    const hook = new URL((await createToken(cookie, "webhook", "Test", "claude-code")).url).pathname;
+    const again = await call("POST", hook, null, { title: "still noisy", key: "noisy" });
+    expect(again.body).toMatchObject({ id: "ntf_01OVERLAPDEBUG000000000", outcome: "alerted" });
   });
 
   it("are converted only once", async () => {
     const cookie = await devLogin();
     const me = (await call("GET", "/api/me", { cookie })).body;
-    await seedLegacyInbox(me.id);
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
     const first = (await call<{ items: Notification[] }>("GET", "/api/notifications", { cookie })).body.items;
 
     // The converted ask is expired, so an old app build can no longer answer it. Reading it, then restarting, must
@@ -349,7 +374,7 @@ describe("notifications stored before intents", () => {
   it("reach clients that synced before the upgrade", async () => {
     const cookie = await devLogin();
     const me = (await call("GET", "/api/me", { cookie })).body;
-    await seedLegacyInbox(me.id);
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
     // The client's cursor from before the upgrade: it had seen every legacy row.
     const cursor = encodeCursor({ s: LEGACY_ROWS.length });
     const sync = await call<{ items: Notification[] }>("GET", `/api/notifications?updatedSince=${cursor}`, { cookie });
@@ -360,9 +385,9 @@ describe("notifications stored before intents", () => {
   it("new notifications sit next to converted ones with their key", async () => {
     const cookie = await devLogin();
     const me = (await call("GET", "/api/me", { cookie })).body;
-    await seedLegacyInbox(me.id);
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
     const hook = new URL((await createToken(cookie, "webhook")).url).pathname;
-    const sent = await call("POST", hook, null, { title: "fresh", replaceKey: "fresh-key" });
+    const sent = await call("POST", hook, null, { title: "fresh", key: "fresh-key" });
     const n = (await call<Notification>("GET", `/api/notifications/${sent.body.id}`, { cookie })).body;
     expect(n).toMatchObject({ intent: "inform", key: "fresh-key" });
   });

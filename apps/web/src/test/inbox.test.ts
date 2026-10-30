@@ -1,4 +1,4 @@
-import { IntentNotification } from "@oyee/schema";
+import { Notification } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
 import { flatSections, inboxSections, toastsOnArrival } from "../lib/inbox";
@@ -6,12 +6,15 @@ import { flatSections, inboxSections, toastsOnArrival } from "../lib/inbox";
 type Name = keyof typeof fixtures;
 
 /** A shared protocol v2 fixture (packages/schema/fixtures), decoded the way the web reads the wire. */
-const fx = (name: Name, patch: Partial<IntentNotification> = {}): IntentNotification =>
-  ({ ...IntentNotification.parse(fixtures[name]), ...patch }) as IntentNotification;
+const fx = (name: Name, patch: Partial<Notification> = {}): Notification =>
+  ({ ...Notification.parse(fixtures[name]), ...patch }) as Notification;
+
+/** Half-way through the fixtures' open asks (asked 09:00, expiring 10:00 or later). */
+const NOW = Date.parse("2026-10-30T09:30:00.000Z");
 
 /** Section id → stacks → item ids, the shape the inbox renders. */
-const layout = (items: IntentNotification[]) => inboxSections(items).map((s) => [s.id, s.stacks.map((st) => st.items.map((n) => n.id))]);
-const sectionOf = (n: IntentNotification) => inboxSections([n])[0]!.id;
+const layout = (items: Notification[]) => inboxSections(items, NOW).map((s) => [s.id, s.stacks.map((st) => st.items.map((n) => n.id))]);
+const sectionOf = (n: Notification, now = NOW) => inboxSections([n], now)[0]!.id;
 
 describe("inbox sections come from intent and state", () => {
   it("Needs you holds open asks only", () => {
@@ -19,6 +22,13 @@ describe("inbox sections come from intent and state", () => {
     for (const name of ["ask-answered-option", "ask-answered-text", "ask-expired", "ask-withdrawn"] as const) {
       expect([name, sectionOf(fx(name))]).toEqual([name, "updates"]);
     }
+  });
+
+  it("an open ask past its expiry has left Needs you before the server's broadcast arrives", () => {
+    const n = fx("ask-open");
+    if (n.intent !== "ask") throw new Error("not an ask");
+    expect(sectionOf(n, Date.parse(n.ask.expiresAt) - 1)).toBe("needs-you");
+    expect(sectionOf(n, Date.parse(n.ask.expiresAt))).toBe("updates");
   });
 
   it("In progress holds running and stopped progress; done and failed are Updates", () => {

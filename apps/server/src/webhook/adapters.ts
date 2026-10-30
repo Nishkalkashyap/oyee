@@ -2,15 +2,13 @@
  * Webhook payload adapters (docs/protocol.md §4): Alertmanager, Grafana, AWS SNS, text/plain + query + ntfy headers.
  * Each turns a payload into an intent (inform, or progress for `?intent=progress`).
  */
-import { LIMITS, type InformInput, type IntentSendInput, type IntentSeverity, type SendNotificationInput } from "@oyee/schema";
+import { LIMITS, type InformInput, type IntentSendInput, type Severity } from "@oyee/schema";
 import { z } from "zod";
 import { badRequest } from "../lib/errors";
-import { parseIntentSend } from "../routes/send";
+import { REMOVED_FIELDS, parseIntentSend } from "../routes/send";
 
 export type HookAction =
   | { kind: "send"; input: IntentSendInput }
-  /** A protocol v1 flat card (JSON body with flat-only fields); removed with the flat card (ticket 15). */
-  | { kind: "flat"; input: SendNotificationInput }
   /** Resolve the inform with this key, showing `input` as its final content (Alertmanager/Grafana group resolved). */
   | { kind: "resolve"; input: InformInput & { key: string } }
   | { kind: "sns-confirm"; subscribeUrl: string }
@@ -29,7 +27,7 @@ const validUrl = (v: unknown): string | undefined => {
 // ─── Severity mapping ───────────────────────────────────────────────────────
 
 /** An alerting label (Alertmanager `severity`, `?severity=`) as a severity; below-info levels such as debug are info. */
-export function severityFromLabel(label: string | undefined, fallback: IntentSeverity = "warning"): IntentSeverity {
+export function severityFromLabel(label: string | undefined, fallback: Severity = "warning"): Severity {
   switch (label?.toLowerCase().trim()) {
     case "critical":
     case "crit":
@@ -66,7 +64,7 @@ export function severityFromLabel(label: string | undefined, fallback: IntentSev
 }
 
 /** ntfy-style priority: 1–3 → info, 4 → warning, 5 → critical (names min/low/default/high/max too). */
-export function severityFromPriority(p: string | undefined): IntentSeverity | undefined {
+export function severityFromPriority(p: string | undefined): Severity | undefined {
   if (!p) return undefined;
   switch (p.toLowerCase().trim()) {
     case "1":
@@ -201,11 +199,11 @@ export function fromSns(body: Json): HookAction {
 
 // ─── text/plain, GET, ntfy headers ──────────────────────────────────────────
 
-/** Query parameters of removed features: a send using one is rejected, saying what to use instead. */
-const REMOVED_PARAMS: Record<string, string> = {
-  replaceKey: "replaceKey is no longer supported: use key (a later send with the same key updates the notification)",
-  template: "template is no longer supported: send the fields themselves (title, body, severity…)",
-};
+/**
+ * Query parameters of removed features that change what a sender gets: a send using one is rejected, saying what to
+ * use instead. (ntfy's Tags header and `?tags=` are ignored as before: they never changed delivery.)
+ */
+const REMOVED_PARAMS = { replaceKey: REMOVED_FIELDS.replaceKey!, template: REMOVED_FIELDS.template!, threadId: REMOVED_FIELDS.threadId! };
 
 /** The first non-empty line of a text body: the title for senders that only post text. */
 const firstLine = (text: string | undefined) =>

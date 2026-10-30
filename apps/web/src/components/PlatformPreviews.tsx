@@ -1,14 +1,13 @@
 /**
- * Approximate mock-ups of how one card renders as a system notification on each platform (protocol §9 / PLAN §5.5).
- * They're illustrations, not pixel-perfect replicas.
+ * Approximate mock-ups of how one notification renders as a system notification on each platform, per intent
+ * (protocol §9). They're illustrations, not pixel-perfect replicas.
  */
 import { useState, type ReactNode } from "react";
 import type { Notification } from "@oyee/schema";
-import { fieldLines, systemNotificationBody } from "../lib/format";
-import { markdownToPlainText } from "../lib/markdown";
+import { askView } from "../lib/ask";
 import { SEVERITY_STYLES } from "../lib/severity";
-import { webPushActions, webPushPresentation } from "../lib/webpush";
-import { BellIcon, ChevronDownIcon } from "./Icons";
+import { webPushActions, webPushBody, webPushPresentation } from "../lib/webpush";
+import { ChevronDownIcon } from "./Icons";
 import { NotificationCard } from "./NotificationCard";
 import { ProgressBar } from "./NotificationParts";
 import { Segmented, cx, OyeeMark } from "./ui";
@@ -30,12 +29,43 @@ function Caption({ children }: { children: ReactNode }) {
   return <p className="mt-2 text-[11px] leading-snug text-zinc-500 dark:text-zinc-500">{children}</p>;
 }
 
+const iconOf = (n: Notification) => (n.intent === "inform" ? n.inform.icon : null);
+const imageOf = (n: Notification) => (n.intent === "inform" ? n.inform.image : null);
+const emojiOf = (n: Notification) => {
+  const icon = iconOf(n);
+  return icon && !/^https?:/.test(icon) ? icon : null;
+};
+/** Every severity alerts; only a running progress updates quietly. */
+const quiet = (n: Notification) => n.intent === "progress" && n.progress.state === "running";
+
+/** Android's buttons (at most 3): an open ask's answers and inline reply, an inform's links then Resolve, a progress's Resolve. */
+function androidButtons(n: Notification): string[] {
+  if (n.intent === "ask") {
+    const v = askView(n);
+    if (!v.open) return [];
+    const reply = v.reply ? [v.reply.placeholder] : [];
+    return [...v.options.slice(0, 3 - reply.length).map((o) => o.label), ...reply];
+  }
+  const links = n.intent === "inform" ? n.inform.links.map((l) => l.label) : [];
+  return links.length < 3 ? [...links, "✓ Resolve"] : links.slice(0, 3);
+}
+
+/** Apple's buttons: an open ask's answers and a text-input Reply, an inform's links; nothing else. */
+function appleButtons(n: Notification): string[] {
+  if (n.intent === "ask") {
+    const v = askView(n);
+    return v.open ? [...v.options.map((o) => o.label), ...(v.reply ? ["Reply"] : [])] : [];
+  }
+  return n.intent === "inform" ? n.inform.links.map((l) => l.label) : [];
+}
+
 export function AndroidPreview({ n }: { n: Notification }) {
   const s = SEVERITY_STYLES[n.severity];
-  const text = [markdownToPlainText(n.body).trim(), ...fieldLines(n.fields)].filter(Boolean).join("\n");
-  const buttons = [...(n.reply ? [n.reply.buttonLabel || "Reply"] : []), ...n.actions.map((a) => a.label)];
-  const shown = buttons.slice(0, 3);
-  const channel = `oyee.${n.severity}`;
+  const text = webPushBody(n);
+  const icon = iconOf(n);
+  const image = imageOf(n);
+  const emoji = emojiOf(n);
+  const buttons = androidButtons(n);
   return (
     <div>
       <div className="rounded-[22px] bg-[#f2f0f7] p-3.5 text-[#1c1b1f] shadow-sm dark:bg-[#2b2930] dark:text-[#e6e1e5]">
@@ -51,22 +81,22 @@ export function AndroidPreview({ n }: { n: Notification }) {
         <div className="mt-2 flex gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-semibold leading-tight">
-              {n.icon && !/^https?:/.test(n.icon) ? `${n.icon} ` : ""}
+              {emoji ? `${emoji} ` : ""}
               {n.title}
             </div>
             {text && <div className="mt-0.5 text-[13px] leading-snug whitespace-pre-line text-[#49454f] dark:text-[#cac4d0]">{text}</div>}
           </div>
-          {n.icon && /^https:/.test(n.icon) && <img src={n.icon} alt="" className="size-10 rounded-lg object-cover" />}
+          {icon && /^https:/.test(icon) && <img src={icon} alt="" className="size-10 rounded-lg object-cover" />}
         </div>
-        {n.progress && (
+        {n.intent === "progress" && (
           <div className="mt-2.5">
-            <ProgressBar progress={{ ...n.progress, label: undefined }} severity={n.severity} compact />
+            <ProgressBar progress={{ ...n.progress, label: undefined }} severity={n.severity} muted={n.progress.state === "stopped"} compact />
           </div>
         )}
-        {n.image && <img src={n.image} alt="" className="mt-2.5 max-h-40 w-full rounded-xl object-cover" />}
-        {shown.length > 0 && (
+        {image && <img src={image} alt="" className="mt-2.5 max-h-40 w-full rounded-xl object-cover" />}
+        {buttons.length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-2">
-            {shown.map((b, i) => (
+            {buttons.map((b, i) => (
               <span
                 key={i}
                 className="rounded-full bg-[#e8def8] px-3 py-1.5 text-[12px] font-medium text-[#1d192b] dark:bg-[#4a4458] dark:text-[#e8def8]"
@@ -78,9 +108,8 @@ export function AndroidPreview({ n }: { n: Notification }) {
         )}
       </div>
       <Caption>
-        Channel <code>{channel}</code>
-        {n.silent ? " · silent" : ""}
-        {buttons.length > 3 ? " · Android shows at most 3 buttons" : ""}
+        Channel <code>oyee.{n.severity}</code>
+        {quiet(n) ? " · updates quietly while running" : ""}
         <span className={cx("ml-1 inline-block size-1.5 rounded-full align-middle", s.dot)} />
       </Caption>
     </div>
@@ -88,10 +117,11 @@ export function AndroidPreview({ n }: { n: Notification }) {
 }
 
 export function ApplePreview({ n, platform }: { n: Notification; platform: "ios" | "macos" }) {
-  const body = systemNotificationBody(n);
-  const buttons = [...n.actions.map((a) => a.label), ...(n.reply ? [n.reply.buttonLabel || "Reply"] : [])];
-  const level =
-    n.severity === "critical" ? "time-sensitive" : n.severity === "debug" || n.silent ? "passive" : "active";
+  const title = `${emojiOf(n) ? `${emojiOf(n)} ` : ""}${n.title}`;
+  const body = webPushBody(n);
+  const image = imageOf(n);
+  const buttons = appleButtons(n);
+  const level = quiet(n) ? "passive" : "active";
   if (platform === "macos") {
     return (
       <div>
@@ -99,12 +129,13 @@ export function ApplePreview({ n, platform }: { n: Notification; platform: "ios"
           <AppGlyph className="size-9 rounded-[9px]" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <div className="truncate text-[13px] font-semibold">{n.title}</div>
+              <div className="truncate text-[13px] font-semibold">{title}</div>
               <div className="shrink-0 text-[11px] text-black/45 dark:text-white/45">now</div>
             </div>
+            <div className="truncate text-[12px] text-black/55 dark:text-white/55">{n.source}</div>
             <div className="line-clamp-4 text-[12.5px] leading-snug whitespace-pre-line text-black/70 dark:text-white/75">{body}</div>
           </div>
-          {n.image && <img src={n.image} alt="" className="size-10 shrink-0 rounded-md object-cover" />}
+          {image && <img src={image} alt="" className="size-10 shrink-0 rounded-md object-cover" />}
         </div>
         {buttons.length > 0 && (
           <div className="mt-1.5 ml-auto w-44 overflow-hidden rounded-lg border border-black/5 bg-white/90 text-[12.5px] shadow-md dark:border-white/10 dark:bg-[#323232] dark:text-white">
@@ -116,7 +147,7 @@ export function ApplePreview({ n, platform }: { n: Notification; platform: "ios"
             ))}
           </div>
         )}
-        <Caption>Thread {n.threadId ?? n.source} · interruption level {level} · progress as text</Caption>
+        <Caption>Grouped by source ({n.source}) · interruption level {level} · progress as text</Caption>
       </div>
     );
   }
@@ -127,12 +158,12 @@ export function ApplePreview({ n, platform }: { n: Notification; platform: "ios"
           <AppGlyph className="size-[38px] rounded-[9px]" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <div className="truncate text-[14px] font-semibold">{n.title}</div>
+              <div className="truncate text-[14px] font-semibold">{title}</div>
               <div className="shrink-0 text-[12px] text-black/40 dark:text-white/40">now</div>
             </div>
             <div className="line-clamp-4 text-[13.5px] leading-snug whitespace-pre-line text-black/80 dark:text-white/80">{body}</div>
           </div>
-          {n.image && <img src={n.image} alt="" className="size-[38px] shrink-0 rounded-md object-cover" />}
+          {image && <img src={image} alt="" className="size-[38px] shrink-0 rounded-md object-cover" />}
         </div>
       </div>
       {buttons.length > 0 && (
@@ -144,7 +175,7 @@ export function ApplePreview({ n, platform }: { n: Notification; platform: "ios"
           ))}
         </div>
       )}
-      <Caption>Long-press actions shown · thread {n.threadId ?? n.source} · {level}</Caption>
+      <Caption>Long-press actions shown · grouped by source · {level}</Caption>
     </div>
   );
 }
@@ -186,8 +217,8 @@ export function WebPushPreview({ n }: { n: Notification }) {
       </div>
       <Caption>
         {p.options.requireInteraction ? "Stays until dismissed (critical)" : "Auto-dismisses"}
-        {p.options.silent ? " · silent" : ""} · max 2 buttons; URL actions open from the inbox
-        {n.reply ? " · reply opens the inbox" : ""}
+        {p.options.silent ? " · silent while running" : ""} · max 2 buttons
+        {n.intent === "ask" && n.ask.allowText ? " · Reply opens the inbox" : ""}
       </Caption>
     </div>
   );

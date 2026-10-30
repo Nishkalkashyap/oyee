@@ -9,7 +9,7 @@
 import {
   durationMs,
   LIMITS,
-  type IntentSeverity,
+  type Severity,
   type Notification,
   type ProgressInput,
   type ProgressStatus,
@@ -30,7 +30,7 @@ export interface ProgressReport {
 }
 
 /** Running progress has no severity of its own; finishing picks the alert's urgency. */
-const SEVERITY: Record<ProgressStatus, IntentSeverity> = { running: "info", done: "success", failed: "warning" };
+const SEVERITY: Record<ProgressStatus, Severity> = { running: "info", done: "success", failed: "warning" };
 
 /** A progress the next report continues: running or stopped, and not resolved by the user. */
 export function isLiveProgress(n: Notification | null | undefined): n is ProgressNotification {
@@ -79,19 +79,7 @@ export function reportProgress(
       state: status,
       staleAfter: input.staleAfter ?? prev?.staleAfter ?? LIMITS.defaultStaleAfter,
       lastReportAt: now,
-      indeterminate: false,
     },
-    // Flat card for app builds that predate intents (removed with the flat card): `silent` keeps running reports quiet.
-    threadId: null,
-    icon: null,
-    image: null,
-    fields: [],
-    actions: [],
-    reply: null,
-    tags: [],
-    silent: !finished,
-    template: null,
-    responses: [],
   };
   return {
     notification,
@@ -121,11 +109,6 @@ export function progressReason({ notification: n, outcome, revived }: ProgressRe
         `the user is told it stopped reporting.`;
 }
 
-/** The MCP `progress` result, in the same shape as inform's: "outcome: …" and "id: …" lines, then what to do next. */
-export function progressResultText(report: ProgressReport): string {
-  return `outcome: ${report.outcome}\nid: ${report.notification.id}\n${progressReason(report)}`;
-}
-
 // ─── Stopped reporting ──────────────────────────────────────────────────────
 
 /** When a running progress counts as stopped reporting (`lastReportAt + staleAfter`); null if it can't stop. */
@@ -150,7 +133,5 @@ export function stopIfQuiet(n: Notification, now: number): ProgressNotification 
     updatedAt: new Date(now).toISOString(),
     readAt: null,
     progress: { ...n.progress, state: "stopped" },
-    // Flat card for app builds that predate intents: this one sounds.
-    silent: false,
   };
 }

@@ -1,14 +1,13 @@
 /** What the inform card shows (GLOSSARY.md: Inform), derived from the intent-shaped notification. Pure, so it's tested. */
-import type { Field, IntentNotification, IntentSeverity, LinkButton, Severity } from "@oyee/schema";
+import type { Field, LinkButton, Notification, Severity } from "@oyee/schema";
 import { isHttpUrl } from "./format";
 import { safeHref } from "./markdown";
 import { SEVERITY_STYLES } from "./severity";
 
-/** An inform as received. While flat cards are still sent (until ticket 15), its severity may be the old `debug`. */
-export type InformNotification = Omit<Extract<IntentNotification, { intent: "inform" }>, "severity"> & { severity: Severity };
+export type InformNotification = Extract<Notification, { intent: "inform" }>;
 
 export interface InformView {
-  severity: IntentSeverity;
+  severity: Severity;
   severityLabel: string;
   resolved: boolean;
   /** The sender's emoji or image; null falls back to the severity glyph. */
@@ -29,10 +28,9 @@ export function informView(n: InformNotification): InformView {
   const { inform } = n;
   const icon = inform.icon?.trim();
   const open = n.url ? safeHref(n.url) : null;
-  const severity = n.severity === "debug" ? "info" : n.severity;
   return {
-    severity,
-    severityLabel: SEVERITY_STYLES[severity].label,
+    severity: n.severity,
+    severityLabel: SEVERITY_STYLES[n.severity].label,
     resolved: n.status === "resolved",
     icon: !icon ? null : isHttpUrl(icon) ? { kind: "image", src: icon } : { kind: "emoji", text: [...icon].slice(0, 2).join("") },
     title: n.title,

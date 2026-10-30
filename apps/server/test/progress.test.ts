@@ -58,9 +58,7 @@ describe("MCP progress", () => {
       title: "Deploying api",
       severity: "info",
       status: "active",
-      // older app builds read these flat fields: no sound, native bar from `progress`
-      silent: true,
-      progress: { value: 3, max: 7, label: "3/7 steps", state: "running", staleAfter: "30m", indeterminate: false },
+      progress: { value: 3, max: 7, label: "3/7 steps", state: "running", staleAfter: "30m" },
     });
     expect(await get(r.id!)).toMatchObject({ intent: "progress", progress: { state: "running" } });
     expect(messages.length).toBeGreaterThan(0);
@@ -79,7 +77,7 @@ describe("MCP progress", () => {
     const ev = await next(from);
     expect(ev).toMatchObject({ type: "notification.updated", alert: false, reason: "update" });
     // omitted fields keep the previous report's value
-    expect(ev.notification).toMatchObject({ version: 2, silent: true, body: "Step 1", progress: { value: 2, max: 4, state: "running" } });
+    expect(ev.notification).toMatchObject({ version: 2, body: "Step 1", progress: { value: 2, max: 4, state: "running" } });
     expect(await get(first.id!)).toMatchObject({ version: 2, progress: { value: 2 } });
     ws.close();
   });
@@ -105,13 +103,13 @@ describe("MCP progress", () => {
         severity: "success",
         status: "active",
         readAt: null,
-        silent: false,
         // value defaults to max; the old label described 3/7 so it's dropped
         progress: { value: 7, max: 7, state: "done" },
       },
     });
     const n = await get(first.id!);
     expect(n).toMatchObject({ status: "active", resolvedAt: null, progress: { state: "done" } });
+    if (n.intent !== "progress") throw new Error("not a progress");
     expect(n.progress).not.toHaveProperty("label");
     ws.close();
   });
@@ -127,7 +125,7 @@ describe("MCP progress", () => {
     expect(ev).toMatchObject({
       type: "notification.updated",
       alert: true,
-      notification: { id: first.id, severity: "warning", silent: false, status: "active", progress: { value: 40, state: "failed" } },
+      notification: { id: first.id, severity: "warning", status: "active", progress: { value: 40, state: "failed" } },
     });
     ws.close();
   });
@@ -142,7 +140,7 @@ describe("MCP progress", () => {
     expect(again.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\n/);
     expect(again.id).not.toBe(first.id);
     const ev = await eventually(() => messages.slice(from).find((m) => m.type === "notification.created"));
-    expect(ev).toMatchObject({ notification: { id: again.id, silent: true, version: 1, progress: { value: 5, state: "running" } } });
+    expect(ev).toMatchObject({ notification: { id: again.id, version: 1, progress: { value: 5, state: "running" } } });
     // the finished one is left as it was
     expect(await get(first.id!)).toMatchObject({ status: "active", progress: { state: "done" } });
     ws.close();
@@ -200,14 +198,14 @@ describe("progress push", () => {
     await eventually(() => sent.length === 1);
     expect(sent[0]!.data).toMatchObject({ type: "notification.created", id: first.id, alert: "false" });
     expect(sent[0]!.android.priority).toBe("NORMAL");
-    expect(JSON.parse(sent[0]!.data.notification!)).toMatchObject({ intent: "progress", silent: true });
+    expect(JSON.parse(sent[0]!.data.notification!)).toMatchObject({ intent: "progress", progress: { state: "running" } });
 
     await tool(mcp, "progress", { key: "build", title: "Build", status: "done" });
     await eventually(() => sent.some((m) => m.data.alert === "true"), 4000);
     const done = sent.find((m) => m.data.alert === "true")!;
     expect(done.data).toMatchObject({ type: "notification.updated", id: first.id });
     expect(done.android.priority).toBe("HIGH");
-    expect(JSON.parse(done.data.notification!)).toMatchObject({ silent: false, progress: { state: "done" } });
+    expect(JSON.parse(done.data.notification!)).toMatchObject({ progress: { state: "done" } });
     ws.close();
   });
 });

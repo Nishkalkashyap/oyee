@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import type { Action, Notification, NotificationStatus, Severity } from "@oyee/schema";
+import type { Notification, NotificationStatus, Severity } from "@oyee/schema";
 import { ApiError, errorMessage } from "../lib/api";
 import { flattenPages, type InboxFilters } from "../lib/cache";
 import { relativeTime } from "../lib/format";
@@ -22,8 +22,6 @@ import {
   XIcon,
 } from "../components/Icons";
 import { NotificationCard, ReplyComposer } from "../components/NotificationCard";
-import { AskCard } from "../components/AskCard";
-import { showsAsAsk } from "../lib/ask";
 import { ProgressBar } from "../components/NotificationParts";
 import { useToast } from "../components/Toast";
 import { Avatar, Button, EmptyState, ErrorBanner, Spinner, buttonClasses, cx } from "../components/ui";
@@ -378,19 +376,6 @@ function NotificationDetail({
   }
   if (!n) return null;
 
-  const onAction = (a: Action) => {
-    if (a.url) {
-      window.open(a.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    respond.mutate(
-      { actionId: a.id },
-      {
-        onSuccess: () => toast.success(`Sent “${a.label}”`),
-        onError: (e) => toast.error("Couldn't send response", errorMessage(e)),
-      },
-    );
-  };
   const resolved = n.status === "resolved";
   // The ask's answer (from any device) and whether it still takes a typed one.
   const answer = n.intent === "ask" ? n.ask.answer : null;
@@ -439,33 +424,22 @@ function NotificationDetail({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-2xl flex-col gap-2.5 px-3 py-5 sm:px-5">
           <SystemLine>{formatDateTime(n.createdAt)}</SystemLine>
-          {showsAsAsk(n) ? (
-            <AskCard
-              notification={n}
-              inThread
-              className="mr-6 sm:mr-12"
-              onAnswer={(option) =>
-                respond.mutate(
-                  { option },
-                  {
-                    onSuccess: () => toast.success(`Sent “${option}”`),
-                    onError: (e) => toast.error("Couldn't send answer", errorMessage(e)),
-                  },
-                )
-              }
-              pendingOption={respond.isPending ? (respond.variables?.option ?? null) : null}
-              footer={cardFooter}
-            />
-          ) : (
-            <NotificationCard
-              notification={n}
-              inThread
-              className="mr-6 sm:mr-12"
-              onAction={onAction}
-              pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
-              footer={cardFooter}
-            />
-          )}
+          <NotificationCard
+            notification={n}
+            inThread
+            className="mr-6 sm:mr-12"
+            onAnswer={(option) =>
+              respond.mutate(
+                { option },
+                {
+                  onSuccess: () => toast.success(`Sent “${option}”`),
+                  onError: (e) => toast.error("Couldn't send answer", errorMessage(e)),
+                },
+              )
+            }
+            pendingOption={respond.isPending ? (respond.variables?.option ?? null) : null}
+            footer={cardFooter}
+          />
           {n.version > 1 && n.updatedAt !== n.createdAt && (
             <SystemLine>
               Updated {relativeTime(n.updatedAt)} · v{n.version}

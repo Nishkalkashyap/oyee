@@ -6,7 +6,7 @@ import {
   LIMITS,
   type Field,
   type IntentSendBody,
-  type IntentSeverity,
+  type Severity,
   type LinkButton,
   type Notification,
   type ProgressStatus,
@@ -25,7 +25,7 @@ export interface ComposerState {
   /** Target device ids; empty = every device. */
   devices: string[];
   // inform
-  severity: IntentSeverity;
+  severity: Severity;
   icon: string;
   image: string;
   cooldown: string;
@@ -100,11 +100,10 @@ export function buildSendInput(s: ComposerState): IntentSendBody {
   };
 }
 
-const PROGRESS_SEVERITY: Record<ProgressStatus, IntentSeverity> = { running: "info", done: "success", failed: "warning" };
+const PROGRESS_SEVERITY: Record<ProgressStatus, Severity> = { running: "info", done: "success", failed: "warning" };
 
 /**
- * The notification a send body would create, for the live preview (and mock mode): the intent block plus the flat
- * card fields older renderers still read (removed with the flat card).
+ * The notification a send body would create, for the live preview (and mock mode).
  */
 export function previewNotification(input: IntentSendBody, now = new Date().toISOString()): Notification {
   const shared = {
@@ -121,11 +120,6 @@ export function previewNotification(input: IntentSendBody, now = new Date().toIS
     readAt: null,
     resolvedAt: null,
     targetDeviceIds: null,
-    threadId: null,
-    reply: null,
-    tags: [],
-    template: null,
-    responses: [],
   };
   if (input.intent === "progress") {
     const status = input.status ?? "running";
@@ -141,30 +135,20 @@ export function previewNotification(input: IntentSendBody, now = new Date().toIS
         state: status,
         staleAfter: input.staleAfter ?? LIMITS.defaultStaleAfter,
         lastReportAt: now,
-        indeterminate: false,
       },
-      icon: null,
-      image: null,
-      fields: [],
-      actions: [],
-      silent: status === "running",
     };
   }
-  const links = input.links ?? [];
-  const fields = input.fields ?? [];
-  const image = input.image ?? null;
-  const icon = input.icon ?? null;
   return {
     ...shared,
     intent: "inform",
     severity: input.severity ?? "info",
-    inform: { links, fields, image, icon, cooldown: input.cooldown ?? null },
-    icon,
-    image,
-    fields,
-    progress: null,
-    actions: links.map((l, i) => ({ id: `link_${i + 1}`, label: l.label, url: l.url, style: "default" as const, resolves: false })),
-    silent: false,
+    inform: {
+      links: input.links ?? [],
+      fields: input.fields ?? [],
+      image: input.image ?? null,
+      icon: input.icon ?? null,
+      cooldown: input.cooldown ?? null,
+    },
   };
 }
 

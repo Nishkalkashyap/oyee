@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IntentNotification, type WebPushPayload } from "@oyee/schema";
+import { Notification, type WebPushPayload } from "@oyee/schema";
 import swSource from "../../public/sw.js?raw";
 import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
 import { REPLY_ACTION, shouldClose, webPushActions, webPushPresentation } from "../lib/webpush";
@@ -7,9 +7,9 @@ import { REPLY_ACTION, shouldClose, webPushActions, webPushPresentation } from "
 type Name = keyof typeof fixtures;
 
 /** A shared protocol v2 fixture (packages/schema/fixtures), decoded the way the web reads the wire. */
-const fx = (name: Name): IntentNotification => IntentNotification.parse(fixtures[name]);
-const ask = (patch: Partial<Extract<IntentNotification, { intent: "ask" }>["ask"]>) => {
-  const n = fx("ask-open") as Extract<IntentNotification, { intent: "ask" }>;
+const fx = (name: Name): Notification => Notification.parse(fixtures[name]);
+const ask = (patch: Partial<Extract<Notification, { intent: "ask" }>["ask"]>) => {
+  const n = fx("ask-open") as Extract<Notification, { intent: "ask" }>;
   return { ...n, ask: { ...n.ask, ...patch } };
 };
 
@@ -103,7 +103,7 @@ interface Shown {
   options: Record<string, unknown>;
 }
 
-function loadServiceWorker(fetched: IntentNotification = fx("inform-full")) {
+function loadServiceWorker(fetched: Notification = fx("inform-full")) {
   const listeners: Record<string, (e: unknown) => void> = {};
   const shown: Shown[] = [];
   const closed: string[] = [];
@@ -150,6 +150,15 @@ describe("public/sw.js", () => {
     expect(sw.shown).toHaveLength(1);
     expect(sw.shown[0]!.title).toBe(expected.title);
     expect(sw.shown[0]!.options).toEqual(expected.options);
+  });
+
+  it("says a progress stopped reporting the way every client does, also when max isn't 100", async () => {
+    const sw = loadServiceWorker();
+    const stopped = fx("progress-stopped") as Extract<Notification, { intent: "progress" }>;
+    const n = { ...stopped, progress: { ...stopped.progress, value: 3, max: 7 } };
+    await sw.dispatch("push", push({ type: "notification.updated", id: n.id, notification: n as never }));
+    expect(webPushPresentation(n, true).options.body).toBe("Stopped reporting after 43%");
+    expect(sw.shown[0]!.options).toEqual(webPushPresentation(n, true).options);
   });
 
   it("closes on deleted / read / resolved", async () => {

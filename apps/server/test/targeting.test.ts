@@ -57,7 +57,7 @@ describe("targeted delivery", () => {
     await call("PUT", "/api/devices/self", { bearer: tablet.token }, { fcmToken: "fcm-tablet" });
     const fcm = interceptFcm();
 
-    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Only the phone", devices: ["s23"] });
+    const sent = await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "only-phone", title: "Only the phone", devices: ["s23"] });
     expect(sent.status).toBe(201);
     expect(sent.body.notification.targetDeviceIds).toEqual([phone.device.id]);
     await eventually(() => fcm.length === 1);
@@ -65,7 +65,7 @@ describe("targeted delivery", () => {
     expect(fcm).toEqual(["fcm-phone"]);
 
     // Updates follow the original targets.
-    await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { title: "Still only the phone", alert: true });
+    await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "only-phone", title: "Still only the phone", status: "done" });
     await eventually(() => fcm.length === 2);
     expect(fcm[1]).toBe("fcm-phone");
 

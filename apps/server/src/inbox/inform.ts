@@ -12,7 +12,7 @@ export interface InformResult {
   notification: Notification;
 }
 
-/** A new inform, carrying the flat (protocol v1) card fields too so older app builds keep rendering it. */
+/** A new inform. */
 export function buildInform(
   id: string,
   input: InformInput,
@@ -20,10 +20,6 @@ export function buildInform(
   now: string,
   targetDeviceIds: string[] | null,
 ): Extract<Notification, { intent: "inform" }> {
-  const links = input.links ?? [];
-  const fields = input.fields ?? [];
-  const image = input.image ?? null;
-  const icon = input.icon ?? null;
   return {
     id,
     intent: "inform",
@@ -40,19 +36,13 @@ export function buildInform(
     readAt: null,
     resolvedAt: null,
     targetDeviceIds,
-    inform: { links, fields, image, icon, cooldown: input.cooldown ?? null },
-    // flat card (removed in ticket 15)
-    threadId: null,
-    icon,
-    image,
-    fields,
-    progress: null,
-    actions: links.map((l, i) => ({ id: `link_${i + 1}`, label: l.label, url: l.url, style: "default", resolves: false })),
-    reply: null,
-    tags: [],
-    silent: false,
-    template: null,
-    responses: [],
+    inform: {
+      links: input.links ?? [],
+      fields: input.fields ?? [],
+      image: input.image ?? null,
+      icon: input.icon ?? null,
+      cooldown: input.cooldown ?? null,
+    },
   };
 }
 

@@ -1,10 +1,8 @@
 import type { Notification } from "@oyee/schema";
 import { env, SELF } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { hmacSha256, toHex } from "../src/lib/encoding";
-import { BASE, call, createToken, devLogin, eventually, pairDevice } from "./helpers";
+import { describe, expect, it } from "vitest";
+import { BASE, call, createToken, devLogin, pairDevice } from "./helpers";
 
-afterEach(() => vi.restoreAllMocks());
 
 describe("meta", () => {
   it("healthz and config", async () => {
@@ -43,12 +41,13 @@ describe("meta", () => {
 });
 
 describe("end-to-end webhook flow", () => {
-  it("dev login → webhook token → text + JSON → list → patch → respond → resolve", async () => {
+  it("dev login → webhook token → text + JSON → list → read → resolve", async () => {
     const cookie = await devLogin();
     const tok = await createToken(cookie, "webhook", "Home Assistant", "home-assistant");
     expect(tok.secret).toMatch(/^oyee_wh_[A-Za-z0-9_-]{43}$/);
     expect(tok.url).toBe(`https://oyee.test/hook/${tok.secret}`);
     expect(tok.token.prefix).toBe(tok.secret.slice(0, "oyee_wh_".length + 4));
+    expect(Object.keys(tok).sort()).toEqual(["secret", "token", "url"]); // no callback secret: callbacks are gone
 
     // text/plain
     const t = await SELF.fetch(`${BASE}/hook/${tok.secret}`, {
@@ -66,21 +65,18 @@ describe("end-to-end webhook flow", () => {
       title: "Deploy finished",
       body: "prod-api **v42**",
       severity: "success",
-      actions: [
-        { id: "ack", label: "Acknowledge", style: "primary", resolves: true },
-        { id: "later", label: "Later" },
-      ],
+      links: [{ label: "Build log", url: "https://ci.example.com/42" }],
       fields: [{ label: "Env", value: "prod" }],
     });
     expect(j.status).toBe(200);
 
-    // List (newest first)
+    // List (newest first): the wire notification is the shared fields plus one intent block, nothing else
     const list = await call("GET", "/api/notifications", { cookie });
     expect(list.status).toBe(200);
     expect(list.body.items.map((n: Notification) => n.id)).toEqual([j.body.id, tRes.id]);
     expect(list.body.nextCursor).toBeNull();
-    const text = list.body.items[1] as Notification;
-    expect(text).toMatchObject({
+    expect(list.body.items[1]).toMatchObject({
+      intent: "inform",
       title: "Door opened",
       body: "Front door opened at 10:00",
       severity: "warning",
@@ -89,36 +85,23 @@ describe("end-to-end webhook flow", () => {
       readAt: null,
     });
     const json = list.body.items[0] as Notification;
-    expect(json.actions[1]).toEqual({ id: "later", label: "Later", style: "default", resolves: false });
-
-    // PATCH → version increments
-    const patched = await call("PATCH", `/api/notifications/${json.id}`, { cookie }, {
-      progress: { value: 3, max: 7, label: "3/7" },
-      body: null,
+    expect(Object.keys(json).sort()).toEqual(
+      [
+        "id", "intent", "source", "key", "title", "body", "severity", "status", "url", "version", "createdAt",
+        "updatedAt", "readAt", "resolvedAt", "targetDeviceIds", "inform",
+      ].sort(),
+    );
+    expect(json).toMatchObject({
+      inform: { links: [{ label: "Build log", url: "https://ci.example.com/42" }], fields: [{ label: "Env", value: "prod" }] },
     });
-    expect(patched.status).toBe(200);
-    expect(patched.body.version).toBe(2);
-    expect(patched.body.body).toBeNull();
-    expect(patched.body.progress).toEqual({ value: 3, max: 7, label: "3/7", indeterminate: false });
 
-    // Unknown action
-    expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "nope" })).status).toBe(400);
-    // Neither actionId nor text
-    expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, {})).status).toBe(400);
+    // An inform takes no answers
+    const answer = await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { text: "ok" });
+    expect(answer.status).toBe(400);
+    expect(answer.body.error.message).toMatch(/not an ask/);
 
-    // A card with answer buttons is an ask: the first answer (even a non-resolving v1 action) answers and resolves it
-    const r1 = await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "later" });
-    expect(r1.status).toBe(200);
-    expect(r1.body.version).toBe(3);
-    expect(r1.body.status).toBe("resolved");
-    expect(r1.body.readAt).not.toBeNull();
-    expect(r1.body.responses).toHaveLength(1);
-    expect(r1.body.responses[0]).toMatchObject({ actionId: "later", text: null, deviceId: null });
-    expect(r1.body.ask).toMatchObject({ state: "answered", answer: { option: "Later" } });
-    // ...and later answers conflict
-    expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "ack" })).status).toBe(409);
-
-    // Resolve
+    // Read, then resolve
+    expect((await call("POST", `/api/notifications/${json.id}/read`, { cookie })).body.version).toBe(2);
     const res = await call("POST", `/api/notifications/${tRes.id}/resolve`, { cookie });
     expect(res.body.status).toBe("resolved");
     expect(res.body.resolvedAt).not.toBeNull();
@@ -126,9 +109,11 @@ describe("end-to-end webhook flow", () => {
 
     // Filters
     const resolved = await call("GET", "/api/notifications?status=resolved", { cookie });
-    expect(resolved.body.items).toHaveLength(2);
+    expect(resolved.body.items).toHaveLength(1);
     const q = await call("GET", "/api/notifications?q=DOOR", { cookie });
     expect(q.body.items.map((n: Notification) => n.id)).toEqual([tRes.id]);
+    const byField = await call("GET", "/api/notifications?q=prod", { cookie });
+    expect(byField.body.items.map((n: Notification) => n.id)).toEqual([j.body.id]);
   });
 
   it("revoked tokens stop working", async () => {
@@ -142,50 +127,49 @@ describe("end-to-end webhook flow", () => {
 });
 
 describe("notifications", () => {
-  it("renders templates on send, with overrides and fallbacks", async () => {
-    const cookie = await devLogin();
-    const put = await call("PUT", "/api/templates/aws-alarm", { cookie }, {
-      description: "CloudWatch alarm",
-      card: {
-        title: "{{service}} {{metric}} high",
-        severity: "warning",
-        body: "Value: {{value|n/a}}",
-        fields: [{ label: "Region", value: "{{region|us-east-1}}" }],
-      },
-    });
-    expect(put.status).toBe(200);
-    expect(put.body.id).toMatch(/^tpl_/);
-
-    const sent = await call("POST", "/api/notifications", { cookie }, {
-      template: "aws-alarm",
-      vars: { service: "prod-api", metric: "CPU", value: 93 },
-      severity: "critical",
-    });
-    expect(sent.status).toBe(201);
-    expect(sent.body).toMatchObject({
-      title: "prod-api CPU high",
-      body: "Value: 93",
-      severity: "critical",
-      template: "aws-alarm",
-      source: "web",
-      fields: [{ label: "Region", value: "us-east-1" }],
-    });
-
-    const preview = await call("POST", "/api/templates/aws-alarm/preview", { cookie }, { vars: { service: "db" } });
-    expect(preview.body.title).toBe("db  high");
-
-    expect((await call("GET", "/api/templates", { cookie })).body.items).toHaveLength(1);
-    expect((await call("GET", "/api/templates/aws-alarm", { cookie })).body.description).toBe("CloudWatch alarm");
-    expect((await call("POST", "/api/notifications", { cookie }, { template: "missing" })).status).toBe(400);
-    expect((await call("DELETE", "/api/templates/aws-alarm", { cookie })).status).toBe(204);
-    expect((await call("GET", "/api/templates/aws-alarm", { cookie })).status).toBe(404);
-  });
-
-  it("requires a title when there's no template", async () => {
+  it("requires a title", async () => {
     const cookie = await devLogin();
     const r = await call("POST", "/api/notifications", { cookie }, { body: "no title" });
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe("bad_request");
+  });
+
+  it("the flat card's routes are gone: no templates, no PATCH", async () => {
+    const cookie = await devLogin();
+    const sent = await call("POST", "/api/notifications", { cookie }, { title: "x" });
+    const patch = await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { title: "y" });
+    expect(patch.status).toBe(404);
+    expect((await call("GET", `/api/notifications/${sent.body.id}`, { cookie })).body).toMatchObject({ title: "x", version: 1 });
+    for (const [method, path] of [
+      ["GET", "/api/templates"],
+      ["GET", "/api/templates/aws"],
+      ["PUT", "/api/templates/aws"],
+      ["DELETE", "/api/templates/aws"],
+      ["POST", "/api/templates/aws/preview"],
+    ] as const) {
+      expect((await call(method, path, { cookie }, method === "GET" || method === "DELETE" ? undefined : { card: { title: "T" } })).status, `${method} ${path}`).toBe(404);
+    }
+  });
+
+  it("rejects protocol v1 card fields, saying what to send instead", async () => {
+    const cookie = await devLogin();
+    const cases: [Record<string, unknown>, RegExp][] = [
+      [{ replaceKey: "a" }, /use key/],
+      [{ template: "aws", vars: { a: 1 } }, /template is no longer supported/],
+      [{ actions: [{ id: "ok", label: "OK" }] }, /use links/],
+      [{ reply: {} }, /asks/],
+      [{ progress: { value: 1 } }, /"intent": "progress"/],
+      [{ threadId: "t" }, /threadId/],
+      [{ tags: ["a"] }, /tags/],
+      [{ silent: true }, /every severity alerts/],
+      [{ severity: "debug" }, /use "info"/],
+    ];
+    for (const [extra, message] of cases) {
+      const r = await call("POST", "/api/notifications", { cookie }, { title: "x", ...extra });
+      expect(r.status, JSON.stringify(extra)).toBe(400);
+      expect(r.body.error.message, JSON.stringify(extra)).toMatch(message);
+    }
+    expect((await call("GET", "/api/notifications", { cookie })).body.items).toHaveLength(0);
   });
 
   it("sends an intent-tagged body: an inform with a key updates in place, after a resolve a new one is created", async () => {
@@ -272,34 +256,6 @@ describe("notifications", () => {
     expect((await call("GET", `/api/notifications/${n.body.id}`, { cookie: b })).status).toBe(404);
     expect((await call("GET", "/api/notifications", { cookie: b })).body.items).toHaveLength(0);
   });
-
-  it("signs action callbacks with the token's callback secret", async () => {
-    const cookie = await devLogin();
-    const tok = await createToken(cookie, "webhook");
-    const sent = await call("POST", `/hook/${tok.secret}`, null, {
-      title: "Scale?",
-      actions: [{ id: "scale", label: "Scale +2", callback: { url: "https://example.com/cb", headers: { "X-Custom": "1" } } }],
-    });
-    const realFetch = globalThis.fetch;
-    const seen: { url: string; headers: Headers; body: string }[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const req = new Request(input as RequestInfo, init as RequestInit);
-      if (req.url === "https://example.com/cb") {
-        seen.push({ url: req.url, headers: req.headers, body: await req.text() });
-        return new Response("ok");
-      }
-      return realFetch(input as RequestInfo, init as RequestInit);
-    });
-    const r = await call("POST", `/api/notifications/${sent.body.id}/respond`, { cookie }, { actionId: "scale" });
-    expect(r.status).toBe(200);
-    const cb = await eventually(() => seen[0]);
-    const expected = `sha256=${toHex(await hmacSha256(tok.callbackSecret, cb.body))}`;
-    expect(cb.headers.get("X-Oyee-Signature")).toBe(expected);
-    expect(cb.headers.get("X-Custom")).toBe("1");
-    const payload = JSON.parse(cb.body);
-    expect(payload.notification.id).toBe(sent.body.id);
-    expect(payload.response.actionId).toBe("scale");
-  });
 });
 
 describe("devices", () => {
@@ -327,10 +283,9 @@ describe("devices", () => {
     expect(list.body.items[0].title).toBe("hello device");
     expect((await call("GET", "/api/me", { bearer })).body.id).toBe(paired.body.user.id);
 
-    // device scope: can respond/read, can't send or manage tokens
+    // device scope: can read/resolve (and answer asks), can't send or manage tokens
     const id = list.body.items[0].id;
-    const reply = await call("POST", `/api/notifications/${id}/respond`, { bearer }, { text: "on it" });
-    expect(reply.body.responses[0]).toMatchObject({ deviceId: paired.body.device.id, deviceName: "Pixel 9", text: "on it" });
+    expect((await call("POST", `/api/notifications/${id}/read`, { bearer })).body.readAt).not.toBeNull();
     expect((await call("POST", "/api/notifications", { bearer }, { title: "x" })).status).toBe(403);
     expect((await call("GET", "/api/tokens", { bearer })).status).toBe(403);
 

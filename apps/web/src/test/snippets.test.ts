@@ -1,3 +1,4 @@
+import { InformInput, IntentSendInput } from "@oyee/schema";
 import { describe, expect, it } from "vitest";
 import { mcpSnippets, shellQuote, webhookSnippets, withQuery } from "../lib/snippets";
 
@@ -57,13 +58,22 @@ describe("webhookSnippets", () => {
     expect(byId(s, "curl-text").code).toContain(`curl -d "Backup finished in 4m12s" '${HOOK}?title=Backup&severity=success'`);
   });
 
-  it("curl JSON body is valid JSON with progress, fields and actions", () => {
+  it("curl JSON body is a valid inform (the default intent) with a key, cooldown, rows and a link", () => {
     const code = byId(s, "curl-json").code;
-    const json = code.slice(code.indexOf("-d '") + 4, code.lastIndexOf("'"));
-    const body = JSON.parse(json);
-    expect(body.progress).toEqual({ value: 3, max: 7, label: "3/7 pods" });
-    expect(body.actions).toHaveLength(2);
-    expect(body.replaceKey).toBe("deploy-142");
+    const body = InformInput.parse(JSON.parse(code.slice(code.indexOf("-d '") + 4, code.lastIndexOf("'"))));
+    expect(body).toMatchObject({ key: "disk/db-1", cooldown: "15m" });
+    expect([body.fields?.length, body.links?.length]).toEqual([2, 1]);
+  });
+
+  it("live progress reports a progress under one key and finishes it with status done", () => {
+    const code = byId(s, "curl-progress").code;
+    const line = code.split("\n").find((l) => l.includes("-d "))!;
+    const json = line.slice(line.indexOf('"') + 1, line.lastIndexOf('"')).replace(/\\"/g, '"').replace("$i", "5").replace("$status", "done");
+    expect(IntentSendInput.parse(JSON.parse(json))).toMatchObject({ intent: "progress", key: "nightly", value: 5, max: 5, status: "done" });
+  });
+
+  it("no snippet uses a protocol v1 field", () => {
+    for (const x of s) expect(x.code, x.id).not.toMatch(/replaceKey|threadId|"actions"|"tags"|tags=|Tags:/);
   });
 
   it("Home Assistant notify platform uses the documented keys", () => {

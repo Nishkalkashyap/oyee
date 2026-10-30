@@ -3,7 +3,7 @@
  * in plain JS (service workers can't import the app bundle); this TS copy powers the in-app preview and the unit
  * tests, which run sw.js and check it shows exactly this. Keep the two in sync.
  */
-import { progressText, type IntentNotification, type Severity } from "@oyee/schema";
+import { progressText, type Notification } from "@oyee/schema";
 import { fieldLines } from "./format";
 import { markdownToPlainText } from "./markdown";
 import { progressView } from "./progress";
@@ -14,9 +14,6 @@ export const ANSWER_ACTION = "answer:";
 export const LINK_ACTION = "link:";
 export const DEFAULT_ICON = "/icon-192.png";
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-/** A protocol v2 notification as pushed; while v1 cards overlap its severity may still be the old `debug`. */
-export type PushNotification = DistributiveOmit<IntentNotification, "severity"> & { severity: Severity };
 export const BADGE_ICON = "/badge-72.png";
 
 export interface WebPushAction {
@@ -28,7 +25,7 @@ export interface WebPushAction {
  * Browsers show at most 2 buttons. An open ask: its first answer buttons, then "Reply…" (opens the inbox) if it takes
  * text and there's room. An inform: its first link buttons. Progress and closed asks: none.
  */
-export function webPushActions(n: PushNotification): WebPushAction[] {
+export function webPushActions(n: Notification): WebPushAction[] {
   if (n.intent === "inform") return n.inform.links.slice(0, 2).map((l) => ({ action: LINK_ACTION + l.url, title: l.label }));
   if (n.intent !== "ask" || n.ask.state !== "open") return [];
   const out = n.ask.options.slice(0, 2).map((o) => ({ action: ANSWER_ACTION + o, title: o }));
@@ -37,7 +34,7 @@ export function webPushActions(n: PushNotification): WebPushAction[] {
 }
 
 /** Body text, then an inform's rows or a progress's text bar ("Done · 7/7 checks" once it ended). */
-export function webPushBody(n: PushNotification): string {
+export function webPushBody(n: Notification): string {
   const parts: string[] = [];
   const body = markdownToPlainText(n.body).trim();
   if (body) parts.push(body);
@@ -52,7 +49,7 @@ export function webPushBody(n: PushNotification): string {
 }
 
 /** True when the system notification should be closed instead of shown. */
-export function shouldClose(n: Pick<IntentNotification, "readAt" | "status">): boolean {
+export function shouldClose(n: Pick<Notification, "readAt" | "status">): boolean {
   return !!n.readAt || n.status === "resolved";
 }
 
@@ -73,7 +70,7 @@ export interface WebPushPresentation {
   };
 }
 
-export function webPushPresentation(n: PushNotification, alert: boolean): WebPushPresentation {
+export function webPushPresentation(n: Notification, alert: boolean): WebPushPresentation {
   const icon = n.intent === "inform" ? n.inform.icon : null;
   const image = n.intent === "inform" ? n.inform.image : null;
   const emoji = icon && !/^https?:\/\//i.test(icon) ? `${icon} ` : "";

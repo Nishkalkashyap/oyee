@@ -9,7 +9,7 @@ import { listDevices, toDevice, type TokenRecord } from "../db";
 import { SERVER_VERSION, type Env } from "../env";
 import { ApiError, rpc } from "../lib/errors";
 import type { Actor } from "../inbox/model";
-import { progressResultText } from "../inbox/progress";
+import { progressReason } from "../inbox/progress";
 import { inbox } from "../routes/api";
 import { askResultText, waitResultText } from "./ask";
 import { registerInformTool } from "./inform";
@@ -109,7 +109,11 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
         "user once. Omitted fields keep the previous report's value.",
       inputSchema: ProgressInput,
     },
-    (input) => run(async () => progressResultText(await rpc(stub().progress(actor, input)))),
+    (input) =>
+      run(async () => {
+        const report = await rpc(stub().progress(actor, input));
+        return resultText(report.outcome, report.notification.id, progressReason(report));
+      }),
   );
 
   server.registerTool(

@@ -71,15 +71,12 @@ describe("ask", () => {
     });
     if (n.intent !== "ask") throw new Error("not an ask");
     expect(Date.parse(n.ask.expiresAt) - Date.parse(n.createdAt)).toBe(3_600_000);
-    // Older app builds still get answer buttons from the flat card.
-    expect(n.actions.map((a) => a.label)).toEqual(["Approve", "Reject"]);
-    expect(n.reply).toBeNull();
   });
 
   it("adds a reply box when there are neither options nor allowText, and keeps both when asked", async () => {
     const { cookie, mcp } = await setup();
     const open = await get(cookie, (await ask(mcp, { title: "Which branch?" })).id);
-    expect(open).toMatchObject({ ask: { options: [], allowText: true, replyPlaceholder: "Reply…" }, reply: { placeholder: "Reply…" } });
+    expect(open).toMatchObject({ ask: { options: [], allowText: true, replyPlaceholder: "Reply…" } });
 
     const both = await get(cookie, (await ask(mcp, { title: "Ship it?", options: ["Yes"], allowText: true })).id);
     expect(both).toMatchObject({ ask: { options: ["Yes"], allowText: true } });
@@ -130,17 +127,16 @@ describe("answering an ask", () => {
     const late = await call("POST", `/api/notifications/${id}/respond`, { cookie }, { option: "Reject" });
     expect(late.status).toBe(409);
     expect(late.body.error.message).toContain("Approve · Pixel 9");
-    expect((await call("POST", `/api/notifications/${id}/respond`, { cookie }, { actionId: "option_2" })).status).toBe(409);
     expect((await get(cookie, id))).toMatchObject({ version: 2, ask: { answer: { option: "Approve" } } });
     ws.close();
   });
 
-  it("older app builds answer with the v1 action id", async () => {
+  it("takes the answer button's label, not the v1 action id", async () => {
     const { cookie, mcp } = await setup();
     const { id } = await ask(mcp, { title: "Deploy?", options: ["Approve", "Reject"] });
-    const r = await call<Notification>("POST", `/api/notifications/${id}/respond`, { cookie }, { actionId: "option_2" });
+    expect((await call("POST", `/api/notifications/${id}/respond`, { cookie }, { actionId: "option_2" })).status).toBe(400);
+    const r = await call<Notification>("POST", `/api/notifications/${id}/respond`, { cookie }, { option: "Reject" });
     expect(r.body).toMatchObject({ ask: { state: "answered", answer: { option: "Reject", deviceName: "Web" } } });
-    expect(r.body.responses).toMatchObject([{ actionId: "option_2" }]);
   });
 
   it("rejects answers the ask doesn't take", async () => {
