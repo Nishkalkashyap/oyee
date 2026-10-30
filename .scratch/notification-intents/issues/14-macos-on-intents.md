@@ -18,3 +18,5 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 01: Swift tests need a copy of packages/schema/fixtures/notifications.v2.json inside their test target.
+
+From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.

@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] MCP `ask` takes title, body, options (≤ 3), allowText, url, key, source, devices, platforms; it always alerts at `warning`; with neither options nor allowText a reply box is added
 - [ ] The `ask` result text tells the agent to call `wait_for_response` with the returned id; a reused ask says "already asked N ago, still waiting"
@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] The first answer (option or text, any device) records the answer, resolves the ask and broadcasts; later answers get a conflict error
 - [ ] The web ask card shows open (buttons, reply box, waiting time) and answered states
 - [ ] Server tests through MCP and the respond endpoint; web view-model tests on the shared fixtures
+
+## Comments
+
+Resolved: work 4c522b4, merged into `notification-intents` at 4ac26b9 (combined with 07).
