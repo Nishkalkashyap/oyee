@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
+  `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
+  with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
+  who answered from which device, or how long ago it asked. The first answer from any device closes the ask
+  everywhere; later answers get `409` (this also applies to v1 cards with answer buttons). Respond accepts
+  `{ "option": "<label>" }`. The web inbox shows a purpose-built ask card: waiting time, buttons and reply box while
+  open, "Answered: Approve · Pixel 9" once answered.
 - Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
   `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
   sends get the intent they most resemble and existing notifications are converted once; the flat card fields are

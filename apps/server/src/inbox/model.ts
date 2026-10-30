@@ -6,6 +6,7 @@ import {
   renderTemplateValue,
   type Notification,
   type Platform,
+  type RespondInput,
   type Response as OyeeResponse,
   type Template,
   type UpdateNotificationInput,
@@ -192,6 +193,37 @@ export function assertUniqueActionIds(actions: Notification["actions"]): void {
     if (seen.has(a.id)) throw badRequest(`actions: duplicate action id "${a.id}"`);
     seen.add(a.id);
   }
+}
+
+/** A response to a card that isn't an ask (v1 behaviour, removed with the flat card). Asks: see ask.ts answerAsk. */
+export function respondToCard(
+  card: Notification,
+  input: RespondInput,
+  actor: Actor,
+  now: string,
+): { n: Notification; response: OyeeResponse; action: Notification["actions"][number] | undefined } {
+  if (input.option !== undefined) throw badRequest("option: this notification is not an ask");
+  const action = input.actionId !== undefined ? card.actions.find((a) => a.id === input.actionId) : undefined;
+  if (input.actionId !== undefined && !action) throw badRequest(`actionId: unknown action "${input.actionId}"`);
+  const response: OyeeResponse = {
+    actionId: input.actionId ?? null,
+    text: input.text ?? null,
+    deviceId: actor.deviceId,
+    deviceName: actor.deviceName,
+    at: now,
+  };
+  const n: Notification = {
+    ...card,
+    responses: appendResponse(card, response),
+    version: card.version + 1,
+    updatedAt: now,
+    readAt: card.readAt ?? now,
+  };
+  if (action?.resolves && n.status === "active") {
+    n.status = "resolved";
+    n.resolvedAt = now;
+  }
+  return { n: inferIntent(n), response, action };
 }
 
 export function appendResponse(n: Notification, r: OyeeResponse): OyeeResponse[] {

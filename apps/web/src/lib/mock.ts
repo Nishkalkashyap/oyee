@@ -96,6 +96,26 @@ function fixtures(): Notification[] {
       },
       4 * MIN,
     ),
+    // An ask answered from the phone: every device shows "Answered: Approve · Pixel 9".
+    base(
+      {
+        title: "Merge the dependency bump?",
+        body: "`zod` 4.6 → 4.7. All checks are green.",
+        source: "claude-code",
+        severity: "warning",
+        url: "https://github.com/example/api/pull/42",
+        status: "resolved",
+        resolvedAt: iso(12 * MIN),
+        readAt: iso(12 * MIN),
+        version: 2,
+        actions: [
+          { id: "option_1", label: "Approve", style: "primary", resolves: true },
+          { id: "option_2", label: "Reject", style: "default", resolves: true },
+        ],
+        responses: [{ actionId: "option_1", text: null, deviceId: "dev_mock1", deviceName: "Pixel 9", at: iso(12 * MIN) }],
+      },
+      15 * MIN,
+    ),
     base(
       {
         title: "[FIRING:1] HighCPU prod-api",
@@ -527,17 +547,19 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
       return ok(next);
     }
     if (action === "respond") {
-      const b = body as { actionId?: string; text?: string };
-      const a = n.actions.find((x) => x.id === b.actionId);
-      if (b.actionId && !a) return err(400, "bad_request", `Unknown action "${b.actionId}"`);
+      const b = body as { actionId?: string; option?: string; text?: string };
+      const a = n.actions.find((x) => (b.option !== undefined ? !x.url && x.label === b.option : x.id === b.actionId));
+      if ((b.actionId || b.option) && !a) return err(400, "bad_request", `Unknown answer "${b.option ?? b.actionId}"`);
+      // Asks: the first answer wins and closes it (as on the server).
+      if (n.intent === "ask" && n.ask.answer) return err(409, "conflict", "This ask was already answered");
       const responses = [
         ...n.responses,
-        { actionId: b.actionId ?? null, text: b.text ?? null, deviceId: null, deviceName: "Web", at: iso() },
+        { actionId: a?.id ?? null, text: b.text ?? null, deviceId: null, deviceName: "Web", at: iso() },
       ].slice(-20);
       const next = touch(n, {
         responses,
         readAt: n.readAt ?? iso(),
-        ...(a?.resolves ? { status: "resolved" as const, resolvedAt: iso() } : {}),
+        ...(a?.resolves || n.intent === "ask" ? { status: "resolved" as const, resolvedAt: iso() } : {}),
       });
       updated(next, "responded");
       return ok(next);

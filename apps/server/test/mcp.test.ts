@@ -1,7 +1,7 @@
 import type { Notification } from "@oyee/schema";
 import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { BASE, call, createToken, devLogin, sleep } from "./helpers";
+import { BASE, call, createToken, devLogin } from "./helpers";
 
 let rpcId = 0;
 
@@ -94,30 +94,6 @@ describe("MCP", () => {
     const missing = await tool(path, "get_notification", { id: "ntf_nope" });
     expect(missing.isError).toBe(true);
     expect(missing.text).toMatch(/not_found/);
-  });
-
-  it("ask + wait_for_response (pending, then answered while waiting)", async () => {
-    const { cookie, path } = await setup();
-    const ask = (await tool<{ id: string }>(path, "ask", { title: "Deploy to prod?", options: ["Yes", "No"], allowText: true })).json();
-    const n = (await call("GET", `/api/notifications/${ask.id}`, { cookie })).body as Notification;
-    expect(n.actions.map((a) => [a.id, a.label, a.resolves])).toEqual([
-      ["option_1", "Yes", true],
-      ["option_2", "No", true],
-    ]);
-    expect(n.reply).not.toBeNull();
-
-    expect((await tool(path, "wait_for_response", { id: ask.id, timeoutSeconds: 1 })).json()).toEqual({ status: "pending" });
-
-    const waiting = tool(path, "wait_for_response", { id: ask.id, timeoutSeconds: 10 });
-    await sleep(200);
-    const responded = await call("POST", `/api/notifications/${ask.id}/respond`, { cookie }, { actionId: "option_1" });
-    expect(responded.body.status).toBe("resolved");
-    const answered = (await waiting).json();
-    expect(answered.status).toBe("answered");
-    expect(answered.response).toMatchObject({ actionId: "option_1", text: null });
-
-    // later calls return the stored response immediately
-    expect((await tool(path, "wait_for_response", { id: ask.id })).json().status).toBe("answered");
   });
 
   it("templates and devices tools", async () => {

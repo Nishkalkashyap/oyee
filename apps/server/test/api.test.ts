@@ -101,29 +101,28 @@ describe("end-to-end webhook flow", () => {
     expect(patched.body.body).toBeNull();
     expect(patched.body.progress).toEqual({ value: 3, max: 7, label: "3/7", indeterminate: false });
 
-    // Respond with a non-resolving action
-    const r1 = await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "later", text: "tomorrow" });
-    expect(r1.status).toBe(200);
-    expect(r1.body.version).toBe(3);
-    expect(r1.body.status).toBe("active");
-    expect(r1.body.readAt).not.toBeNull();
-    expect(r1.body.responses).toHaveLength(1);
-    expect(r1.body.responses[0]).toMatchObject({ actionId: "later", text: "tomorrow", deviceId: null });
-
     // Unknown action
     expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "nope" })).status).toBe(400);
     // Neither actionId nor text
     expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, {})).status).toBe(400);
+
+    // A card with answer buttons is an ask: the first answer (even a non-resolving v1 action) answers and resolves it
+    const r1 = await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "later" });
+    expect(r1.status).toBe(200);
+    expect(r1.body.version).toBe(3);
+    expect(r1.body.status).toBe("resolved");
+    expect(r1.body.readAt).not.toBeNull();
+    expect(r1.body.responses).toHaveLength(1);
+    expect(r1.body.responses[0]).toMatchObject({ actionId: "later", text: null, deviceId: null });
+    expect(r1.body.ask).toMatchObject({ state: "answered", answer: { option: "Later" } });
+    // ...and later answers conflict
+    expect((await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "ack" })).status).toBe(409);
 
     // Resolve
     const res = await call("POST", `/api/notifications/${tRes.id}/resolve`, { cookie });
     expect(res.body.status).toBe("resolved");
     expect(res.body.resolvedAt).not.toBeNull();
     expect(res.body.version).toBe(2);
-
-    // Responding with a `resolves` action resolves it
-    const r2 = await call("POST", `/api/notifications/${json.id}/respond`, { cookie }, { actionId: "ack" });
-    expect(r2.body.status).toBe("resolved");
 
     // Filters
     const resolved = await call("GET", "/api/notifications?status=resolved", { cookie });

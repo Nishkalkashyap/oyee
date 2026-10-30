@@ -291,10 +291,12 @@ export type UpdateNotificationInput = z.infer<typeof UpdateNotificationInput>;
 export const RespondInput = z
   .object({
     actionId: z.string().max(32).optional(),
+    /** The label of an ask's answer button (protocol v2; `actionId` is the v1 way to pick one). */
+    option: z.string().min(1).max(32).optional(),
     text: z.string().min(1).max(2000).optional(),
   })
-  .refine((v) => v.actionId !== undefined || v.text !== undefined, {
-    message: "actionId or text is required",
+  .refine((v) => v.actionId !== undefined || v.option !== undefined || v.text !== undefined, {
+    message: "option, actionId or text is required",
   });
 export type RespondInput = z.infer<typeof RespondInput>;
 
@@ -520,28 +522,56 @@ export interface WebPushPayload {
 
 // ─── MCP tool inputs ────────────────────────────────────────────────────────
 
-export const McpAskInput = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().max(4000).optional(),
-  options: z.array(z.string().min(1).max(32)).max(3).optional(),
-  allowText: z.boolean().optional(),
-  severity: Severity.optional(),
-  source: z.string().min(1).max(64).optional(),
-  threadId: z.string().min(1).max(128).optional(),
-  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
-  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
-  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
-  platforms: z.array(Platform).max(4).optional(),
+/** wait_for_response holds at most this long (exported as LIMITS.askWaitSeconds; defined here because LIMITS comes later). */
+const ASK_WAIT_SECONDS = 50;
+
+/**
+ * Ask: a question for the user (GLOSSARY.md). Agents only, over MCP; they poll the answer with wait_for_response.
+ * Always alerts at `warning`. With neither `options` nor `allowText`, a reply box is added.
+ */
+export const AskInput = z.object({
+  title: z.string().min(1).max(200).describe("The question, short enough for a notification title."),
+  body: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Context for the decision. Markdown subset: **bold**, *italic*, `code`, [links](https://…), line breaks."),
+  options: z
+    .array(z.string().min(1).max(32))
+    .max(3)
+    .optional()
+    .describe("Up to 3 answer-button labels, e.g. [\"Approve\", \"Reject\"]. The label tapped is the answer."),
+  allowText: z.boolean().optional().describe("Also accept a typed answer. Implied when there are no options."),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the PR to review before answering."),
+  key: Key.optional().describe(
+    "Names this question. Asking again with the key of an open ask returns that ask instead of alerting again.",
+  ),
+  source: z.string().min(1).max(64).optional().describe("Who is asking. Defaults to the token's label."),
+  devices: z
+    .array(z.string().min(1).max(64))
+    .max(20)
+    .optional()
+    .describe("Alert only these devices: names or ids from list_devices (a unique partial name such as \"macbook\" works)."),
+  platforms: z.array(Platform).max(4).optional().describe("Alert only devices on these platforms (union with devices)."),
 });
-export type McpAskInput = z.infer<typeof McpAskInput>;
+export type AskInput = z.infer<typeof AskInput>;
 
 export const McpWaitInput = z.object({
-  id: z.string(),
-  timeoutSeconds: z.number().int().min(1).max(55).default(50),
+  id: z.string().describe("The id returned by ask (ntf_…)."),
+  timeoutSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(ASK_WAIT_SECONDS)
+    .default(ASK_WAIT_SECONDS)
+    .describe(`How long to hold for an answer, at most ${ASK_WAIT_SECONDS} s. Call again while it is pending.`),
 });
 export type McpWaitInput = z.infer<typeof McpWaitInput>;
 
-export type McpWaitResult = { status: "answered"; response: Response } | { status: "pending" };
+/** wait_for_response: the first answer, or still pending (with when it was asked, so the agent needs no date maths). */
+export type McpWaitResult =
+  | { status: "answered"; answer: AskAnswer; askedAt: string }
+  | { status: "pending"; askedAt: string; expiresAt: string | null };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -575,6 +605,8 @@ export const LIMITS = {
   defaultAskExpiry: "1h",
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
+  /** wait_for_response holds for an answer at most this long. */
+  askWaitSeconds: ASK_WAIT_SECONDS,
 } as const satisfies Record<string, number | Duration>;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
