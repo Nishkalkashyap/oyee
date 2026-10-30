@@ -445,8 +445,9 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   /**
-   * Applies an inform to its key and stores, broadcasts and pushes the result. `charge`: a new notification counts as a
-   * send and a silent update as an update (spec "Quotas"); Oyee's own notices aren't charged.
+   * Applies an inform to its key and stores, broadcasts and pushes the result. `charge`: a new notification and a
+   * cooldown re-alert (`alerted`) count as a send, a silent update as an update (spec "Quotas", docs/protocol.md §3.1);
+   * Oyee's own notices aren't charged.
    */
   private storeInform(actor: Actor, input: InformInput, targets: string[] | null, charge: boolean): InformResult {
     const now = new Date().toISOString();

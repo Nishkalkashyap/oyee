@@ -275,6 +275,21 @@ describe("MCP inform cooldown", () => {
     ws.close();
   });
 
+  it("counts a re-alert as a send and a silent update as an update (docs/protocol.md §3.1)", async () => {
+    const { cookie, path } = await setup();
+    const used = async () => {
+      const items = (await call<{ items: { kind: string; used: number }[] }>("GET", "/api/usage", { cookie })).body.items;
+      return Object.fromEntries(items.map((i) => [i.kind, i.used]));
+    };
+    const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "1h" });
+    const start = await used();
+    expect((await inform(path, { title: "Disk 91% full", key: "disk-full", cooldown: "1h" })).outcome).toBe("updated_silently");
+    expect(await used()).toMatchObject({ send: start.send, update: start.update! + 1 });
+    await backdateAlert(cookie, first.id!, 61 * 60_000);
+    expect((await inform(path, { title: "Disk 97% full", key: "disk-full", cooldown: "1h" })).outcome).toBe("alerted");
+    expect(await used()).toMatchObject({ send: start.send! + 1, update: start.update! + 1 });
+  });
+
   it("once the cooldown has passed after a resolve, creates a new inform", async () => {
     const { cookie, path } = await setup();
     const first = await inform(path, { title: "Disk 90% full", key: "disk-full", cooldown: "30m" });

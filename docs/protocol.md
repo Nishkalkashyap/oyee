@@ -210,11 +210,15 @@ send, update and answer limits the inbox gets one notice (source `oyee`). Values
 | Quota | Per day | Per minute | Counts |
 |---|---|---|---|
 | `send` | 1,000 | 120 (and 60 per webhook/MCP token) | new notifications, and keyed informs that alert again |
-| `update` | 5,000 | — | silent keyed updates, progress reports, resolve, read, read-all, delete |
+| `update` | 5,000 | — | silent keyed updates, later progress reports, resolve, read, read-all, delete |
 | `respond` | 1,000 | 30 | answers to asks |
 | `read` | 20,000 | 300 | list, get, sources, `wait_for_response`, WebSocket `sync` |
 | `pairing` | 20 | 5 | pairing codes |
 
+- An inform sent again with its key is charged by its outcome: `updated_silently` (inside the cooldown) counts as
+  `update`, but `alerted` (the cooldown passed, or no cooldown) counts as `send`, like a new notification, because
+  it alerts the user's devices again. `suppressed` and a `reused` ask are not charged. The first report of a progress
+  counts as `send`, later ones as `update`; alarm-driven changes (ask expiry, stopped reporting) are never charged.
 - At most 10 devices and 20 tokens per account (`409 conflict` beyond that).
 - Pushes for updates to one notification are coalesced to one per 2 s: the first goes out at once, the latest one
   when the interval ends (with `alert` if any update in between asked for it). WebSocket clients get every update.
