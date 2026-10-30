@@ -31,8 +31,18 @@ function severity(v: unknown): Severity {
 }
 
 /**
+ * A closed v1 card leaves the inbox and the tray: the ask it became can't be answered and the progress can't finish,
+ * so it is resolved (at its last update, if it wasn't already). That also keeps it out of the expiry sweep and frees
+ * its key for the next send.
+ */
+function closed<T extends { status: "active" | "resolved"; resolvedAt: string | null; updatedAt: string }>(shared: T): T {
+  return { ...shared, status: "resolved", resolvedAt: shared.resolvedAt ?? shared.updatedAt };
+}
+
+/**
  * The v2 notification for a stored row. `replaceKey` is the row's v1 replace key (its v2 `key` when the row has none).
- * A v1 card's sender can no longer act on it, so an unanswered ask becomes expired and an unfinished progress stopped.
+ * A v1 card's sender can no longer act on it, so an unanswered ask becomes expired and an unfinished progress stopped,
+ * both resolved; an answered ask is resolved like any answered ask.
  */
 export function fromStored(raw: unknown, replaceKey: string | null): Notification {
   const d = raw as StoredData;
@@ -78,7 +88,7 @@ export function fromStored(raw: unknown, replaceKey: string | null): Notificatio
         }
       : null;
     return {
-      ...shared,
+      ...closed(shared),
       intent: "ask",
       ask: {
         options: answers.map((a) => a.label),
@@ -93,14 +103,15 @@ export function fromStored(raw: unknown, replaceKey: string | null): Notificatio
   const p = d.progress as { value: number; max?: number; label?: string; indeterminate?: boolean } | null | undefined;
   if (p) {
     const max = p.max ?? 100;
+    const done = !p.indeterminate && p.value >= max;
     return {
-      ...shared,
+      ...(done ? shared : closed(shared)),
       intent: "progress",
       progress: {
         value: p.value,
         max,
         ...(p.label !== undefined ? { label: p.label } : {}),
-        state: !p.indeterminate && p.value >= max ? "done" : "stopped",
+        state: done ? "done" : "stopped",
         staleAfter: LIMITS.defaultStaleAfter,
         lastReportAt: d.updatedAt,
       },

@@ -1,6 +1,6 @@
 /** Every notification is one intent (protocol v2): what each sender produces, and how stored rows are converted. */
 import { Notification, type ServerMessage } from "@oyee/schema";
-import { env, runInDurableObject, SELF } from "cloudflare:test";
+import { env, runDurableObjectAlarm, runInDurableObject, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { encodeCursor, type InboxDO } from "../src/inbox/do";
 import { BASE, call, createToken, devLogin, eventually, pairDevice } from "./helpers";
@@ -181,7 +181,7 @@ const LEGACY_ROWS: StoredRow[] = [
   [legacyCard("ntf_01LEGACYPROGRESSDONE00000", { progress: { value: 5, max: 5, indeterminate: false } }), "build"],
   [
     legacyCard("ntf_01LEGACYPROGRESSHALF00000", { progress: { value: 2, max: 5, label: "2/5", indeterminate: false } }),
-    null,
+    "sync",
   ],
 ];
 
@@ -343,6 +343,40 @@ describe("notifications stored before protocol v2", () => {
     const hook = new URL((await createToken(cookie, "webhook", "Test", "claude-code")).url).pathname;
     const again = await call("POST", hook, null, { title: "still noisy", key: "noisy" });
     expect(again.body).toMatchObject({ id: "ntf_01OVERLAPDEBUG000000000", outcome: "alerted" });
+  });
+
+  it("an ask nobody answered and a progress that never finished leave the inbox and free their key", async () => {
+    const cookie = await devLogin();
+    const me = (await call("GET", "/api/me", { cookie })).body;
+    await seedOldInbox(me.id, 0, LEGACY_ROWS);
+
+    const active = (await call<{ items: Notification[] }>("GET", "/api/notifications?status=active", { cookie })).body.items;
+    expect(active.map((n) => n.id)).not.toContain("ntf_01LEGACYUNANSWERED0000000");
+    expect(active.map((n) => n.id)).not.toContain("ntf_01LEGACYPROGRESSHALF00000");
+    // A finished progress stays until read, as a new one would.
+    expect(active.map((n) => n.id)).toContain("ntf_01LEGACYPROGRESSDONE00000");
+    const ask = (await call<Notification>("GET", "/api/notifications/ntf_01LEGACYUNANSWERED0000000", { cookie })).body;
+    expect(ask).toMatchObject({ status: "resolved", resolvedAt: T1, ask: { state: "expired" } });
+    const progress = (await call<Notification>("GET", "/api/notifications/ntf_01LEGACYPROGRESSHALF00000", { cookie })).body;
+    expect(progress).toMatchObject({ status: "resolved", resolvedAt: T1, progress: { state: "stopped" } });
+
+    // The expiry sweep leaves the converted ask alone.
+    const stub = env.INBOX.get(env.INBOX.idFromName(me.id));
+    await runInDurableObject(stub, (_inst: InboxDO, state) => state.storage.setAlarm(Date.now()));
+    await runDurableObjectAlarm(stub);
+    const swept = (await call<Notification>("GET", "/api/notifications/ntf_01LEGACYUNANSWERED0000000", { cookie })).body;
+    expect(swept.version).toBe(ask.version);
+
+    // The stopped progress's key is free for a new progress.
+    const hook = new URL((await createToken(cookie, "webhook", "Test", "claude-code")).url).pathname;
+    const next = await call<{ id: string; outcome: string }>("POST", hook, null, {
+      intent: "progress",
+      key: "sync",
+      title: "Sync again",
+      value: 1,
+    });
+    expect(next.body).toMatchObject({ outcome: "created" });
+    expect(next.body.id).not.toBe("ntf_01LEGACYPROGRESSHALF00000");
   });
 
   it("are converted only once", async () => {

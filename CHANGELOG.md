@@ -9,7 +9,8 @@
   (`replaceKey`, `template`, `vars`, `actions`, `reply`, `progress`, `threadId`, `tags`, `silent`, or severity
   `debug`) gets `400` naming what to use instead; `?threadId=` on webhooks too. Respond takes `{ "option" }` or
   `{ "text" }` and only on asks. The list endpoint drops `threadId`. Each inbox converts its stored notifications
-  once (v1 cards to the intent they resemble). docs/protocol.md is rewritten as protocol v2. **App builds before
+  once (v1 cards to the intent they resemble); converted asks and unfinished progress are resolved, so they leave
+  the inbox and the tray and free their key. docs/protocol.md is rewritten as protocol v2. **App builds before
   0.3.0 read the flat fields, so release 0.3.0 before deploying this.**
 - Web: cards, mock mode, the Send preview and the landing demo are intent-only; the token snippets use `key`,
   `cooldown` and progress intents. An open ask past its expiry leaves Needs you right away. Search also matches an

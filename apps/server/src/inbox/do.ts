@@ -189,14 +189,15 @@ export class InboxDO extends DurableObject<Env> {
       )
       .toArray();
     for (const r of rows) {
-      const old = JSON.parse(r.data) as { intent?: string; severity?: string };
+      const old = JSON.parse(r.data) as { intent?: string; severity?: string; status?: string };
       const n = fromStored(old, r.replace_key);
-      const changed = old.intent === undefined || old.severity !== n.severity;
+      const changed = old.intent === undefined || old.severity !== n.severity || old.status !== n.status;
       this.sql.exec(
-        "UPDATE notifications SET intent = ?, key = ?, severity = ?, search = ?, data = ?, seq = COALESCE(?, seq) WHERE id = ?",
+        "UPDATE notifications SET intent = ?, key = ?, severity = ?, status = ?, search = ?, data = ?, seq = COALESCE(?, seq) WHERE id = ?",
         n.intent,
         n.key,
         n.severity,
+        n.status,
         searchText(n),
         JSON.stringify(n),
         changed ? this.nextSeq() : null,
@@ -988,7 +989,8 @@ export class InboxDO extends DurableObject<Env> {
   private expireAsks(refs: string[], now: number) {
     const overdue = this.sql
       .exec<{ id: string }>(
-        "SELECT id FROM notifications WHERE intent = 'ask' AND status = 'active' AND json_extract(data, '$.ask.expiresAt') <= ?",
+        `SELECT id FROM notifications WHERE intent = 'ask' AND status = 'active' AND json_extract(data, '$.ask.state') = 'open'
+           AND json_extract(data, '$.ask.expiresAt') <= ?`,
         new Date(now).toISOString(),
       )
       .toArray()

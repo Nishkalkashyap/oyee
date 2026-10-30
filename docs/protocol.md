@@ -93,7 +93,9 @@ web, Android and Swift tests all decode it; the Swift copy is checked for drift)
 **Stored notifications from before v2** were converted once, in each inbox: a v1 card with answer actions or a reply
 became an ask (`answered` from its last response, otherwise `expired`), one with a progress bar became a progress
 (`done` at max, otherwise `stopped`), and everything else an inform (link actions became `links`). `replaceKey`
-became `key`, and `debug` became `info`.
+became `key`, and `debug` became `info`. Converted asks and stopped progress are `resolved` (at their last update
+when they weren't already), so they leave the inbox and the tray and don't hold their key; a converted `done`
+progress stays `active` until read, like a new one.
 
 ### 1.2 Send inputs
 
