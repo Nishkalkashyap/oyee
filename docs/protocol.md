@@ -253,7 +253,7 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
 | `ask` | `{ title, body?, options?: string[] (≤3 → actions), allowText?: boolean, severity?, source?, threadId? }` | `{ id }` — the notification awaits a response |
-| `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: outcome (`created` / `updated_silently` / `alerted`), the id and the next step |
+| `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: `outcome:` (`created` / `updated_silently` / `alerted`) and `id:` lines, then the next step (as `inform`) |
 | `wait_for_response` | `{ id, timeoutSeconds?: number (1..55, default 50) }` | `{ status: "answered", response } \| { status: "pending" }` (call again if pending) |
 | `get_notification` | `{ id }` | `Notification` |
 | `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |

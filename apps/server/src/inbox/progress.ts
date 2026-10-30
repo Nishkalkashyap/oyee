@@ -89,20 +89,16 @@ export function reportProgress(
 const amount = (p: ProgressNotification["progress"]) =>
   p.label ?? (p.max === 100 ? `${Math.round((Math.min(p.value, p.max) / p.max) * 100)}%` : `${p.value}/${p.max}`);
 
-/** The MCP `progress` result: what happened, then what to do next. */
+/** The MCP `progress` result, in the same shape as inform's: "outcome: …" and "id: …" lines, then what to do next. */
 export function progressResultText({ notification: n, outcome }: ProgressReport): string {
   const key = JSON.stringify(n.key);
   const p = n.progress;
-  if (p.state === "done" || p.state === "failed") {
-    return (
-      `${outcome}: progress ${n.id} (key ${key}) finished as ${p.state} at ${amount(p)}; the user was alerted once. ` +
-      `It stays in the inbox until read. A later report with key ${key} starts a new progress.`
-    );
-  }
-  const what =
-    outcome === "created" ? `appeared without sound at ${amount(p)}` : `is now at ${amount(p)} (updated silently)`;
-  return (
-    `${outcome}: progress ${n.id} (key ${key}) ${what}. Call progress again with key ${key} to update it; ` +
-    `finish with status "done" or "failed" to alert the user once.`
-  );
+  const reason =
+    p.state === "done" || p.state === "failed"
+      ? `The progress with key ${key} finished as ${p.state} at ${amount(p)} and alerted the user once. It stays in ` +
+        `the inbox until read; a later report with key ${key} starts a new progress.`
+      : `The progress with key ${key} ${outcome === "created" ? "appeared without sound" : "was updated silently"} at ` +
+        `${amount(p)}. Call progress again with key ${key} to update it; finish with status "done" or "failed" to ` +
+        `alert the user once.`;
+  return `outcome: ${outcome}\nid: ${n.id}\n${reason}`;
 }

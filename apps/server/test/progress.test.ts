@@ -45,7 +45,7 @@ describe("MCP progress", () => {
     const { mcp, ws, messages, next, get } = await setup();
     const r = await tool(mcp, "progress", { key: "deploy", title: "Deploying api", value: 3, max: 7, label: "3/7 steps" });
     expect(r.isError).toBe(false);
-    expect(r.text).toMatch(/^created\b/);
+    expect(r.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\n/);
     expect(r.text).toContain('"deploy"');
 
     const ev = await next(0);
@@ -73,7 +73,7 @@ describe("MCP progress", () => {
     await next(0);
     const from = messages.length;
     const r = await tool(mcp, "progress", { key: "deploy", title: "Deploying api", value: 2 });
-    expect(r.text).toMatch(/^updated_silently\b/);
+    expect(r.text).toMatch(/^outcome: updated_silently\nid: ntf_[0-9A-Za-z]+\n/);
     expect(r.id).toBe(first.id);
 
     const ev = await next(from);
@@ -91,7 +91,7 @@ describe("MCP progress", () => {
     await call("POST", `/api/notifications/${first.id}/read`, { cookie });
     const from = messages.length;
     const r = await tool(mcp, "progress", { key: "ci", title: "CI passed", status: "done" });
-    expect(r.text).toMatch(/^alerted\b/);
+    expect(r.text).toMatch(/^outcome: alerted\nid: ntf_[0-9A-Za-z]+\n/);
     expect(r.text).toContain("done");
 
     const ev = await eventually(() =>
@@ -122,7 +122,7 @@ describe("MCP progress", () => {
     await next(0);
     const from = messages.length;
     const r = await tool(mcp, "progress", { key: "e2e", title: "e2e tests", status: "failed", body: "`login` failed" });
-    expect(r.text).toMatch(/^alerted\b/);
+    expect(r.text).toMatch(/^outcome: alerted\nid: ntf_[0-9A-Za-z]+\n/);
     const ev = await next(from);
     expect(ev).toMatchObject({
       type: "notification.updated",
@@ -139,7 +139,7 @@ describe("MCP progress", () => {
     await next(0);
     const from = messages.length;
     const again = await tool(mcp, "progress", { key: "nightly", title: "Nightly", value: 5 });
-    expect(again.text).toMatch(/^created\b/);
+    expect(again.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\n/);
     expect(again.id).not.toBe(first.id);
     const ev = await eventually(() => messages.slice(from).find((m) => m.type === "notification.created"));
     expect(ev).toMatchObject({ notification: { id: again.id, silent: true, version: 1, progress: { value: 5, state: "running" } } });
@@ -152,7 +152,7 @@ describe("MCP progress", () => {
     const { cookie, mcp, ws } = await setup();
     const a = await tool(mcp, "progress", { key: "build", title: "Build" });
     const b = await tool(mcp, "progress", { key: "build", title: "Build", source: "other-agent" });
-    expect(b.text).toMatch(/^created\b/);
+    expect(b.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\n/);
     expect(b.id).not.toBe(a.id);
     const again = await tool(mcp, "progress", { key: "build", title: "Build", source: "other-agent", value: 50 });
     expect(again.id).toBe(b.id);
