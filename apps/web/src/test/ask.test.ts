@@ -26,12 +26,14 @@ describe("ask card view", () => {
       ],
       reply: { placeholder: "Reply…" },
       status: "Waiting 12m",
+      expiry: "Expires in 48m",
+      note: null,
     });
   });
 
   it("a fresh ask is just asked", () => {
     expect(askView(fixture("ask-open"), at("2026-10-30T09:00:20.000Z")).status).toBe("Just asked");
-    expect(askView(fixture("ask-open"), at("2026-10-30T11:30:00.000Z")).status).toBe("Waiting 2h");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:45:00.000Z")).status).toBe("Waiting 45m");
   });
 
   it("an answered ask shows the answer and the device, with the chosen button marked and nothing left to press", () => {
@@ -45,6 +47,8 @@ describe("ask card view", () => {
       ],
       reply: null,
       status: "Answered: Approve · Pixel 9",
+      expiry: null,
+      note: null,
     });
   });
 
@@ -64,6 +68,35 @@ describe("ask card view", () => {
       ],
     });
     expect(askView(fixture("ask-withdrawn"), at("2026-10-30T09:30:00.000Z"))).toMatchObject({ open: false, status: "Withdrawn" });
+  });
+
+  it("says when an open ask expires, down to the last minute", () => {
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:00:20.000Z")).expiry).toBe("Expires in 1h");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:59:20.000Z")).expiry).toBe("Expires in 1m");
+    expect(askView(fixture("ask-open"), at("2026-10-30T09:59:45.000Z")).expiry).toBe("Expires in under a minute");
+  });
+
+  it("explains why an expired or withdrawn ask can't be answered", () => {
+    expect(askView(fixture("ask-expired"), at("2026-10-30T09:30:00.000Z"))).toMatchObject({
+      state: "expired",
+      expiry: null,
+      note: "Nobody answered within 1h, so the question was closed on every device.",
+    });
+    expect(askView(fixture("ask-withdrawn"), at("2026-10-30T09:30:00.000Z"))).toMatchObject({
+      state: "withdrawn",
+      expiry: null,
+      note: "The sender withdrew this question before it was answered.",
+    });
+  });
+
+  it("an open ask past its expiry shows as expired before the server says so", () => {
+    expect(askView(fixture("ask-open"), at("2026-10-30T10:00:00.000Z"))).toMatchObject({
+      state: "expired",
+      open: false,
+      reply: null,
+      status: "Expired",
+      expiry: null,
+    });
   });
 });
 

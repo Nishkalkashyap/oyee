@@ -624,6 +624,8 @@ export interface WebPushPayload {
 
 /** wait_for_response holds at most this long (exported as LIMITS.askWaitSeconds; defined here because LIMITS comes later). */
 const ASK_WAIT_SECONDS = 50;
+/** The longest an ask can stay open (exported as LIMITS.maxAskExpiry). */
+const MAX_ASK_EXPIRY = "24h";
 
 /**
  * Ask: a question for the user (GLOSSARY.md). Agents only, over MCP; they poll the answer with wait_for_response.
@@ -642,6 +644,14 @@ export const AskInput = z.object({
     .optional()
     .describe("Up to 3 answer-button labels, e.g. [\"Approve\", \"Reject\"]. The label tapped is the answer."),
   allowText: z.boolean().optional().describe("Also accept a typed answer. Implied when there are no options."),
+  expiresIn: Duration.refine((d) => durationMs(d) <= durationMs(LIMITS.maxAskExpiry), {
+    message: `at most ${MAX_ASK_EXPIRY}`,
+  })
+    .optional()
+    .describe(
+      `How long the question stays answerable, e.g. "15m", "2h" (default 1h, at most ${MAX_ASK_EXPIRY}). Then it leaves ` +
+        "every device and wait_for_response reports it expired.",
+    ),
   url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the PR to review before answering."),
   key: Key.optional().describe(
     "Names this question. Asking again with the key of an open ask returns that ask instead of alerting again.",
@@ -668,10 +678,13 @@ export const McpWaitInput = z.object({
 });
 export type McpWaitInput = z.infer<typeof McpWaitInput>;
 
-/** wait_for_response: the first answer, or still pending (with when it was asked, so the agent needs no date maths). */
+/**
+ * wait_for_response: the first answer; still pending (with when it was asked and when it expires, so the agent needs
+ * no date maths); or closed unanswered because it expired or its sender withdrew it.
+ */
 export type McpWaitResult =
   | { status: "answered"; answer: AskAnswer; askedAt: string }
-  | { status: "pending"; askedAt: string; expiresAt: string | null };
+  | { status: "pending" | "expired" | "withdrawn"; askedAt: string; expiresAt: string | null };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -703,6 +716,8 @@ export const LIMITS = {
   authFailuresPerIpPerMinute: 30,
   /** An ask closes this long after it was sent unless the sender says otherwise. */
   defaultAskExpiry: "1h",
+  /** The longest `expiresIn` an ask may set. */
+  maxAskExpiry: MAX_ASK_EXPIRY,
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
   /** Bounds of a progress's `staleAfter`. */
@@ -836,7 +851,15 @@ export function inferIntent(
           at: last.at,
         }
       : null;
-    const state: AskState = answer ? "answered" : opts.legacy ? "expired" : n.status === "resolved" ? "withdrawn" : "open";
+    // Re-inferring a stored ask (read, resolve…) keeps its expiry and whether it expired.
+    const prior = (n as { ask?: Partial<AskBlock> }).ask;
+    const state: AskState = answer
+      ? "answered"
+      : opts.legacy || prior?.state === "expired"
+        ? "expired"
+        : n.status === "resolved"
+          ? "withdrawn"
+          : "open";
     return {
       ...flat,
       intent: "ask",
@@ -844,7 +867,7 @@ export function inferIntent(
         options: n.actions.filter((a) => !isLinkAction(a)).map((a) => a.label),
         allowText: n.reply !== null,
         replyPlaceholder: n.reply?.placeholder ?? null,
-        expiresAt: new Date(Date.parse(n.createdAt) + durationMs(LIMITS.defaultAskExpiry)).toISOString(),
+        expiresAt: prior?.expiresAt ?? new Date(Date.parse(n.createdAt) + durationMs(LIMITS.defaultAskExpiry)).toISOString(),
         answer,
         state,
       },

@@ -253,8 +253,8 @@ Streamable HTTP, stateless. Server name `oyee`. Exactly seven tools (the input s
 | Tool | Input | Output |
 |---|---|---|
 | `inform` | `InformInput` (below) | result text (below): `created` / `updated_silently` / `alerted` / `suppressed` |
-| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | result text: `created` (`Asked the user. Call wait_for_response with id "ntf_…" to get the answer.`), or `reused` for an open ask with the same `(source, key)` (`Already asked 12m ago, still waiting; the user was not alerted again. …`, no new alert) |
-| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | result text: `answered` (`The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`) or `pending` (`No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.`) |
+| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, expiresIn?: duration (default "1h", max "24h"), url?, key?, source?, devices?, platforms? }` | result text: `created` (`Asked the user (expires in 1h). Call wait_for_response with id "ntf_…" to get the answer.`), or `reused` for an open ask with the same `(source, key)` (`Already asked 12m ago, still waiting (expires in 48m); the user was not alerted again. …`, no new alert) |
+| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | result text: `answered` (`The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`) `pending` (`No answer yet: asked 3m ago, expires in 57m. Call wait_for_response again with id "ntf_…" to keep waiting.`), `expired` (`The ask expired without an answer…`) or `withdrawn` (`The ask was withdrawn without an answer…`) |
 | `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | result text: `created` / `updated_silently` / `alerted`, then the next step |
 | `resolve` | `{ id }` | result text: `resolved` (`Resolved "…": it is gone from the user's devices.`) or `withdrawn` for an open ask (it can no longer be answered) |
 | `list_notifications` | `McpListInput`: `{ key?, intent?, status?, source?, limit? (default 10, max 50), cursor? }` | JSON `{ items: McpListItem[], nextCursor }`, newest first |
@@ -266,7 +266,7 @@ the next step in words, so a model reads the outcome and id the same way from ev
 ```
 outcome: pending
 id: ntf_01J…
-No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_01J…" to keep waiting.
+No answer yet: asked 3m ago, expires in 57m. Call wait_for_response again with id "ntf_01J…" to keep waiting.
 ```
 
 Errors are `isError` results with the text `<code>: <message>` (for example `not_found: notification not found`).
@@ -278,8 +278,13 @@ Errors are `isError` results with the text `<code>: <message>` (for example `not
 `nextCursor` as `cursor` for older ones (`null` = no more).
 
 `wait_for_response` returns the answer immediately if there is one. An ask always alerts at `warning`; with neither
-options nor `allowText` it gets a reply box. Its `ask.expiresAt` is one hour after it was sent (expiry itself comes
-with ticket 06: until then an ask stays open).
+options nor `allowText` it gets a reply box. Its `ask.expiresAt` is `expiresIn` (default one hour, at most 24 hours)
+after it was sent. **Expiry**: when that time is up the inbox's alarm sets `ask.state: "expired"` and
+`status: "resolved"` and broadcasts `notification.updated` (`reason: "resolved"`, `alert: false`), so every device
+takes it out of the tray; a held `wait_for_response` returns at once with the expiry. Not charged to quotas.
+**Withdrawing**: resolving an open ask (`resolve` or `POST /api/notifications/:id/resolve`) sets
+`ask.state: "withdrawn"`, the same way. Answering an answered, expired or withdrawn ask (or one past `expiresAt`)
+returns `409 conflict`.
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
 For app builds that predate intents, `ask` options also become flat actions with ids `option_1..3` (first `primary`,

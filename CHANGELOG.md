@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Asks expire: `ask` takes `expiresIn` (default 1h, at most 24h). When it runs out the ask leaves every device's
+  tray, shows "Expired" in the inbox with its buttons disabled, and `wait_for_response` reports it expired (a pending
+  result now also says when the ask expires). Resolving an open ask withdraws it ("Withdrawn"). Answers to an
+  expired or withdrawn ask get `409`. The web ask card shows when an open ask expires and explains why a closed one
+  can't be answered.
 - Web inbox on intents: **Needs you** lists open asks (answer buttons and Reply right in the list), **In progress**
   running or stopped progress, **Updates** everything else. Notifications with the same key from the same source stack
   as one row (without a key: same source and title). Tag chips, tag search, the thread filter and the Templates page
