@@ -1,5 +1,5 @@
 /** What the inform card shows (GLOSSARY.md: Inform), derived from the intent-shaped notification. Pure, so it's tested. */
-import type { Field, LinkButton, Notification, Severity } from "@oyee/schema";
+import { LIMITS, type Field, type LinkButton, type Notification, type Severity } from "@oyee/schema";
 import { isHttpUrl } from "./format";
 import { safeHref } from "./markdown";
 import { SEVERITY_STYLES } from "./severity";
@@ -16,13 +16,11 @@ export interface InformView {
   body: string | null;
   image: string | null;
   rows: Field[];
-  /** Link buttons, at most three, only with URLs safe to open. */
+  /** Link buttons, at most `LIMITS.maxLinks`, only with URLs safe to open. */
   links: LinkButton[];
   /** Where tapping the notification goes. */
   open: { url: string; host: string } | null;
 }
-
-const MAX_LINKS = 3;
 
 export function informView(n: InformNotification): InformView {
   const { inform } = n;
@@ -37,7 +35,7 @@ export function informView(n: InformNotification): InformView {
     body: n.body,
     image: inform.image && isHttpUrl(inform.image) ? inform.image : null,
     rows: inform.fields.map((f) => ({ label: f.label, value: f.value || "—" })),
-    links: inform.links.filter((l) => safeHref(l.url)).slice(0, MAX_LINKS),
+    links: inform.links.filter((l) => safeHref(l.url)).slice(0, LIMITS.maxLinks),
     open: open ? { url: open, host: hostOf(open) } : null,
   };
 }

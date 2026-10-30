@@ -232,12 +232,12 @@ export const InformInput = IntentInputBase.extend({
     .array(LinkButton)
     .max(LIMITS.maxLinks)
     .optional()
-    .describe("Up to 3 link buttons (label + url), e.g. the PR, the build log, a dashboard."),
+    .describe(`Up to ${LIMITS.maxLinks} link buttons (label + url), e.g. the PR, the build log, a dashboard.`),
   fields: z
     .array(Field)
     .max(LIMITS.maxFields)
     .optional()
-    .describe("Up to 10 label/value rows for structured facts (region, duration, commit)."),
+    .describe(`Up to ${LIMITS.maxFields} label/value rows for structured facts (region, duration, commit).`),
   image: httpsUrl
     .refine((u) => u.startsWith("https://"), "image must be an https URL")
     .optional()
@@ -246,7 +246,8 @@ export const InformInput = IntentInputBase.extend({
   cooldown: boundedDuration("cooldown", LIMITS.minCooldown, LIMITS.maxCooldown)
     .optional()
     .describe(
-      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; 1m to 168h). ' +
+      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; ' +
+        `${LIMITS.minCooldown} to ${LIMITS.maxCooldown}). ` +
         "Sends inside it update the notification silently, or change nothing if the user resolved it.",
     ),
 });
@@ -267,7 +268,7 @@ export const AskInput = IntentInputBase.extend({
     .array(z.string().min(1).max(32))
     .max(LIMITS.maxOptions)
     .optional()
-    .describe('Up to 3 answer-button labels, e.g. ["Approve", "Reject"]. The label tapped is the answer.'),
+    .describe(`Up to ${LIMITS.maxOptions} answer-button labels, e.g. ["Approve", "Reject"]. The label tapped is the answer.`),
   allowText: z.boolean().optional().describe("Also accept a typed answer. Implied when there are no options."),
   expiresIn: Duration.refine((d) => durationMs(d) <= durationMs(LIMITS.maxAskExpiry), {
     message: `at most ${LIMITS.maxAskExpiry}`,
@@ -305,7 +306,8 @@ export const ProgressInput = IntentInputBase.extend({
     .optional()
     .describe(
       'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
-        'silent step (default "30m", from "1m" to "24h"). A later report revives it.',
+        `silent step (default "${LIMITS.defaultStaleAfter}", from "${LIMITS.minStaleAfter}" to ` +
+        `"${LIMITS.maxStaleAfter}"). A later report revives it.`,
     ),
   url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
 });

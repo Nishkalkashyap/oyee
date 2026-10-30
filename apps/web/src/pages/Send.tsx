@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { IntentSendInput, Severity, ProgressStatus, type Field, type LinkButton } from "@oyee/schema";
+import { IntentSendInput, LIMITS, Severity, ProgressStatus, type Field, type LinkButton } from "@oyee/schema";
 import { errorMessage } from "../lib/api";
 import { buildSendInput, COMPOSER_PRESETS, emptyComposer, previewNotification, type ComposerIntent, type ComposerState } from "../lib/composer";
 import { useDevices, useSendNotification } from "../lib/queries";
@@ -180,7 +180,7 @@ export function SendPage() {
                   <Input id="c-pl" value={s.label} maxLength={64} placeholder="3/7 checks" onChange={(e) => set("label", e.target.value)} />
                 </FormField>
                 <FormField label="Stopped after" htmlFor="c-stale" hint="Quiet this long = stopped">
-                  <Input id="c-stale" value={s.staleAfter} placeholder="30m" onChange={(e) => set("staleAfter", e.target.value)} />
+                  <Input id="c-stale" value={s.staleAfter} placeholder={LIMITS.defaultStaleAfter} onChange={(e) => set("staleAfter", e.target.value)} />
                 </FormField>
                 <input
                   type="range"
@@ -206,12 +206,12 @@ export function SendPage() {
               <Section
                 title="Rows"
                 right={
-                  <Button size="sm" variant="ghost" icon={<PlusIcon size={13} />} disabled={s.fields.length >= 10} onClick={() => set("fields", [...s.fields, { label: "", value: "" }])}>
+                  <Button size="sm" variant="ghost" icon={<PlusIcon size={13} />} disabled={s.fields.length >= LIMITS.maxFields} onClick={() => set("fields", [...s.fields, { label: "", value: "" }])}>
                     Add row
                   </Button>
                 }
               >
-                {s.fields.length === 0 && <p className="text-xs text-zinc-500">Label/value rows for structured facts (max 10).</p>}
+                {s.fields.length === 0 && <p className="text-xs text-zinc-500">Label/value rows for structured facts (max {LIMITS.maxFields}).</p>}
                 {s.fields.map((f, i) => (
                   <div key={i} className="flex gap-2">
                     <Input aria-label="Row label" value={f.label} maxLength={40} placeholder="Label" onChange={(e) => updateField(i, { label: e.target.value })} className="w-2/5" />
@@ -224,12 +224,12 @@ export function SendPage() {
               <Section
                 title="Link buttons"
                 right={
-                  <Button size="sm" variant="ghost" icon={<PlusIcon size={13} />} disabled={s.links.length >= 3} onClick={() => set("links", [...s.links, { label: "", url: "" }])}>
+                  <Button size="sm" variant="ghost" icon={<PlusIcon size={13} />} disabled={s.links.length >= LIMITS.maxLinks} onClick={() => set("links", [...s.links, { label: "", url: "" }])}>
                     Add link
                   </Button>
                 }
               >
-                {s.links.length === 0 && <p className="text-xs text-zinc-500">Up to 3 buttons that open a URL, e.g. the PR or the build log.</p>}
+                {s.links.length === 0 && <p className="text-xs text-zinc-500">Up to {LIMITS.maxLinks} buttons that open a URL, e.g. the PR or the build log.</p>}
                 {s.links.map((l, i) => (
                   <div key={i} className="flex gap-2">
                     <Input aria-label="Link label" value={l.label} maxLength={32} placeholder="Label" onChange={(e) => updateLink(i, { label: e.target.value })} className="w-2/5" />
