@@ -71,6 +71,18 @@ async function tool(path: string, name: string, args: unknown): Promise<any> {
   return JSON.parse(body.result.content[0]!.text);
 }
 
+/** Calls the MCP `ask` tool and reads the ask's id from its text result. */
+async function askId(path: string, args: unknown): Promise<string> {
+  const res = await SELF.fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name: "ask", arguments: args } }),
+  });
+  const body = (await res.json()) as { result: { content: { text: string }[]; isError?: boolean } };
+  expect(body.result.isError ?? false).toBe(false);
+  return /ntf_[0-9A-Za-z]+/.exec(body.result.content[0]!.text)![0];
+}
+
 async function socket(cookie: string) {
   const res = await SELF.fetch(`${BASE}/api/ws`, { headers: { Upgrade: "websocket", Cookie: cookie } });
   const ws = res.webSocket!;
@@ -88,7 +100,7 @@ describe("intent of MCP sends", () => {
     const mcp = new URL((await createToken(cookie, "mcp", "Claude Code", "claude-code")).url).pathname;
     const { ws, messages } = await socket(cookie);
 
-    const { id } = await tool(mcp, "ask", { title: "Deploy to prod?", options: ["Approve", "Reject"] });
+    const id = await askId(mcp, { title: "Deploy to prod?", options: ["Approve", "Reject"] });
     const asked = (await call<Notification>("GET", `/api/notifications/${id}`, { cookie })).body;
     expect(asked).toMatchObject({
       intent: "ask",
@@ -114,7 +126,7 @@ describe("intent of MCP sends", () => {
   it("an ask with only a reply box accepts text", async () => {
     const cookie = await devLogin();
     const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
-    const { id } = await tool(mcp, "ask", { title: "Which branch?" });
+    const id = await askId(mcp, { title: "Which branch?" });
     await call("POST", `/api/notifications/${id}/respond`, { cookie }, { text: "main" });
     const n = (await call<Notification>("GET", `/api/notifications/${id}`, { cookie })).body;
     expect(n).toMatchObject({
@@ -126,7 +138,7 @@ describe("intent of MCP sends", () => {
   it("an ask resolved without an answer is withdrawn", async () => {
     const cookie = await devLogin();
     const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
-    const { id } = await tool(mcp, "ask", { title: "Still needed?", options: ["Yes"] });
+    const id = await askId(mcp, { title: "Still needed?", options: ["Yes"] });
     const n = await tool(mcp, "resolve_notification", { id });
     expect(n).toMatchObject({ intent: "ask", status: "resolved", ask: { state: "withdrawn", answer: null } });
   });

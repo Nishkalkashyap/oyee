@@ -184,7 +184,10 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /api/notifications/:id` → `Notification`
 - `POST /api/notifications` `SendNotificationInput` → `201 Notification` (session only; devices may not send)
 - `PATCH /api/notifications/:id` `UpdateNotificationInput` → `Notification` (session only)
-- `POST /api/notifications/:id/respond` `{ "actionId"?: string, "text"?: string }` (at least one) → `Notification`
+- `POST /api/notifications/:id/respond` `{ "option"?: string, "actionId"?: string, "text"?: string }` (at least one) →
+  `Notification`. On an ask, `option` is an answer-button label (`actionId` is the v1 way to pick one) and `text`
+  needs `allowText`; the first answer from any device sets `ask.answer`, resolves the ask and marks it read; a later
+  answer gets `409 conflict` ("This ask was already answered: Approve · Pixel 9").
 - `POST /api/notifications/:id/read` → `Notification`
 - `POST /api/notifications/read-all` `{ "source"?: string }` → `{ "updated": n }`
 - `POST /api/notifications/:id/resolve` → `Notification`
@@ -252,9 +255,9 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `send_notification` | `SendNotificationInput` | `Notification` |
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
-| `ask` | `{ title, body?, options?: string[] (≤3 → actions), allowText?: boolean, severity?, source?, threadId? }` | `{ id }` — the notification awaits a response |
+| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | Text: `Asked the user (id ntf_…). Call wait_for_response with id "ntf_…" to get the answer.`, or for an open ask with the same `(source, key)`: `Already asked 12m ago, still waiting (id ntf_…)…` (no new alert) |
 | `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: `outcome:` (`created` / `updated_silently` / `alerted`) and `id:` lines, then the next step (as `inform`) |
-| `wait_for_response` | `{ id, timeoutSeconds?: number (1..55, default 50) }` | `{ status: "answered", response } \| { status: "pending" }` (call again if pending) |
+| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | Text: `The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`, or `No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.` |
 | `get_notification` | `{ id }` | `Notification` |
 | `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |
 | `list_templates` | `{}` | `{ items }` |
@@ -262,23 +265,37 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `delete_template` | `{ name }` | `{ ok: true }` |
 | `list_devices` | `{}` | `{ items: Device[] }` |
 
-`wait_for_response` returns the latest existing response immediately if one exists. `ask` with neither options nor `allowText` adds a reply box.
+`wait_for_response` returns the answer immediately if there is one. An ask always alerts at `warning`; with neither
+options nor `allowText` it gets a reply box. Its `ask.expiresAt` is one hour after it was sent (expiry itself comes
+with ticket 06: until then an ask stays open).
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
-`ask` options become actions with ids `option_1..3` and labels set to the option text. Each `resolves: true`. `allowText` adds `reply`.
+For app builds that predate intents, `ask` options also become flat actions with ids `option_1..3` (first `primary`,
+each `resolves: true`) and `allowText` adds `reply`; answering with `actionId: "option_2"` records the option `"Reject"`.
 
 **`inform`** (something the user should know; one-way). `InformInput`: `title` (required, ≤ 200), `body?` (markdown,
 ≤ 4000), `severity?` (`info` default \| `success` \| `warning` \| `critical`; every severity alerts), `url?` (opens on
 tap), `key?` (≤ 128), `source?` (default: the token's name), `devices?`, `platforms?`, `links?` (≤ 3 link buttons
-`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL).
-Keys are unique per `(source, key)`: with a key whose latest notification is an active inform, that one is updated in
-place (same id, `version` + 1, unread again) and alerts again (`outcome: alerted`); otherwise a new inform is created
-and alerts (`outcome: created`). Another source using the same key gets its own notification. The result is text:
+`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL),
+`cooldown?` (duration such as `"30m"`, `"1h"`, `"24h"`; units s, m, h; `LIMITS.minCooldown` 1m to
+`LIMITS.maxCooldown` 168h; only meaningful with `key`, stored as `inform.cooldown`).
+Keys are unique per `(source, key)`; another source using the same key gets its own notification. With a key whose
+latest notification is an inform, the send's `cooldown` is measured from the key's last alert, whatever the
+notification's status (silent updates don't move it):
+
+| Latest inform with the key | Inside the cooldown | Cooldown passed, or no cooldown |
+|---|---|---|
+| none (or another intent) | `created`: new inform, alerts | `created` |
+| active | `updated_silently`: content replaced, `version` + 1, `notification.updated` with `alert: false`, read state kept | `alerted`: content replaced, `version` + 1, unread again, `notification.updated` with `alert: true` |
+| resolved | `suppressed`: nothing changes, nothing is broadcast; the reason says when it was resolved and when the cooldown ends | `created`: new inform, alerts |
+
+A created or alerted send counts against the `send` quota, a silent update against `update`, a suppressed one against
+neither (the per-token rate limit still applies). The result is text:
 
 ```
-outcome: alerted
+outcome: updated_silently
 id: ntf_01J…
-Updated the notification with key "disk-db1" in place and alerted the user's devices again.
+Updated the notification with key "disk-full" without alerting: it alerted 12m ago, inside its 1h cooldown. The card shows the new text; sends with this key can alert again from 2026-10-30T13:05:00.000Z (in 48m).
 ```
 
 Until the flat card is removed, an inform also carries the flat fields: `links` become link `actions`
@@ -301,6 +318,19 @@ what the sender last reported; every client shows "Stopped reporting after <labe
 report with the key revives it as `running` silently (`outcome: updated_silently`, and the tool text says it had
 stopped reporting). A finished (`done`/`failed`) or resolved progress never stops; resolving a stopped one keeps
 `stopped`.
+
+**Keys across intents.** While the latest notification under a `(source, key)` is live (a running or stopped
+progress, or an open, unexpired ask), the key belongs to that intent: `inform`, `ask` or `progress` with the key and
+another intent fails with `conflict` (`409` over REST/webhooks once they send intents), and the message names the key,
+the live notification's intent and id, and the fix (use a different key, or finish the progress with `done` /
+`failed`, or withdraw the ask with resolve):
+
+```
+conflict: key "deploy" belongs to a running progress (id ntf_01J…). Use a different key for this inform, or first finish that progress by reporting it with key "deploy" and status "done" or "failed".
+```
+
+Once it is no longer live (finished progress, answered, expired or withdrawn ask, any inform, resolved or not) the
+next intent takes the key over and creates a new notification; the old one is left as it was.
 
 ---
 

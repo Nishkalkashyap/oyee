@@ -108,15 +108,6 @@ export type IntentSeverity = z.infer<typeof IntentSeverity>;
 export const Duration = z.string().regex(/^[1-9][0-9]{0,5}[smh]$/, 'expected a duration such as "30m" or "1h"');
 export type Duration = z.infer<typeof Duration>;
 
-/** Bounds for a progress's `staleAfter` (exposed as LIMITS.minStaleAfter / maxStaleAfter; defined here for ProgressInput). */
-const LIMITS_STALE_AFTER = { min: "1m", max: "24h" } as const satisfies Record<string, Duration>;
-
-/** A Duration within `[min, max]` (bounds from LIMITS). */
-const boundedDuration = (min: Duration, max: Duration) =>
-  Duration.refine((d) => durationMs(d) >= durationMs(min) && durationMs(d) <= durationMs(max), {
-    message: `expected a duration from ${min} to ${max}`,
-  });
-
 /** Names a notification per source so later sends refer to the same one. Unique per `(source, key)`. */
 export const Key = z.string().min(1).max(128);
 
@@ -197,7 +188,10 @@ export const ProgressInput = z.object({
   status: ProgressStatus.default("running").describe(
     "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
   ),
-  staleAfter: boundedDuration(LIMITS_STALE_AFTER.min, LIMITS_STALE_AFTER.max)
+  staleAfter: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minStaleAfter) && durationMs(d) <= durationMs(LIMITS.maxStaleAfter),
+    { error: () => `staleAfter must be between ${LIMITS.minStaleAfter} and ${LIMITS.maxStaleAfter}` },
+  )
     .optional()
     .describe(
       'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
@@ -335,10 +329,12 @@ export type UpdateNotificationInput = z.infer<typeof UpdateNotificationInput>;
 export const RespondInput = z
   .object({
     actionId: z.string().max(32).optional(),
+    /** The label of an ask's answer button (protocol v2; `actionId` is the v1 way to pick one). */
+    option: z.string().min(1).max(32).optional(),
     text: z.string().min(1).max(2000).optional(),
   })
-  .refine((v) => v.actionId !== undefined || v.text !== undefined, {
-    message: "actionId or text is required",
+  .refine((v) => v.actionId !== undefined || v.option !== undefined || v.text !== undefined, {
+    message: "option, actionId or text is required",
   });
 export type RespondInput = z.infer<typeof RespondInput>;
 
@@ -396,6 +392,15 @@ export const InformInput = z.object({
     .optional()
     .describe("https URL of an image shown on the card, such as a chart or screenshot."),
   icon: z.string().min(1).max(2048).optional().describe("An emoji or an https image URL shown next to the title."),
+  cooldown: Duration.refine(
+    (d) => durationMs(d) >= durationMs(LIMITS.minCooldown) && durationMs(d) <= durationMs(LIMITS.maxCooldown),
+    { error: () => `cooldown must be between ${LIMITS.minCooldown} and ${LIMITS.maxCooldown}` },
+  )
+    .optional()
+    .describe(
+      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; 1m to 168h). ' +
+        "Sends inside it update the notification silently, or change nothing if the user resolved it.",
+    ),
 });
 export type InformInput = z.infer<typeof InformInput>;
 
@@ -617,28 +622,56 @@ export interface WebPushPayload {
 
 // ─── MCP tool inputs ────────────────────────────────────────────────────────
 
-export const McpAskInput = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().max(4000).optional(),
-  options: z.array(z.string().min(1).max(32)).max(3).optional(),
-  allowText: z.boolean().optional(),
-  severity: Severity.optional(),
-  source: z.string().min(1).max(64).optional(),
-  threadId: z.string().min(1).max(128).optional(),
-  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
-  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
-  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
-  platforms: z.array(Platform).max(4).optional(),
+/** wait_for_response holds at most this long (exported as LIMITS.askWaitSeconds; defined here because LIMITS comes later). */
+const ASK_WAIT_SECONDS = 50;
+
+/**
+ * Ask: a question for the user (GLOSSARY.md). Agents only, over MCP; they poll the answer with wait_for_response.
+ * Always alerts at `warning`. With neither `options` nor `allowText`, a reply box is added.
+ */
+export const AskInput = z.object({
+  title: z.string().min(1).max(200).describe("The question, short enough for a notification title."),
+  body: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Context for the decision. Markdown subset: **bold**, *italic*, `code`, [links](https://…), line breaks."),
+  options: z
+    .array(z.string().min(1).max(32))
+    .max(3)
+    .optional()
+    .describe("Up to 3 answer-button labels, e.g. [\"Approve\", \"Reject\"]. The label tapped is the answer."),
+  allowText: z.boolean().optional().describe("Also accept a typed answer. Implied when there are no options."),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the PR to review before answering."),
+  key: Key.optional().describe(
+    "Names this question. Asking again with the key of an open ask returns that ask instead of alerting again.",
+  ),
+  source: z.string().min(1).max(64).optional().describe("Who is asking. Defaults to the token's label."),
+  devices: z
+    .array(z.string().min(1).max(64))
+    .max(20)
+    .optional()
+    .describe("Alert only these devices: names or ids from list_devices (a unique partial name such as \"macbook\" works)."),
+  platforms: z.array(Platform).max(4).optional().describe("Alert only devices on these platforms (union with devices)."),
 });
-export type McpAskInput = z.infer<typeof McpAskInput>;
+export type AskInput = z.infer<typeof AskInput>;
 
 export const McpWaitInput = z.object({
-  id: z.string(),
-  timeoutSeconds: z.number().int().min(1).max(55).default(50),
+  id: z.string().describe("The id returned by ask (ntf_…)."),
+  timeoutSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(ASK_WAIT_SECONDS)
+    .default(ASK_WAIT_SECONDS)
+    .describe(`How long to hold for an answer, at most ${ASK_WAIT_SECONDS} s. Call again while it is pending.`),
 });
 export type McpWaitInput = z.infer<typeof McpWaitInput>;
 
-export type McpWaitResult = { status: "answered"; response: Response } | { status: "pending" };
+/** wait_for_response: the first answer, or still pending (with when it was asked, so the agent needs no date maths). */
+export type McpWaitResult =
+  | { status: "answered"; answer: AskAnswer; askedAt: string }
+  | { status: "pending"; askedAt: string; expiresAt: string | null };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -672,9 +705,14 @@ export const LIMITS = {
   defaultAskExpiry: "1h",
   /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
   defaultStaleAfter: "30m",
-  /** Bounds for a progress's `staleAfter`. */
-  minStaleAfter: LIMITS_STALE_AFTER.min,
-  maxStaleAfter: LIMITS_STALE_AFTER.max,
+  /** Bounds of a progress's `staleAfter`. */
+  minStaleAfter: "1m",
+  maxStaleAfter: "24h",
+  /** wait_for_response holds for an answer at most this long. */
+  askWaitSeconds: ASK_WAIT_SECONDS,
+  /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
+  minCooldown: "1m",
+  maxCooldown: "168h",
 } as const satisfies Record<string, number | Duration>;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────

@@ -6,10 +6,14 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] `cooldown` accepts durations like `30m`, `1h`, `24h` (bounds in LIMITS)
 - [ ] Outcomes: no notification with the key → `created` (alerts); active and last alert within cooldown → `updated_silently`; resolved within cooldown → `suppressed` with a reason naming when it was resolved and when the cooldown ends; cooldown passed → `alerted` (updates the active one, or creates a new one if the latest is resolved)
 - [ ] Cooldown is measured from the last alert for that key, whatever its status
 - [ ] Silent updates are broadcast without alert and don't reset read state; alerted updates do
 - [ ] Tests drive time by backdating the stored row through the Durable Object, then observe via MCP results and WebSocket events
+
+## Comments
+
+Resolved: feature 5c6d6e7, merged into `notification-intents` (LIMITS conflict kept both sides). Last alert stored in internal `alerted_at`; cooldown bounds 1m..168h; suppressed sends cost no quota.

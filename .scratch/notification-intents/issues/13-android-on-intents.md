@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] System notifications per intent; answering from the notification posts to the respond endpoint; expired/answered asks are cancelled
 - [ ] The debug channel is deleted on upgrade; tags, thread and silent handling removed
 - [ ] Unit tests (models, inbox sections, card state labels) pass; screenshots of each card state attached for code review
+
+## Comments
+
+From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.

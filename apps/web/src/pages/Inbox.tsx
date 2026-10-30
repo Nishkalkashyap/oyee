@@ -23,6 +23,8 @@ import {
   XIcon,
 } from "../components/Icons";
 import { NotificationCard, ReplyComposer } from "../components/NotificationCard";
+import { AskCard } from "../components/AskCard";
+import { showsAsAsk } from "../lib/ask";
 import { ProgressBar } from "../components/NotificationParts";
 import { useToast } from "../components/Toast";
 import { Avatar, Button, EmptyState, ErrorBanner, Spinner, buttonClasses, cx } from "../components/ui";
@@ -391,6 +393,16 @@ function NotificationDetail({
     );
   };
   const resolved = n.status === "resolved";
+  const cardFooter = !resolved && (
+    <div className="flex items-center gap-3">
+      <Button size="sm" variant="primary" icon={<CheckIcon size={14} />} loading={resolving} onClick={() => onResolve(n)}>
+        Resolve
+      </Button>
+      <span className="hidden text-xs text-zinc-400 pointer-fine:inline dark:text-zinc-500">
+        or press <Kbd>E</Kbd>
+      </span>
+    </div>
+  );
   const onDelete = () => {
     if (!confirm("Delete this notification on every device?")) return;
     del.mutate(n.id, {
@@ -433,25 +445,33 @@ function NotificationDetail({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-2xl flex-col gap-2.5 px-3 py-5 sm:px-5">
           <SystemLine>{formatDateTime(n.createdAt)}</SystemLine>
-          <NotificationCard
-            notification={n}
-            inThread
-            className="mr-6 sm:mr-12"
-            onAction={onAction}
-            pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
-            footer={
-              !resolved && (
-                <div className="flex items-center gap-3">
-                  <Button size="sm" variant="primary" icon={<CheckIcon size={14} />} loading={resolving} onClick={() => onResolve(n)}>
-                    Resolve
-                  </Button>
-                  <span className="hidden text-xs text-zinc-400 pointer-fine:inline dark:text-zinc-500">
-                    or press <Kbd>E</Kbd>
-                  </span>
-                </div>
-              )
-            }
-          />
+          {showsAsAsk(n) ? (
+            <AskCard
+              notification={n}
+              inThread
+              className="mr-6 sm:mr-12"
+              onAnswer={(option) =>
+                respond.mutate(
+                  { option },
+                  {
+                    onSuccess: () => toast.success(`Sent “${option}”`),
+                    onError: (e) => toast.error("Couldn't send answer", errorMessage(e)),
+                  },
+                )
+              }
+              pendingOption={respond.isPending ? (respond.variables?.option ?? null) : null}
+              footer={cardFooter}
+            />
+          ) : (
+            <NotificationCard
+              notification={n}
+              inThread
+              className="mr-6 sm:mr-12"
+              onAction={onAction}
+              pendingActionId={respond.isPending && respond.variables?.actionId ? respond.variables.actionId : null}
+              footer={cardFooter}
+            />
+          )}
           {n.version > 1 && n.updatedAt !== n.createdAt && (
             <SystemLine>
               Updated {relativeTime(n.updatedAt)} · v{n.version}

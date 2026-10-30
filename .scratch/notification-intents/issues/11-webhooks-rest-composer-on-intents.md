@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Alertmanager/Grafana produce informs keyed by group key (severity from labels; below-info levels map to info); resolution resolves the keyed inform; SNS produces an inform
 - [ ] `POST /api/notifications` takes the intent-tagged body; the web Send page offers inform and progress with the intent fields (no templates, tags or silent)
 - [ ] Webhook and API server tests; web composer tests
+
+## Comments
+
+From 09: add a webhook test for the cross-intent key 409.

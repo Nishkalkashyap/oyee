@@ -1,10 +1,24 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Keys across intents: reusing a key whose latest notification is a running or stopped progress or an open ask, with
+  a different intent (`inform`, `ask` or `progress`), now fails with a conflict that names the key, what holds it and
+  how to fix it. Once that notification is finished, answered, expired or withdrawn, the new intent takes the key.
+- Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
+  `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
+  with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
+  who answered from which device, or how long ago it asked. The first answer from any device closes the ask
+  everywhere; later answers get `409` (this also applies to v1 cards with answer buttons). Respond accepts
+  `{ "option": "<label>" }`. The web inbox shows a purpose-built ask card: waiting time, buttons and reply box while
+  open, "Answered: Approve · Pixel 9" once answered.
 - MCP: new `inform` tool for one-way notifications (title, markdown body, severity, url, up to 3 link buttons, up to
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
   in plain text. The older tools keep working for now.
+- MCP: `inform` takes a `cooldown` (such as `"1h"`, 1m to 168h) alongside its key, so a cron agent alerts the user at
+  most once per cooldown: sends inside it update the card's text silently (`updated_silently`), and if the user
+  resolved it inside the cooldown nothing changes (`suppressed`, with when it was resolved and when the cooldown
+  ends). The cooldown runs from the key's last alert.
 - Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
   image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without

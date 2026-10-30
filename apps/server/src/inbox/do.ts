@@ -7,11 +7,13 @@ import { DurableObject } from "cloudflare:workers";
 import {
   ClientMessage,
   LIMITS,
+  type AskInput,
   QUOTAS,
   type FlatNotification,
   type InformInput,
   type ListNotificationsQuery,
   type McpWaitResult,
+  type Intent,
   type Notification,
   type Page,
   type ProgressInput,
@@ -36,12 +38,12 @@ import { newId } from "../lib/ids";
 import { listDevices } from "../db";
 import { fanoutPush, sendActionCallback, type InboxEvent } from "../push/fanout";
 import {
-  appendResponse,
   applyPatch,
   assertUniqueActionIds,
   buildNotification,
   replaceContent,
   resolveSendInput,
+  respondToCard,
   resolveTargets,
   searchText,
   type Actor,
@@ -49,7 +51,9 @@ import {
 } from "./model";
 import { isLiveProgress, reportProgress, staleDueAt, stopIfQuiet, type ProgressReport } from "./progress";
 import { Scheduler } from "./scheduler";
+import { answerAsk, answerOf, buildAsk, isOpenAsk, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
+import { assertKeyFree } from "./keys";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -175,6 +179,13 @@ export class InboxDO extends DurableObject<Env> {
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
     this.migrateToIntents();
+    this.migrateAlertedAt();
+  }
+
+  /** Inform cooldown: when each notification last alerted, measured per key (inbox/inform.ts). */
+  private migrateAlertedAt() {
+    const columns = this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray();
+    if (!columns.some((c) => c.name === "alerted_at")) this.sql.exec("ALTER TABLE notifications ADD COLUMN alerted_at TEXT");
   }
 
   /**
@@ -471,26 +482,48 @@ export class InboxDO extends DurableObject<Env> {
   async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("send", actor.userId);
       const targets =
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
       const now = new Date().toISOString();
       const fresh = buildInform(newId("ntf"), input, actor, now, targets);
-      const latest = fresh.key ? this.latestByKey(fresh.source, fresh.key) : null;
-      const result = applyInform(latest?.n ?? null, fresh, now);
+      const latest = fresh.key ? this.claimKey(fresh.source, fresh.key, "inform") : null;
+      const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
+      if (result.outcome === "suppressed") return result;
+      // a new notification counts as a send, a silent update as an update (spec "Quotas")
+      this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
       const n = result.notification;
       if (n.id === fresh.id) {
         this.save(n, null, actor.tokenId);
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       } else {
+        const alert = result.outcome === "alerted";
         this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
+      }
+      if (result.outcome !== "updated_silently") {
+        this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
       }
       return result;
     });
+  }
+
+  /**
+   * The latest notification under `(source, key)`, for an intent about to use the key (inbox/keys.ts): fails when that
+   * notification is still live and of another intent.
+   */
+  private claimKey(source: string, key: string, intent: Intent): Loaded | null {
+    const latest = this.latestByKey(source, key);
+    assertKeyFree(latest?.n, intent, Date.now());
+    return latest;
+  }
+
+  /** When an inform last alerted (`alerted_at`, written by inform); rows from other send paths fall back to `updatedAt`. */
+  private informAlertedAt(n: Notification): string {
+    const r = this.sql.exec<{ alerted_at: string | null }>("SELECT alerted_at FROM notifications WHERE id = ?", n.id).toArray()[0];
+    return r?.alerted_at ?? n.updatedAt;
   }
 
   /** The latest notification a sender named with this key (keys are unique per `(source, key)`). */
@@ -520,28 +553,9 @@ export class InboxDO extends DurableObject<Env> {
     return guard(() => {
       this.consume("respond", actor.userId);
       const rec = this.mustLoad(id);
-      const action = input.actionId !== undefined ? rec.n.actions.find((a) => a.id === input.actionId) : undefined;
-      if (input.actionId !== undefined && !action) throw badRequest(`actionId: unknown action "${input.actionId}"`);
       const now = new Date().toISOString();
-      const response: OyeeResponse = {
-        actionId: input.actionId ?? null,
-        text: input.text ?? null,
-        deviceId: actor.deviceId,
-        deviceName: actor.deviceName,
-        at: now,
-      };
-      let n: Notification = {
-        ...rec.n,
-        responses: appendResponse(rec.n, response),
-        version: rec.n.version + 1,
-        updatedAt: now,
-        readAt: rec.n.readAt ?? now,
-      };
-      if (action?.resolves && n.status === "active") {
-        n.status = "resolved";
-        n.resolvedAt = now;
-      }
-      n = inferIntent(n);
+      const { n, response, action } =
+        rec.n.intent === "ask" ? answerAsk(rec.n, input, actor, now) : respondToCard(rec.n, input, actor, now);
       this.save(n, rec.replaceKey, rec.tokenId);
       this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: false, reason: "responded" }]);
 
@@ -717,25 +731,35 @@ export class InboxDO extends DurableObject<Env> {
     });
   }
 
-  /** Long-poll for a response. Resolves immediately if the notification already has one. */
+  /** Long-poll for the answer (at most LIMITS.askWaitSeconds). Resolves immediately if it was already answered. */
   async waitForResponse(id: string, timeoutSeconds: number): Promise<RpcResult<McpWaitResult>> {
     return guard(() => {
       this.consume("read");
-      const rec = this.mustLoad(id);
-      const last = rec.n.responses[rec.n.responses.length - 1];
-      if (last) return { status: "answered", response: last } as McpWaitResult;
-      const ms = Math.max(1, Math.min(55, timeoutSeconds)) * 1000;
+      const asked = this.mustLoad(id).n;
+      const answered = (n: Notification): McpWaitResult | null => {
+        const answer = answerOf(n);
+        return answer ? { status: "answered", answer, askedAt: n.createdAt } : null;
+      };
+      const now = answered(asked);
+      if (now) return now;
+      const pending: McpWaitResult = {
+        status: "pending",
+        askedAt: asked.createdAt,
+        expiresAt: asked.intent === "ask" ? asked.ask.expiresAt : null,
+      };
+      const ms = Math.max(1, Math.min(LIMITS.askWaitSeconds, timeoutSeconds)) * 1000;
       return new Promise<McpWaitResult>((resolve) => {
         const set = this.waiters.get(id) ?? new Set();
         this.waiters.set(id, set);
         const timer = setTimeout(() => {
           set.delete(fn);
           if (set.size === 0 && this.waiters.get(id) === set) this.waiters.delete(id);
-          resolve({ status: "pending" });
+          resolve(pending);
         }, ms);
-        const fn = (response: OyeeResponse) => {
+        const fn = () => {
           clearTimeout(timer);
-          resolve({ status: "answered", response });
+          const latest = this.load(id)?.n;
+          resolve((latest && answered(latest)) || pending);
         };
         set.add(fn);
       });
@@ -753,20 +777,14 @@ export class InboxDO extends DurableObject<Env> {
           : undefined;
       // No awaits from here on, so concurrent reports for the same key can't interleave.
       const source = input.source ?? actor.defaultSource;
-      const row = this.sql
-        .exec<StoredRow>(
-          "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
-          source,
-          input.key,
-        )
-        .toArray()[0];
-      const latest = row ? (JSON.parse(row.data) as Notification) : null;
+      const row = this.claimKey(source, input.key, "progress");
+      const latest = row?.n ?? null;
       const continues = isLiveProgress(latest);
       if (!continues && actor.tokenId) this.checkRate(actor.tokenId);
       this.consume(continues ? "update" : "send", actor.userId);
       const report = reportProgress(latest, input, { id: newId("ntf"), source, now: new Date().toISOString(), targets });
       const n = report.notification;
-      this.save(n, null, continues ? (row!.token_id ?? actor.tokenId) : actor.tokenId);
+      this.save(n, null, continues ? (row!.tokenId ?? actor.tokenId) : actor.tokenId);
       if (continues) {
         this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: report.alert, reason: "update" }]);
       } else {
@@ -825,6 +843,27 @@ export class InboxDO extends DurableObject<Env> {
     this.knownUserId ??=
       this.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key = 'user_id'").toArray()[0]?.value ?? null;
     return this.knownUserId;
+  }
+
+  // ─── Ask (RPC) ────────────────────────────────────────────────────────────
+
+  /** Asks the user a question, or returns the open, unexpired ask that already has this `(source, key)`. */
+  async ask(actor: Actor, input: AskInput): Promise<RpcResult<AskResult>> {
+    return guard(async () => {
+      if (actor.tokenId) this.checkRate(actor.tokenId);
+      const latest = input.key ? this.claimKey(input.source ?? actor.defaultSource, input.key, "ask")?.n : null;
+      if (latest && isOpenAsk(latest, Date.now())) return { outcome: "reused", notification: latest };
+      this.consume("send", actor.userId);
+      const targets =
+        input.devices?.length || input.platforms?.length
+          ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
+          : null;
+      const n = buildAsk(newId("ntf"), input, actor, new Date().toISOString(), targets);
+      this.save(n, null, actor.tokenId);
+      this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
+      this.ensurePrune();
+      return { outcome: "created", notification: n };
+    });
   }
 
   // ─── Templates (RPC) ──────────────────────────────────────────────────────
