@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 04, 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] `expiresIn` validated (default 1h, max 24h); the stored ask has `expiresAt`
 - [ ] The scheduler expires due asks: state expired, status resolved, broadcast so clients cancel the system notification
@@ -18,3 +18,5 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 01: flat-path asks stay "open" past `expiresAt` until this ticket expires them; include them. From 04: a due deadline ref is removed before its handler runs; decide whether expiry refs need retry protection.
+
+Resolved: feature d300e35, merged into `notification-intents`. Deadline kind `ask.expiry`; prune also sweeps overdue open asks; wait_for_response outcomes answered/pending/expired/withdrawn.

@@ -31,7 +31,7 @@ const HOUR = 60 * MIN;
 
 const user: User = { id: "usr_mock", email: "demo@oyee.dev", name: "Demo User", avatarUrl: null };
 
-function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, msAgo: number): Notification {
+function base(partial: Partial<FlatNotification> & Pick<Notification, "title"> & { key?: string | null }, msAgo: number): Notification {
   const at = iso(msAgo);
   return inferIntent({
     id: `ntf_${ulid()}`,
@@ -58,6 +58,11 @@ function base(partial: Partial<FlatNotification> & Pick<Notification, "title">, 
     responses: [],
     ...partial,
   });
+}
+
+/** The server expires an open ask when its time is up (Expiry). */
+function expired(n: Notification): Notification {
+  return n.intent === "ask" ? { ...n, ask: { ...n.ask, state: "expired" } } : n;
 }
 
 function fixtures(): Notification[] {
@@ -116,6 +121,38 @@ function fixtures(): Notification[] {
         responses: [{ actionId: "option_1", text: null, deviceId: "dev_mock1", deviceName: "Pixel 9", at: iso(12 * MIN) }],
       },
       15 * MIN,
+    ),
+    // An ask nobody answered within its hour: it left every tray and shows "Expired".
+    expired(
+      base(
+        {
+          title: "Rotate the staging API keys?",
+          body: "The current keys are 90 days old.",
+          source: "key-rotator",
+          severity: "warning",
+          status: "resolved",
+          resolvedAt: iso(80 * MIN),
+          version: 2,
+          actions: [
+            { id: "option_1", label: "Rotate", style: "primary", resolves: true },
+            { id: "option_2", label: "Skip", style: "default", resolves: true },
+          ],
+        },
+        140 * MIN,
+      ),
+    ),
+    // An ask its agent withdrew (resolved unanswered): "Withdrawn".
+    base(
+      {
+        title: "Retry the flaky e2e job?",
+        source: "claude-code",
+        severity: "warning",
+        status: "resolved",
+        resolvedAt: iso(50 * MIN),
+        version: 2,
+        actions: [{ id: "option_1", label: "Retry", style: "primary", resolves: true }],
+      },
+      55 * MIN,
     ),
     base(
       {
@@ -231,11 +268,12 @@ function fixtures(): Notification[] {
       },
       35 * MIN,
     ),
-    // The same periodic alert, several times: the inbox stacks these into one row.
+    // The same periodic alert under one key, several times: the inbox stacks these into one row.
     ...[40, 100, 160, 220].map((min, i) =>
       base(
         {
-          title: "Archiver lag warning",
+          key: "archiver-lag",
+          title: i === 0 ? "Archiver lag warning" : `Archiver lag warning (${i + 1})`,
           body: `Shared backlog ${740 + i * 12} pending; watermark still stalled. No data-loss risk yet.`,
           source: "ai-gateway-archiver",
           severity: "warning",
@@ -515,7 +553,6 @@ function handle(method: HttpMethod, path: string, body: unknown): TransportRespo
       source: url.searchParams.get("source") ?? undefined,
       severity: (url.searchParams.get("severity") ?? undefined) as InboxFilters["severity"],
       status: (url.searchParams.get("status") ?? undefined) as InboxFilters["status"],
-      threadId: url.searchParams.get("threadId") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
     };
     const limit = Number(url.searchParams.get("limit") ?? 50);

@@ -21,3 +21,9 @@ From 01: `icon` exists both top-level and in the inform block; pick one. The old
 ## Comments
 
 From 07: ProgressInput duplicates the shared fields InformInput has; fold them into one shared base.
+
+From 10: `progressResultText` in the inbox progress module builds the result shape inline; route it through the MCP text helper.
+
+From 12: web mock data (mock mode) is still v1 flat-shaped; convert it to v2 intents. Remove the `threadId` list parameter from the web API client and the server list endpoint.
+
+From 06: the web Needs you section uses `ask.state` only; treat an open ask past `expiresAt` as expired client-side too. wait_for_response also returns `withdrawn` (document in protocol v2).

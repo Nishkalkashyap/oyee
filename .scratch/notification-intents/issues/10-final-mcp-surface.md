@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 02, 05, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] `send_notification`, `update_notification`, `get_notification`, `resolve_notification` and the three template tools are removed from MCP; `resolve` replaces `resolve_notification`
 - [ ] `list_notifications` filters by key, intent, status and source; `limit` defaults to 10 (max 50) with a cursor; items are `id, intent, key, title, status, state, answer, createdAt, ago`
@@ -16,3 +16,5 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 05: `inform`/`progress` results use "outcome:/id:" lines while `ask`/`wait_for_response` use sentences; make all tool results one consistent style.
+
+Resolved: feature 5dfbe84, merged into `notification-intents`. Seven tools; result style `outcome: <word>\nid: ntf_…\n<sentence>` via the MCP text helper; list tools return compact JSON.

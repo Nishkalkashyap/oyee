@@ -326,8 +326,11 @@ describe("notifications stored before intents", () => {
     await seedLegacyInbox(me.id);
     const first = (await call<{ items: Notification[] }>("GET", "/api/notifications", { cookie })).body.items;
 
-    // Answering the converted (expired) ask from an old app build, then restarting, must not convert it again.
-    await call("POST", `/api/notifications/ntf_01LEGACYUNANSWERED0000000/respond`, { cookie }, { text: "late" });
+    // The converted ask is expired, so an old app build can no longer answer it. Reading it, then restarting, must
+    // not convert it again.
+    const late = await call("POST", `/api/notifications/ntf_01LEGACYUNANSWERED0000000/respond`, { cookie }, { text: "late" });
+    expect(late.status).toBe(409);
+    await call("POST", `/api/notifications/ntf_01LEGACYUNANSWERED0000000/read`, { cookie });
     const id = env.INBOX.idFromName(me.id);
     await runInDurableObject(env.INBOX.get(id), (_inst: InboxDO, state) => state.abort("restart")).catch(() => undefined);
 
@@ -335,7 +338,8 @@ describe("notifications stored before intents", () => {
     expect(again.map((n) => n.id)).toEqual(first.map((n) => n.id));
     expect(again.find((n) => n.id === "ntf_01LEGACYUNANSWERED0000000")).toMatchObject({
       intent: "ask",
-      ask: { state: "answered", answer: { text: "late" } },
+      readAt: expect.any(String),
+      ask: { state: "expired", answer: null },
     });
     expect(again.find((n) => n.id === "ntf_01LEGACYPROGRESSHALF00000")).toEqual(
       first.find((n) => n.id === "ntf_01LEGACYPROGRESSHALF00000"),

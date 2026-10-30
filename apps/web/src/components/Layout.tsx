@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Usage, User } from "@oyee/schema";
 import { api } from "../lib/api";
 import { isMockMode } from "../lib/env";
+import { toastsOnArrival } from "../lib/inbox";
 import { useUnreadCount, useUsage } from "../lib/queries";
 import { useTheme, type ThemePref } from "../lib/theme";
 import { HelpDialog } from "./HelpDialog";
@@ -16,7 +17,6 @@ import {
   MoonIcon,
   SendIcon,
   SunIcon,
-  TemplateIcon,
   type IconProps,
 } from "./Icons";
 import { ConnectionIndicator, useLiveMessages } from "./LiveProvider";
@@ -33,7 +33,6 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: "/", label: "Home", icon: HomeIcon, end: true },
   { to: "/inbox", label: "Inbox", icon: InboxIcon },
-  { to: "/templates", label: "Templates", icon: TemplateIcon },
   { to: "/send", label: "Send", icon: SendIcon },
 ];
 
@@ -219,8 +218,9 @@ function LiveSideEffects() {
   useLiveMessages((msg) => {
     if (msg.type !== "notification.created") return;
     const n = msg.notification;
-    // Skip when already looking at it, when silent, or on the composer (which shows its own "sent" toast).
-    if (location.pathname === `/inbox/${n.id}` || location.pathname === "/send" || n.silent) return;
+    // Skip when already looking at it, for a running progress (it starts quietly), or on the composer (which shows
+    // its own "sent" toast).
+    if (location.pathname === `/inbox/${n.id}` || location.pathname === "/send" || !toastsOnArrival(n)) return;
     toast.show({ kind: "info", title: n.title, description: n.source, onClick: () => navigate(`/inbox/${n.id}`) });
   });
 

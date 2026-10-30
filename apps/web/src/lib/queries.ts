@@ -45,7 +45,6 @@ export function normalizeFilters(f: InboxFilters): InboxFilters {
   if (f.source) out.source = f.source;
   if (f.severity) out.severity = f.severity;
   if (f.status) out.status = f.status;
-  if (f.threadId) out.threadId = f.threadId;
   if (f.q?.trim()) out.q = f.q.trim();
   return out;
 }

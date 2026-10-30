@@ -11,7 +11,6 @@ import { HomePage } from "./pages/Home";
 import { InboxPage } from "./pages/Inbox";
 
 // Heavier, less-visited pages (zod-validated editors, previews) load on demand.
-const TemplatesPage = lazy(() => import("./pages/Templates").then((m) => ({ default: m.TemplatesPage })));
 const SendPage = lazy(() => import("./pages/Send").then((m) => ({ default: m.SendPage })));
 
 function PageFallback() {
@@ -104,7 +103,8 @@ export function App() {
         <Route path="inbox/:id" element={<InboxPage />} />
         {/* Devices moved onto Home. */}
         <Route path="devices" element={<Navigate to="/" replace />} />
-        <Route path="templates" element={lazyEl(TemplatesPage)} />
+        {/* Templates are gone (notification intents); old links land on Home. */}
+        <Route path="templates" element={<Navigate to="/" replace />} />
         <Route path="send" element={lazyEl(SendPage)} />
         <Route path="*" element={<NotFound />} />
       </Route>

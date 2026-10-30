@@ -1,6 +1,7 @@
 /**
  * Ask (GLOSSARY.md): a question an agent sends and polls the answer of. Pure logic used by the InboxDO: building the
- * stored ask, deciding whether an ask can be reused by key, and recording the first answer.
+ * stored ask, deciding whether an ask can be reused by key, recording the first answer, expiring it (Expiry) and
+ * what wait_for_response reports.
  */
 import {
   LIMITS,
@@ -8,6 +9,7 @@ import {
   isLinkAction,
   type AskAnswer,
   type AskInput,
+  type McpWaitResult,
   type Notification,
   type RespondInput,
   type Response as OyeeResponse,
@@ -57,7 +59,7 @@ export function buildAsk(
       options,
       allowText,
       replyPlaceholder: allowText ? REPLY_PLACEHOLDER : null,
-      expiresAt: new Date(Date.parse(now) + durationMs(LIMITS.defaultAskExpiry)).toISOString(),
+      expiresAt: new Date(Date.parse(now) + durationMs(input.expiresIn ?? LIMITS.defaultAskExpiry)).toISOString(),
       answer: null,
       state: "open",
     },
@@ -104,6 +106,10 @@ export function answerAsk(
 ): { n: AskNotification; response: OyeeResponse; action: Notification["actions"][number] | undefined } {
   if (n.ask.answer) {
     throw conflict(`This ask was already answered: ${describeAnswer(n.ask.answer)}`);
+  }
+  if (n.ask.state === "withdrawn") throw conflict("This ask was withdrawn by its sender; there is nothing left to answer");
+  if (n.ask.state === "expired" || Date.parse(n.ask.expiresAt) <= Date.parse(now)) {
+    throw conflict("This ask expired before it was answered");
   }
   const answerButtons = n.actions.filter((a) => !isLinkAction(a));
   let action: Notification["actions"][number] | undefined;
@@ -156,4 +162,38 @@ export function answerOf(n: Notification): AskAnswer | null {
   if (!last) return null;
   const option = last.actionId === null ? null : (n.actions.find((a) => a.id === last.actionId)?.label ?? last.actionId);
   return { option, text: last.text, deviceId: last.deviceId, deviceName: last.deviceName, at: last.at };
+}
+
+/** When the scheduler should expire this ask, or null once it is answered, expired or withdrawn. */
+export function expiryDue(n: Notification): number | null {
+  return n.intent === "ask" && n.ask.state === "open" && n.status === "active" ? Date.parse(n.ask.expiresAt) : null;
+}
+
+/**
+ * Expires an open ask whose time is up: state expired, status resolved (so every device takes it out of the tray).
+ * Returns null when there is nothing to expire yet (answered, withdrawn, or not due at `now`).
+ */
+export function expireAsk(n: Notification, now: number): AskNotification | null {
+  const due = expiryDue(n);
+  if (due === null || due > now || n.intent !== "ask") return null;
+  const at = new Date(now).toISOString();
+  return {
+    ...n,
+    version: n.version + 1,
+    updatedAt: at,
+    status: "resolved",
+    resolvedAt: n.resolvedAt ?? at,
+    ask: { ...n.ask, state: "expired" },
+  };
+}
+
+/** What wait_for_response reports for this notification right now. An ask past its expiry counts as expired. */
+export function waitResult(n: Notification, now: number): McpWaitResult {
+  const answer = answerOf(n);
+  if (answer) return { status: "answered", answer, askedAt: n.createdAt };
+  if (n.intent !== "ask") return { status: "pending", askedAt: n.createdAt, expiresAt: null };
+  const { state, expiresAt } = n.ask;
+  const status =
+    state === "withdrawn" ? "withdrawn" : state === "expired" || Date.parse(expiresAt) <= now ? "expired" : "pending";
+  return { status, askedAt: n.createdAt, expiresAt };
 }

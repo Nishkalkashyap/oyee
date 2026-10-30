@@ -8,7 +8,6 @@ export interface InboxFilters {
   source?: string;
   severity?: Severity;
   status?: NotificationStatus;
-  threadId?: string;
   q?: string;
 }
 
@@ -44,11 +43,11 @@ export function matchesFilters(n: Notification, f: InboxFilters | undefined): bo
   if (f.source && n.source !== f.source) return false;
   if (f.severity && n.severity !== f.severity) return false;
   if (f.status && n.status !== f.status) return false;
-  if (f.threadId && n.threadId !== f.threadId) return false;
   if (f.q) {
     const q = f.q.trim().toLowerCase();
     if (q) {
-      const hay = [n.title, n.body ?? "", n.source, ...n.tags, ...n.fields.map((x) => `${x.label} ${x.value}`)]
+      const rows = n.intent === "inform" ? n.inform.fields : [];
+      const hay = [n.title, n.body ?? "", n.source, ...rows.map((x) => `${x.label} ${x.value}`)]
         .join("\n")
         .toLowerCase();
       if (!hay.includes(q)) return false;

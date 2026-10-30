@@ -89,7 +89,7 @@ describe("MCP", () => {
     expect((await tool(path, "inform", { title: "Hi" })).text).toMatch(shape);
     expect((await tool(path, "progress", { key: "p", title: "Work", value: 1 })).text).toMatch(shape);
     const asked = await tool(path, "ask", { title: "Ok?", options: ["Yes"] });
-    expect(asked.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\nAsked the user\. Call wait_for_response/);
+    expect(asked.text).toMatch(/^outcome: created\nid: ntf_[0-9A-Za-z]+\nAsked the user \(expires in 1h\)\. Call wait_for_response/);
     const pending = await tool(path, "wait_for_response", { id: idOf(asked.text), timeoutSeconds: 1 });
     expect(pending.text).toMatch(new RegExp(`^outcome: pending\\nid: ${idOf(asked.text)}\\nNo answer yet`));
     expect((await tool(path, "resolve", { id: idOf(asked.text) })).text).toMatch(shape);
