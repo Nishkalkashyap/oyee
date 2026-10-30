@@ -14,6 +14,8 @@ import type {
   RegisterWebDeviceInput,
   RespondInput,
   SendNotificationInput,
+  IntentSendBody,
+  IntentSendResult,
   ServerConfig,
   SourceSummary,
   Template,
@@ -164,7 +166,8 @@ export const api = {
         })}`,
       ),
     get: (id: string) => request<Notification>("GET", `/api/notifications/${enc(id)}`),
-    send: (input: SendNotificationInput) => request<Notification>("POST", "/api/notifications", input),
+    /** An inform or progress (the web composer); answers what happened alongside the notification. */
+    send: (input: IntentSendBody) => request<IntentSendResult & { notification: Notification }>("POST", "/api/notifications", input),
     update: (id: string, input: UpdateNotificationInput) =>
       request<Notification>("PATCH", `/api/notifications/${enc(id)}`, input),
     respond: (id: string, input: RespondInput) =>

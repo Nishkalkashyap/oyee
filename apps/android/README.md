@@ -1,9 +1,9 @@
 # Oyee for Android
 
 Native Android client for [Oyee](../../README.md), written in Kotlin with Jetpack Compose (Material 3).
-It handles pairing, a live inbox, and rich system notifications: one channel per severity, in-place updates,
-progress (`Notification.ProgressStyle` on Android 16 / API 36+), images, action buttons, inline replies,
-grouping, and dismissal across devices.
+It handles pairing, a live inbox with one card per intent (inform, ask, progress), and system notifications per
+intent: one channel per severity, in-place updates, progress (`Notification.ProgressStyle` on Android 16 / API 36+),
+images, link and answer buttons, inline replies, grouping, and dismissal across devices.
 Delivery uses **FCM** when it's available and falls back to a **WebSocket foreground service** when it isn't.
 
 Oyee is never on the Play Store. You build the APK yourself and sideload it.
@@ -126,29 +126,31 @@ Notes:
 
 ## Notifications
 
-- **Channels:** `oyee.critical`, `oyee.warning`, `oyee.info`, `oyee.success`, `oyee.debug`.
-  Critical and warning are high importance (heads-up) with sound and vibration. Info and success use default
-  importance. Debug is low importance and silent. Tune them under **Settings → Notifications → Channels**.
+The app reads the notification's `intent` and its `inform` / `ask` / `progress` block (protocol v2); the v1 flat card
+fields the server still sends are ignored. What each intent offers and how it alerts is decided in one pure place,
+`notify/NotificationPlan.kt` (unit-tested); `NotificationRenderer` turns that into a system notification.
+
+- **Channels:** `oyee.critical`, `oyee.warning`, `oyee.info`, `oyee.success`. Critical and warning are high
+  importance (heads-up) with sound and vibration; info and success use default importance. Every severity alerts.
+  The old `oyee.debug` channel is deleted on upgrade. Tune them under **Settings → Notifications → Channels**.
 - **Identity:** each notification's tag is the Oyee id, and its numeric id is a stable FNV-1a hash of that id.
   Updates replace the notification in place with `setOnlyAlertOnce(true)` unless the event has `alert: true`.
-  `silent: true` never makes sound.
+- **Per intent:**
+  - **Inform:** the severity's channel, the markdown body plus `Label: value` rows (`BigTextStyle`), the image
+    (`BigPictureStyle`, downloaded with a 10 s timeout), an emoji or URL icon as the large icon. Buttons: its link
+    buttons (open the URL and mark it read), then **✓ Resolve** if a slot is free.
+  - **Ask** (always warning): its answer buttons (`POST …/respond {option}`, without opening the app) and, when it
+    takes text, an inline reply (RemoteInput, `POST …/respond {text}`); a reply takes one of the 3 slots, so a third
+    answer is only in the app. No Resolve button (resolving would withdraw the question). The first answer from any
+    device resolves it, so it leaves the tray everywhere; it also leaves when it expires (`setTimeoutAfter`, and the
+    server's broadcast) or is withdrawn. A late answer gets `409`: the notification is cancelled, not retried.
+  - **Progress:** while running, `ProgressStyle` on API 36+ (`setProgress` below) and never a sound, including the
+    first report. Done, failed and stopped alert once with "Done · 7/7 checks", "Failed · 4/7 checks" or "Stopped
+    reporting after 40%"; a finished progress stays in the tray until it's read. Button: **✓ Resolve**.
 - **Cancellation:** a notification is cancelled when it's read (`readAt` set), resolved or deleted anywhere.
-- **Layout:**
-  - **Expanded text:** `BigTextStyle` with the markdown body (bold, italic and code are styled) plus
-    `Label: value` field lines.
-  - **Images:** `BigPictureStyle` when `image` is set; the image is downloaded with a 10 s timeout.
-  - **Progress:** `ProgressStyle` on API 36+, `setProgress` below that. Indeterminate progress works on both.
-  - **Icon:** an emoji or URL `icon` becomes the large icon.
-  - **Metadata:** `setWhen(createdAt)` and `setSubText(source)`.
-- **Grouping:** notifications are grouped by `source`, with a group summary.
+- **Metadata:** `setWhen(createdAt)` and `setSubText(source)`. Grouped by `source`, with a group summary.
 - **Taps:** tapping the body opens `url` (or the in-app detail) and calls `POST …/read`.
-  - **Buttons:** up to 3. The card's actions come first, a reply box takes one slot, and a **✓ Resolve** button
-    fills a free slot so you can dismiss a notification everywhere without opening it (retried offline via WorkManager).
-  - **`url` actions:** open the browser and mark the notification read.
-  - **Other actions:** call `POST …/respond {actionId}`. The notification shows "Sent: …", or disappears if the
-    action resolves it.
-  - **Inline reply:** sends `POST …/respond {text}` and then shows the reply in the notification.
-  - **Offline:** if the network is down, these calls are queued in WorkManager and retried.
+- **Offline:** answers, replies and Resolve are queued in WorkManager and retried when the network is back.
 - **Swipe to dismiss** can mark the notification read. This is off by default; turn it on in Settings.
 
 ## Local development with `wrangler dev`
@@ -178,9 +180,11 @@ If you rely on the **WebSocket service** (no Play services, a self-hosted server
   not distributed through Play.
 - Some manufacturers (Xiaomi, Huawei, Samsung, OnePlus, …) kill background apps aggressively despite this. Follow
   the per-vendor steps at <https://dontkillmyapp.com>. These usually involve "autostart" or "unrestricted battery".
-- The inbox opens on **Active**, sorted like the web inbox (`ui/inbox/InboxSections.kt`): **Needs you** (unanswered
-  buttons or reply box, answerable from the list), **In progress** (unfinished progress) and **Updates**, where repeats
-  of the same thread, or source + title, stack into one row with a count (tap to open the newest and expand the rest).
+- The inbox opens on **Active**, sorted like the web inbox (`ui/inbox/InboxSections.kt`): **Needs you** (open asks,
+  answerable from the list), **In progress** (running or stopped progress) and **Updates**, where repeats with the same
+  source and key, or source + title without a key, stack into one row with a count (tap to open the newest and expand
+  the rest). The conversation view draws one card per intent (`ui/cards/`): inform, ask (waiting, answered, expired,
+  withdrawn) and progress (running, done, failed, stopped); their labels come from the pure `ui/cards/CardViews.kt`.
   Swipe a row right to resolve it (a stack resolves as a whole); Resolve also sits in the card's footer and goes back
   to the list. Resolved notifications are a row at the end of the list ("All caught up" once everything is resolved).
 - Blue in a row means unread and nothing else: only critical and warning put a coloured dot on the avatar.
@@ -195,14 +199,16 @@ app/src/main/java/app/oyee/android/
 ├── model/                       kotlinx.serialization mirror of packages/schema (Notification, Device, WS + FCM messages)
 ├── data/                        SettingsStore (DataStore), TokenCipher (Keystore AES-GCM), OyeeApi (OkHttp REST),
 │                                EventProcessor (dedupe + fan-out), SyncManager (REST catch-up)
-├── notify/                      Channels, NotificationRenderer, Intents (PendingIntents), NotificationActionReceiver,
+├── notify/                      Channels, NotificationPlan (buttons / alerting per intent), NotificationRenderer,
+│                                Intents (PendingIntents), NotificationActionReceiver,
 │                                NotificationOpenActivity (tap trampoline), Images, Spans, PostedLog
 ├── transport/                   SocketClient (OkHttp WebSocket), SocketService (FGS), TransportManager, FcmSupport,
 │                                OyeeMessagingService (FCM), BootReceiver
 ├── work/OyeeWorker.kt         WorkManager jobs: read, respond (offline retry), sync, FCM re-registration
 ├── util/                        PairingCode, ServerUrl, Formatting (progress text, fields), Markdown parser,
 │                                NotificationIds (FNV-1a), Backoff
-└── ui/                          MainActivity (navigation, deep links), pair/, inbox/, detail/, settings/, components/
+└── ui/                          MainActivity (navigation, deep links), pair/, inbox/, detail/, settings/, components/,
+                                 cards/ (one card per intent + the pure views behind their labels)
 ```
 
 ## Dependency versions

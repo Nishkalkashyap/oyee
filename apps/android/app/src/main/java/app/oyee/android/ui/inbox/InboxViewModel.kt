@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.oyee.android.AppContainer
 import app.oyee.android.data.NotificationQuery
-import app.oyee.android.model.Action
+import app.oyee.android.data.OyeeApiException
 import app.oyee.android.model.OyeeEvent
 import app.oyee.android.model.Notification
 import app.oyee.android.model.NotificationStatus
@@ -139,17 +139,19 @@ class InboxViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
-    /** Answers a question right from the list ("Needs you"). */
-    fun respond(n: Notification, a: Action) {
+    /** Answers an open ask right from the list ("Needs you"). The first answer from any device wins. */
+    fun answer(n: Notification, option: String) {
         if (_state.value.respondingId != null) return
         _state.update { it.copy(respondingId = n.id) }
         viewModelScope.launch {
             val session = c.settings.session() ?: return@launch
             try {
-                c.processor.onLocal(c.api.respond(session, n.id, actionId = a.id))
-                _state.update { it.copy(respondingId = null, toast = "Sent: ${a.label}") }
+                c.processor.onLocal(c.api.respond(session, n.id, option = option))
+                _state.update { it.copy(respondingId = null, toast = "Answered: $option") }
             } catch (e: Exception) {
                 _state.update { it.copy(respondingId = null, toast = e.message ?: "Couldn't send") }
+                // 409: answered elsewhere, expired or withdrawn meanwhile; show it as it is now.
+                if (e is OyeeApiException && e.isConflict) runCatching { c.api.get(session, n.id) }.onSuccess { c.processor.onLocal(it) }
             }
         }
     }

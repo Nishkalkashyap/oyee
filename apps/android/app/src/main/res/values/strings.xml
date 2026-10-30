@@ -9,8 +9,6 @@
     <string name="channel_info_desc">Regular notifications.</string>
     <string name="channel_success">Success</string>
     <string name="channel_success_desc">Finished jobs and good news.</string>
-    <string name="channel_debug">Debug</string>
-    <string name="channel_debug_desc">Low-priority diagnostics. No sound.</string>
     <string name="channel_service">Connection status</string>
     <string name="channel_service_desc">The persistent \"Oyee connected\" notification shown while instant delivery is on.</string>
     <string name="service_connected">Oyee connected</string>

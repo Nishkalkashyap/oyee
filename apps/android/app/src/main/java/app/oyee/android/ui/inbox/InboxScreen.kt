@@ -64,10 +64,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.oyee.android.model.ActionStyle
+import app.oyee.android.model.Intent as NotificationIntent
 import app.oyee.android.model.Notification
 import app.oyee.android.model.NotificationStatus
+import app.oyee.android.model.ProgressState
 import app.oyee.android.transport.SocketClient
+import app.oyee.android.ui.cards.askView
+import app.oyee.android.ui.cards.progressView
+import app.oyee.android.ui.cards.toneColor
 import app.oyee.android.ui.components.InkProgress
 import app.oyee.android.ui.components.PillButton
 import app.oyee.android.ui.components.PillVariant
@@ -156,7 +160,7 @@ fun InboxScreen(vm: InboxViewModel, onOpen: (String) -> Unit, onSettings: () -> 
                                             )
                                         }
                                         if (sec.id == InboxSectionId.NEEDS_YOU) {
-                                            QuickAnswer(head, busy = state.respondingId == head.id, onAnswer = { vm.respond(head, it) }, onReply = { onOpen(head.id) })
+                                            QuickAnswer(head, busy = state.respondingId == head.id, onAnswer = { vm.answer(head, it) }, onReply = { onOpen(head.id) })
                                         }
                                     }
                                 }
@@ -322,7 +326,7 @@ private fun InboxRow(n: Notification, count: Int = 1, unread: Boolean = !n.isRea
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val preview = n.body?.takeIf { it.isNotBlank() }?.let { Markdown.toPlainText(it).replace('\n', ' ') }
+                val preview = rowPreview(n)
                 Text(
                     when {
                         child -> preview ?: n.source
@@ -335,10 +339,6 @@ private fun InboxRow(n: Notification, count: Int = 1, unread: Boolean = !n.isRea
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (n.responses.isNotEmpty()) {
-                    Spacer(Modifier.width(6.dp))
-                    Text("↩ ${n.responses.size}", style = MaterialTheme.typography.labelSmall, color = c.muted)
-                }
                 if (n.isResolved) {
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Filled.Done, contentDescription = "Resolved", tint = Color(0xFF16A34A), modifier = Modifier.size(15.dp))
@@ -348,36 +348,50 @@ private fun InboxRow(n: Notification, count: Int = 1, unread: Boolean = !n.isRea
                     Box(Modifier.size(9.dp).background(c.brand, CircleShape))
                 }
             }
-            n.progress?.takeIf { !n.isResolved }?.let { p ->
+            n.progress?.takeIf { n.intent == NotificationIntent.PROGRESS && !n.isResolved }?.let { p ->
                 Spacer(Modifier.height(8.dp))
-                InkProgress(p, height = 4.dp)
+                InkProgress(p, height = 4.dp, color = toneColor(progressView(p).tone))
             }
         }
     }
 }
 
-/** A question's buttons right in the list, so answering doesn't need a detour through the conversation. */
+/**
+ * The row's second line after the source: a progress's outcome once it ended ("Stopped reporting after 40%"), an
+ * ask's state once it closed ("Answered: Approve · Pixel 9"), otherwise the body (or the amount for a progress).
+ */
+private fun rowPreview(n: Notification): String? {
+    val body = n.body?.takeIf { it.isNotBlank() }?.let { Markdown.toPlainText(it).replace('\n', ' ') }
+    return when (n.intent) {
+        NotificationIntent.PROGRESS -> n.progress?.let { p ->
+            val v = progressView(p)
+            if (v.state == ProgressState.RUNNING) body ?: v.amount else v.stateLabel
+        } ?: body
+        NotificationIntent.ASK -> askView(n).let { v -> if (v.open) body ?: v.status else v.status }
+        NotificationIntent.INFORM -> body
+    }
+}
+
+/** An open ask's answer buttons right in the list, so answering doesn't need a detour through the conversation. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuickAnswer(n: Notification, busy: Boolean, onAnswer: (app.oyee.android.model.Action) -> Unit, onReply: () -> Unit) {
+private fun QuickAnswer(n: Notification, busy: Boolean, onAnswer: (String) -> Unit, onReply: () -> Unit) {
+    val v = askView(n)
+    if (!v.open) return
     FlowRow(
         Modifier.fillMaxWidth().padding(start = 70.dp, end = 12.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        n.actions.filter { it.url == null }.forEachIndexed { i, a ->
+        v.options.forEachIndexed { i, o ->
             PillButton(
-                onClick = { onAnswer(a) },
-                variant = when {
-                    a.style == ActionStyle.DESTRUCTIVE -> PillVariant.Destructive
-                    i == 0 -> PillVariant.Primary
-                    else -> PillVariant.Secondary
-                },
+                onClick = { onAnswer(o.label) },
+                variant = if (i == 0) PillVariant.Primary else PillVariant.Secondary,
                 enabled = !busy,
                 height = 32.dp,
-            ) { Text(a.label) }
+            ) { Text(o.label) }
         }
-        if (n.reply != null) {
+        if (v.replyPlaceholder != null) {
             PillButton(onClick = onReply, height = 32.dp) { Text("↩ Reply") }
         }
     }

@@ -27,3 +27,7 @@ From 10: `progressResultText` in the inbox progress module builds the result sha
 From 12: web mock data (mock mode) is still v1 flat-shaped; convert it to v2 intents. Remove the `threadId` list parameter from the web API client and the server list endpoint.
 
 From 06: the web Needs you section uses `ask.state` only; treat an open ask past `expiresAt` as expired client-side too. wait_for_response also returns `withdrawn` (document in protocol v2).
+
+From 11: remove the flat fallback for JSON bodies without `intent` that use v1-only fields (actions, replaceKey, template…); update web `lib/snippets.ts` examples (still replaceKey, tags, flat progress).
+
+From 13: web sw.js builds the stopped label from `progressAmount`, which differs from `stoppedReportingLabel` when max != 100 and there is no label ("3/7" vs "43%"); make sw.js/webpush.ts match it. docs/protocol.md §9 still lists `oyee.debug`.

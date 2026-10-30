@@ -6,5 +6,4 @@
     <color name="severity_warning">#FFD97706</color>
     <color name="severity_info">#FF3B82F6</color>
     <color name="severity_success">#FF16A34A</color>
-    <color name="severity_debug">#FFA8A39A</color>
 </resources>

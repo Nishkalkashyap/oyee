@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Webhooks and REST send intents, with the same field names as the MCP tools: a JSON body is an inform by default or
+  `{ "intent": "progress", "key": …, "value": … }`, and `?intent=progress` with `key`, `value`, `max`, `label` and
+  `status` works for plain-text, GET and header sends. They go through the same inbox operations as agents, so `key`,
+  `cooldown`, the cross-intent key conflict and stopped reporting behave identically. Responses add `outcome` and
+  `reason` next to `id` and `version`. `intent: "ask"` gets `400`: asks are for agents over MCP. Alertmanager and
+  Grafana produce informs keyed by the group (a `debug` severity label becomes info) and the group's resolution
+  resolves that inform; SNS produces an inform. `?replaceKey=` and `?template=` are no longer accepted (`400`
+  pointing to `key`); `threadId`, `tags` and ntfy `Tags` are ignored, and ntfy priority 1 is info. JSON bodies that
+  still use v1-only fields (`actions`, `reply`, `progress`, `replaceKey`, …) keep working until the flat card is
+  removed.
+- `POST /api/notifications` takes the same intent-tagged body and answers `{ id, version, outcome, reason,
+  notification }`. The web Send page composes an inform (severity, key, cooldown, icon, image, rows, link buttons) or
+  a progress (key, value, max, label, status, staleAfter); thread, tags, silent, actions, reply and templates are gone
+  from it.
 - Asks expire: `ask` takes `expiresIn` (default 1h, at most 24h). When it runs out the ask leaves every device's
   tray, shows "Expired" in the inbox with its buttons disabled, and `wait_for_response` reports it expired (a pending
   result now also says when the ask expires). Resolving an open ask withdraws it ("Withdrawn"). Answers to an
@@ -83,7 +97,7 @@
 - Avatars: the peach avatar tint is now slate, so no orange is left (sources and accounts that hashed to peach,
   such as your own account avatar, change colour).
 
-## 0.3.0 (unreleased)
+## Unreleased (apps, next release)
 - macOS on intents: the Mac app reads the intent-shaped notification and draws one card per intent. An **inform**
   shows its icon, severity, body, rows and up to three link buttons. An **ask** says how long it has waited and when
   it expires, with its answer buttons (answering sends `{ "option" }`) and the reply box as the conversation's
@@ -97,6 +111,17 @@
   and withdrawn asks leave Notification Center. Every severity alerts.
 - macOS: tags, threads, `silent`, the `debug` severity and templates are gone from the app. The inbox cache from
   0.2.x is dropped once and refilled from the server.
+- Android on intents: the app reads the `intent` and its `inform` / `ask` / `progress` block and draws one card per
+  intent in the conversation view. Inform: icon and severity, body, rows, image, link buttons. Ask: "Waiting 12m" and
+  "Expires in 48m" while open, answer buttons and the reply box, then "Answered: Approve · Pixel 9", "Expired" or
+  "Withdrawn" with the buttons disabled. Progress: a state pill and a real bar ("Running", "Done", "Failed", "Stopped
+  reporting after 40%"). The inbox sections are the intents (Needs you = open asks, In progress = running or stopped
+  progress, Updates = the rest) and repeats stack by source and key.
+- Android system notifications per intent: an inform alerts on its severity's channel with its link buttons; an open
+  ask shows its answer buttons and an inline reply, answers with `{ "option" }` / `{ "text" }`, and leaves the tray
+  once answered (from any device), expired or withdrawn (an answer that arrives too late is dropped, not retried); a
+  running progress updates silently with native progress, and done, failed and stopped alert once. The Debug
+  notification channel is deleted on upgrade; tags, threads and `silent` are gone.
 
 ## 0.2.11
 - Inbox sorted like the web: **Needs you** (questions, answerable from the list), **In progress** and **Updates**;

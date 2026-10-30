@@ -104,20 +104,26 @@ export function reportProgress(
 const amount = (p: ProgressNotification["progress"]) =>
   p.label ?? (p.max === 100 ? `${Math.round((Math.min(p.value, p.max) / p.max) * 100)}%` : `${p.value}/${p.max}`);
 
-/** The MCP `progress` result, in the same shape as inform's: "outcome: …" and "id: …" lines, then what to do next. */
-export function progressResultText({ notification: n, outcome, revived }: ProgressReport): string {
+/**
+ * What a report did and what to do next. `again` names the next call: "Call progress again" for MCP, "Send again"
+ * for webhooks and REST.
+ */
+export function progressReason({ notification: n, outcome, revived }: ProgressReport, again = "Call progress again"): string {
   const key = JSON.stringify(n.key);
   const p = n.progress;
   const what =
     outcome === "created" ? "appeared without sound" : revived ? "had stopped reporting and is running again" : "was updated silently";
-  const reason =
-    p.state === "done" || p.state === "failed"
-      ? `The progress with key ${key} finished as ${p.state} at ${amount(p)} and alerted the user once. It stays in ` +
+  return p.state === "done" || p.state === "failed"
+    ? `The progress with key ${key} finished as ${p.state} at ${amount(p)} and alerted the user once. It stays in ` +
         `the inbox until read; a later report with key ${key} starts a new progress.`
-      : `The progress with key ${key} ${what} at ${amount(p)}. Call progress again with key ${key} to update it; ` +
+    : `The progress with key ${key} ${what} at ${amount(p)}. ${again} with key ${key} to update it; ` +
         `finish with status "done" or "failed" to alert the user once. If no report arrives within ${p.staleAfter}, ` +
         `the user is told it stopped reporting.`;
-  return `outcome: ${outcome}\nid: ${n.id}\n${reason}`;
+}
+
+/** The MCP `progress` result, in the same shape as inform's: "outcome: …" and "id: …" lines, then what to do next. */
+export function progressResultText(report: ProgressReport): string {
+  return `outcome: ${report.outcome}\nid: ${report.notification.id}\n${progressReason(report)}`;
 }
 
 // ─── Stopped reporting ──────────────────────────────────────────────────────
