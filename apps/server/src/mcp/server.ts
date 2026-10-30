@@ -7,6 +7,7 @@ import {
   ListNotificationsQuery,
   McpAskInput,
   McpWaitInput,
+  ProgressInput,
   SendNotificationInput,
   TemplateCard,
   TemplateName,
@@ -18,6 +19,7 @@ import { listDevices, toDevice, type TokenRecord } from "../db";
 import { SERVER_VERSION, type Env } from "../env";
 import { ApiError, rpc } from "../lib/errors";
 import type { Actor } from "../inbox/model";
+import { progressResultText } from "../inbox/progress";
 import { inbox } from "../routes/api";
 import { registerInformTool } from "./inform";
 
@@ -142,6 +144,25 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
       inputSchema: McpWaitInput,
     },
     ({ id, timeoutSeconds }) => run(() => rpc(stub().waitForResponse(id, timeoutSeconds ?? 50))),
+  );
+
+  server.registerTool(
+    "progress",
+    {
+      title: "Report progress",
+      description:
+        "Report long-running work as a progress bar on the user's devices. Call it repeatedly with the same `key`: " +
+        "the first report appears without sound, later ones update it silently, and status done or failed alerts the " +
+        "user once. Omitted fields keep the previous report's value.",
+      inputSchema: ProgressInput,
+    },
+    async (input) => {
+      try {
+        return { content: [{ type: "text", text: progressResultText(await rpc(stub().progress(actor, input))) }] };
+      } catch (e) {
+        return fail(e);
+      }
+    },
   );
 
   server.registerTool(

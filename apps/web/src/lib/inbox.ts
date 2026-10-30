@@ -13,6 +13,7 @@ export function needsAnswer(n: Notification): boolean {
 /** A job that's still running (progress that hasn't reached its max, or an indeterminate bar). */
 export function inProgress(n: Notification): boolean {
   if (n.status !== "active" || !n.progress) return false;
+  if (n.intent === "progress" && (n.progress.state === "done" || n.progress.state === "failed")) return false;
   return n.progress.indeterminate || n.progress.value < n.progress.max;
 }
 

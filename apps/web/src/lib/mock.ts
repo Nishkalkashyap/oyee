@@ -172,6 +172,33 @@ function fixtures(): Notification[] {
       },
       5 * HOUR,
     ),
+    // Progress reported with the MCP `progress` tool: running (silent), then done or failed.
+    base(
+      { title: "Running the test suite", source: "claude-code", silent: true, progress: { value: 3, max: 7, label: "3/7 checks", indeterminate: false } },
+      2 * MIN,
+    ),
+    base(
+      {
+        title: "CI on main",
+        body: "All checks passed on `a1b2c3d`.",
+        source: "github-actions",
+        severity: "success",
+        url: "https://github.com/example/api/actions/runs/811",
+        progress: { value: 7, max: 7, label: "7/7 checks", indeterminate: false },
+      },
+      12 * MIN,
+    ),
+    base(
+      {
+        title: "CI on feature/login",
+        body: "`test:e2e` failed.",
+        source: "github-actions",
+        severity: "warning",
+        readAt: iso(30 * MIN),
+        progress: { value: 4, max: 7, label: "4/7 checks", indeterminate: false, state: "failed" } as FlatNotification["progress"],
+      },
+      35 * MIN,
+    ),
     // The same periodic alert, several times: the inbox stacks these into one row.
     ...[40, 100, 160, 220].map((min, i) =>
       base(

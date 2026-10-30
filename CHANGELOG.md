@@ -11,6 +11,11 @@
   ends). The cooldown runs from the key's last alert.
 - Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
   image and link buttons, with where a tap goes shown as the host.
+- MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without
+  sound, later reports update it silently, and `done` or `failed` alerts once; a finished progress stays in the inbox
+  until read. The tool answers in plain text with the outcome and the next step. The web inbox draws progress with
+  its own card (state pill, a real bar with its label, last report), and a failed progress is no longer listed under
+  In progress. Silent notifications no longer go out as alerting, high-priority FCM messages.
 - Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
   `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
   sends get the intent they most resemble and existing notifications are converted once; the flat card fields are

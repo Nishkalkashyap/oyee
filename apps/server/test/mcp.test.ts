@@ -58,6 +58,7 @@ describe("MCP", () => {
         "list_devices",
         "list_notifications",
         "list_templates",
+        "progress",
         "resolve_notification",
         "send_notification",
         "update_notification",

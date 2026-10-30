@@ -17,3 +17,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 ## Comments
 
 From 01: `icon` exists both top-level and in the inform block; pick one. The old-row conversion must survive deleting `inferIntent`.
+
+## Comments
+
+From 07: ProgressInput duplicates the shared fields InformInput has; fold them into one shared base.
