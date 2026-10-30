@@ -36,8 +36,8 @@ in one open-source, self-hostable package that we fully control.
 - **Inbox** (web + every client): list, filter (source, severity, status, thread, text), paginate, and act on notifications live.
 - **Templates**: named presets with `{{variables}}`, written once in a platform-neutral card schema and rendered
   natively by each client.
-- **MCP tools**: `send_notification`, `update_notification`, `resolve_notification`, `ask`, `wait_for_response`,
-  `get_notification`, `list_notifications`, `list_templates`, `upsert_template`, `delete_template`, `list_devices`.
+- **MCP tools** (one per intent, docs/protocol.md §5): `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
+  `list_notifications`, `list_devices`.
 
 ### Core concepts
 
@@ -120,7 +120,7 @@ oyee/
 - **Web composer + REST** `POST /api/notifications` for manual sends and tests.
 
 ### 5.2 Live updates and two-way actions
-- `update_notification` patches any field and increments `version`. Clients replace the system notification in place.
+- `PATCH /api/notifications/:id` (agents use `progress` or a keyed `inform` instead) patches any field and increments `version`. Clients replace the system notification in place.
   The update is silent unless `alert: true` is set.
 - Actions: up to 3 buttons. Each one either **opens a URL**, **records a response** (default), and/or **calls a callback URL**
   (the server POSTs the response JSON). With `resolves: true`, tapping it also resolves the notification.

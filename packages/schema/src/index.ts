@@ -710,10 +710,46 @@ export const LIMITS = {
   maxStaleAfter: "24h",
   /** wait_for_response holds for an answer at most this long. */
   askWaitSeconds: ASK_WAIT_SECONDS,
+  /** list_notifications (MCP) returns this many items unless asked for more, and at most `maxListPage`. */
+  defaultListPage: 10,
+  maxListPage: 50,
   /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
   minCooldown: "1m",
   maxCooldown: "168h",
 } as const satisfies Record<string, number | Duration>;
+
+// ─── MCP list_notifications ─────────────────────────────────────────────────
+
+export const McpListInput = z.object({
+  key: Key.optional().describe("Only notifications with this key."),
+  intent: Intent.optional().describe("Only this intent: inform, ask or progress."),
+  status: NotificationStatus.optional().describe("active (still on the user's devices) or resolved."),
+  source: z.string().min(1).max(64).optional().describe("Only notifications from this source."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.maxListPage)
+    .default(LIMITS.defaultListPage)
+    .describe(`How many to return, newest first (default ${LIMITS.defaultListPage}, at most ${LIMITS.maxListPage}).`),
+  cursor: z.string().optional().describe("nextCursor from the previous page, to get older notifications."),
+});
+export type McpListInput = z.infer<typeof McpListInput>;
+
+/** One list_notifications item: only what an agent needs, with the age precomputed ("12m") so it needs no date maths. */
+export interface McpListItem {
+  id: string;
+  intent: Intent;
+  key: string | null;
+  title: string;
+  status: NotificationStatus;
+  /** ask: open | answered | expired | withdrawn; progress: running | done | failed | stopped; inform: null. */
+  state: AskState | ProgressState | null;
+  /** An ask's answer; null otherwise. */
+  answer: { option: string | null; text: string | null; device: string | null } | null;
+  createdAt: string;
+  ago: string;
+}
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
 

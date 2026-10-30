@@ -17,7 +17,7 @@ General rules:
 
 ## 1. Card / Notification schema
 
-> **Targeted delivery.** `devices` / `platforms` on send (REST, MCP `send_notification` / `ask`, webhook `?devices=` /
+> **Targeted delivery.** `devices` / `platforms` on send (REST, MCP `inform` / `ask` / `progress`, webhook `?devices=` /
 > `?platforms=`) are resolved server-side to `targetDeviceIds` on the stored notification. Unknown or ambiguous targets
 > → `400` listing the paired devices. Push (FCM / Web Push) goes only to target devices; WebSocket events still reach every
 > client so inboxes stay in sync, and **clients must not post a system notification unless `targetDeviceIds` is null or
@@ -247,23 +247,35 @@ or `"Notification"`.
 
 ## 5. MCP — `/mcp/:token` or `/mcp` (Bearer)
 
-Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the zod schemas from `@oyee/schema`):
+Streamable HTTP, stateless. Server name `oyee`. Exactly seven tools (the input schemas are the zod schemas from
+`@oyee/schema`); the server `instructions` say in a few lines when to use inform, ask and progress.
 
-| Tool | Input | Output (JSON text content) |
+| Tool | Input | Output |
 |---|---|---|
-| `inform` | `InformInput` (below) | text: `outcome: …`, `id: …` and a sentence (below) |
-| `send_notification` | `SendNotificationInput` | `Notification` |
-| `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
-| `resolve_notification` | `{ id }` | `Notification` |
-| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | Text: `Asked the user (id ntf_…). Call wait_for_response with id "ntf_…" to get the answer.`, or for an open ask with the same `(source, key)`: `Already asked 12m ago, still waiting (id ntf_…)…` (no new alert) |
-| `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: `outcome:` (`created` / `updated_silently` / `alerted`) and `id:` lines, then the next step (as `inform`) |
-| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | Text: `The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`, or `No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.` |
-| `get_notification` | `{ id }` | `Notification` |
-| `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |
-| `list_templates` | `{}` | `{ items }` |
-| `upsert_template` | `{ name, description?, card }` | `Template` |
-| `delete_template` | `{ name }` | `{ ok: true }` |
-| `list_devices` | `{}` | `{ items: Device[] }` |
+| `inform` | `InformInput` (below) | result text (below): `created` / `updated_silently` / `alerted` / `suppressed` |
+| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | result text: `created` (`Asked the user. Call wait_for_response with id "ntf_…" to get the answer.`), or `reused` for an open ask with the same `(source, key)` (`Already asked 12m ago, still waiting; the user was not alerted again. …`, no new alert) |
+| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | result text: `answered` (`The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`) or `pending` (`No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.`) |
+| `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | result text: `created` / `updated_silently` / `alerted`, then the next step |
+| `resolve` | `{ id }` | result text: `resolved` (`Resolved "…": it is gone from the user's devices.`) or `withdrawn` for an open ask (it can no longer be answered) |
+| `list_notifications` | `McpListInput`: `{ key?, intent?, status?, source?, limit? (default 10, max 50), cursor? }` | JSON `{ items: McpListItem[], nextCursor }`, newest first |
+| `list_devices` | `{}` | JSON `{ items: Device[] }` |
+
+**Result text.** Every tool that acts answers in one shape: an `outcome:` line, an `id:` line, then what happened and
+the next step in words, so a model reads the outcome and id the same way from every tool:
+
+```
+outcome: pending
+id: ntf_01J…
+No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_01J…" to keep waiting.
+```
+
+Errors are `isError` results with the text `<code>: <message>` (for example `not_found: notification not found`).
+
+**`list_notifications` items** are slim so a listing costs few tokens and needs no date maths:
+`{ id, intent, key, title, status, state, answer, createdAt, ago }`. `state` is the ask's (`open` / `answered` /
+`expired` / `withdrawn`) or the progress's (`running` / `done` / `failed` / `stopped`), `null` for an inform;
+`answer` is an ask's `{ option, text, device }` or `null`; `ago` is the age such as `45s`, `12m`, `3h`, `2d`. Pass
+`nextCursor` as `cursor` for older ones (`null` = no more).
 
 `wait_for_response` returns the answer immediately if there is one. An ask always alerts at `warning`; with neither
 options nor `allowText` it gets a reply box. Its `ask.expiresAt` is one hour after it was sent (expiry itself comes

@@ -16,7 +16,8 @@ src/
   routes/api.ts       REST endpoints + WebSocket upgrade
   routes/hook.ts      webhook ingestion
   webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers
-  mcp/server.ts       MCP tools (stateless Streamable HTTP, official SDK)
+  mcp/server.ts       the seven MCP tools + server instructions (stateless Streamable HTTP, official SDK)
+  mcp/text.ts         the shared result shape ("outcome:" / "id:" lines, then words), `ago`, list_notifications items
   mcp/inform.ts       the `inform` tool and its plain-text result
   mcp/ask.ts          `ask` / `wait_for_response` plain-text results ("asked 3m ago", "answered from Pixel 9")
   inbox/do.ts         InboxDO: notifications, tombstones, templates, quotas, push coalescing, WebSockets, waiters, retention
