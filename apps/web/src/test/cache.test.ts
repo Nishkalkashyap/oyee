@@ -9,6 +9,8 @@ import {
   upsertIntoPages,
   type NotificationPages,
 } from "../lib/cache";
+import type { Notification } from "@oyee/schema";
+import fixtures from "../../../../packages/schema/fixtures/notifications.v2.json";
 import { makeNotification, minute } from "./fixtures";
 
 const n1 = makeNotification({ id: "n1", createdAt: minute(30) });
@@ -113,27 +115,26 @@ describe("applyEventsToPages", () => {
 });
 
 describe("matchesFilters", () => {
-  const n = makeNotification({
-    id: "m",
-    source: "aws",
-    severity: "critical",
-    threadId: "t1",
-    title: "CPU high",
-    body: "on prod-api",
-    tags: ["prod"],
-  });
+  // inform-full: alertmanager, critical, "Disk 95% full on db-1", rows Host: db-1 / Used: 95%.
+  const n = fixtures["inform-full"] as unknown as Notification;
   it("matches every filter dimension", () => {
     expect(matchesFilters(n, {})).toBe(true);
-    expect(matchesFilters(n, { source: "aws", severity: "critical", status: "active", threadId: "t1" })).toBe(true);
+    expect(matchesFilters(n, { source: "alertmanager", severity: "critical", status: "active" })).toBe(true);
     expect(matchesFilters(n, { source: "gcp" })).toBe(false);
     expect(matchesFilters(n, { severity: "info" })).toBe(false);
     expect(matchesFilters(n, { status: "resolved" })).toBe(false);
-    expect(matchesFilters(n, { threadId: "t2" })).toBe(false);
   });
-  it("searches title, body, source and tags case-insensitively", () => {
-    expect(matchesFilters(n, { q: "cpu" })).toBe(true);
-    expect(matchesFilters(n, { q: "PROD-API" })).toBe(true);
+  it("searches title, body, source and an inform's rows case-insensitively", () => {
+    expect(matchesFilters(n, { q: "DISK 95" })).toBe(true);
+    expect(matchesFilters(n, { q: "/var" })).toBe(true);
+    expect(matchesFilters(n, { q: "alertman" })).toBe(true);
+    expect(matchesFilters(n, { q: "host db-1" })).toBe(true);
+    expect(matchesFilters(n, { q: "prod" })).toBe(false);
     expect(matchesFilters(n, { q: "nope" })).toBe(false);
+  });
+  it("searches an ask's answer buttons and a progress's label, like the server", () => {
+    expect(matchesFilters(fixtures["ask-open"] as unknown as Notification, { q: "reject" })).toBe(true);
+    expect(matchesFilters(fixtures["progress-running"] as unknown as Notification, { q: "3/7 checks" })).toBe(true);
   });
 });
 

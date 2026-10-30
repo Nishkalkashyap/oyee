@@ -21,7 +21,6 @@ object Channels {
         Severity.WARNING -> R.string.channel_warning
         Severity.INFO -> R.string.channel_info
         Severity.SUCCESS -> R.string.channel_success
-        Severity.DEBUG -> R.string.channel_debug
     }
 
     private fun descRes(severity: Severity): Int = when (severity) {
@@ -29,19 +28,22 @@ object Channels {
         Severity.WARNING -> R.string.channel_warning_desc
         Severity.INFO -> R.string.channel_info_desc
         Severity.SUCCESS -> R.string.channel_success_desc
-        Severity.DEBUG -> R.string.channel_debug_desc
     }
 
     /** Android has no channel above IMPORTANCE_HIGH (MAX is unused), so critical vs warning differ by vibration/category. */
     fun importance(severity: Severity): Int = when (severity) {
         Severity.CRITICAL, Severity.WARNING -> NotificationManager.IMPORTANCE_HIGH
         Severity.INFO, Severity.SUCCESS -> NotificationManager.IMPORTANCE_DEFAULT
-        Severity.DEBUG -> NotificationManager.IMPORTANCE_LOW
     }
+
+    /** The silent channel for the removed `debug` severity (every severity alerts since protocol v2). */
+    private const val REMOVED_DEBUG = "oyee.debug"
 
     /** Idempotent: safe to call on every start. Existing channels keep the user's customisations. */
     fun ensure(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
+        // Upgrades from builds before intents: the debug channel no longer receives anything, so it goes.
+        nm.deleteNotificationChannel(REMOVED_DEBUG)
         nm.createNotificationChannelGroups(
             listOf(
                 NotificationChannelGroup(GROUP_ALERTS, "Notifications"),
@@ -56,7 +58,6 @@ object Channels {
             NotificationChannel(sev.channelId, context.getString(nameRes(sev)), importance(sev)).apply {
                 description = context.getString(descRes(sev))
                 group = GROUP_ALERTS
-                setShowBadge(sev != Severity.DEBUG)
                 when (sev) {
                     Severity.CRITICAL -> {
                         enableVibration(true)
@@ -74,10 +75,6 @@ object Channels {
                     Severity.INFO, Severity.SUCCESS -> {
                         enableVibration(true)
                         setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), audio)
-                    }
-                    Severity.DEBUG -> {
-                        enableVibration(false)
-                        setSound(null, null)
                     }
                 }
             }

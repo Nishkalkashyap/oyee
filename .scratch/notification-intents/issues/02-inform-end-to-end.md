@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] MCP `inform` tool exists with the inform input schema; every field has a one-line description; severity is `info | success | warning | critical`, each described by when to use it
 - [ ] `key` is unique per `(source, key)`: a second inform with the same key updates the latest active one and alerts; a different source with the same key creates its own
@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] The tool result states the outcome and the notification id
 - [ ] The web inbox and detail view draw inform with a purpose-built card (severity, body, rows, image, link buttons), following docs/design.md
 - [ ] Server tests through MCP `tools/call`; web card/view-model tests on the shared fixtures
+
+## Comments
+
+Resolved in 9253cdd on `notification-intents`. Inform rules in the inbox `inform` module; MCP tool in its own module; web InformCard.

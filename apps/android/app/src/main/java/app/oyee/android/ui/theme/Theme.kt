@@ -39,7 +39,20 @@ data class OyeeColors(
     val border: Color,
     val rowSelected: Color,
     val secondaryLabel: Color,
+    // Severity (docs/design.md), the same in light and dark; res/values/colors.xml mirrors them for system notifications.
+    val critical: Color = SeverityColors.critical,
+    val warning: Color = SeverityColors.warning,
+    val info: Color = SeverityColors.info,
+    val success: Color = SeverityColors.success,
 )
+
+/** The severity colours of docs/design.md, for code outside composition (also `Oyee.colors.critical` etc.). */
+object SeverityColors {
+    val critical = Color(0xFFDC2626)
+    val warning = Color(0xFFD97706)
+    val info = Color(0xFF3B82F6)
+    val success = Color(0xFF16A34A)
+}
 
 val LightOyee = OyeeColors(
     ground = Color(0xFFF3F2EF), background = Color(0xFFFFFFFF), foreground = Color(0xFF1C1B19),

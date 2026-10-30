@@ -1,32 +1,72 @@
 import Foundation
 
-/// Platform rendering helpers (protocol §9).
+/// Platform rendering helpers (protocol §8–9): the text of a system notification, per intent.
 public enum Rendering {
     /// Text progress bar used where native progress isn't available: `▓▓▓░░░░░░░ 3/7`.
     /// Mirrors `progressText` in packages/schema exactly.
-    public static func progressText(_ progress: Progress) -> String {
-        if progress.indeterminate { return progress.label ?? "In progress…" }
+    public static func progressText(_ progress: ProgressBlock) -> String {
         let max = progress.max
         let ratio = Swift.max(0, Swift.min(1, progress.value / max))
         let filled = Int(jsRound(ratio * 10))
         let bar = String(repeating: "▓", count: filled) + String(repeating: "░", count: 10 - filled)
-        let suffix =
-            progress.label
-            ?? (max == 100 ? "\(Int(jsRound(ratio * 100)))%" : "\(jsNumber(progress.value))/\(jsNumber(max))")
-        return "\(bar) \(suffix)"
+        return "\(bar) \(progressAmount(progress))"
     }
 
-    /// The body of a system notification: plain-text body + `Label: value` lines + progress text.
+    /// "3/7 checks", "40%" or "3/7": the sender's label, else the percent (max 100) or value/max. Mirrors
+    /// `progressAmount` in packages/schema exactly.
+    public static func progressAmount(_ progress: ProgressBlock) -> String {
+        let max = progress.max
+        let ratio = max > 0 ? Swift.max(0, Swift.min(1, progress.value / max)) : 0
+        return progress.label
+            ?? (max == 100 ? "\(Int(jsRound(ratio * 100)))%" : "\(jsNumber(progress.value))/\(jsNumber(max))")
+    }
+
+    /// "45s", "12m", "3h", "2d" (elapsed: the largest whole unit, rounded down), or with `span` "40s", "48m", "1h",
+    /// "2h 30m" (to the nearest second under a minute, else the nearest minute). Mirrors `formatDuration` in
+    /// packages/schema exactly.
+    public static func duration(_ seconds: TimeInterval, span: Bool = false) -> String {
+        if span {
+            let s = Swift.max(0, Int(jsRound(seconds)))
+            if s < 60 { return "\(s)s" }
+            let m = Int(jsRound(seconds / 60))
+            if m < 60 { return "\(m)m" }
+            return m % 60 == 0 ? "\(m / 60)h" : "\(m / 60)h \(m % 60)m"
+        }
+        let s = Swift.max(0, Int(seconds.rounded(.down)))
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s / 60)m" }
+        if s < 86_400 { return "\(s / 3600)h" }
+        return "\(s / 86_400)d"
+    }
+
+    /// "Stopped reporting after 3/7 checks" or "… after 40%". Mirrors `stoppedReportingLabel` in packages/schema
+    /// exactly: the sender's last label, else the rounded percent.
+    public static func stoppedReportingLabel(_ progress: ProgressBlock) -> String {
+        let ratio = progress.max > 0 ? Swift.max(0, Swift.min(1, progress.value / progress.max)) : 0
+        return "Stopped reporting after \(progress.label ?? "\(Int(jsRound(ratio * 100)))%")"
+    }
+
+    /// The body of a system notification (same text as the browser popup, apps/web/src/lib/webpush.ts): the
+    /// plain-text body, then an inform's `Label: value` rows or a progress's line (the text bar while running,
+    /// "Done · 7/7 checks" / "Failed · 4/7 checks" once ended, "Stopped reporting after 40%" when stopped).
     public static func systemBody(for notification: OyeeNotification) -> String {
         var lines: [String] = []
-        if let body = notification.body, !body.isEmpty {
-            lines.append(MarkdownSubset.plainText(body))
+        if let body = notification.body {
+            let plain = MarkdownSubset.plainText(body).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !plain.isEmpty { lines.append(plain) }
         }
-        for field in notification.fields {
-            lines.append("\(field.label): \(field.value)")
-        }
-        if let progress = notification.progress {
-            lines.append(progressText(progress))
+        switch notification.content {
+        case .inform(let inform):
+            lines += inform.fields.map { "\($0.label): \($0.value)" }
+        case .ask:
+            break
+        case .progress(let progress):
+            let card = ProgressCardModel(progress)
+            switch progress.state {
+            case .running: lines.append(progressText(progress))
+            case .stopped: lines.append(card.stateLabel)
+            case .done, .failed: lines.append("\(card.stateLabel) · \(card.amount)")
+            }
         }
         return lines.joined(separator: "\n")
     }

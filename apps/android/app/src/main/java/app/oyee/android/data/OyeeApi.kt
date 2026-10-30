@@ -36,6 +36,9 @@ class OyeeApiException(
 ) : IOException(message) {
     val isUnauthorized get() = status == 401
     val isNotFound get() = status == 404
+
+    /** 409: e.g. answering an ask that was already answered, expired or withdrawn. Final: retrying can't succeed. */
+    val isConflict get() = status == 409
 }
 
 data class NotificationQuery(
@@ -44,7 +47,6 @@ data class NotificationQuery(
     val source: String? = null,
     val severity: Severity? = null,
     val status: NotificationStatus? = null,
-    val threadId: String? = null,
     val q: String? = null,
     val updatedSince: String? = null,
 )
@@ -90,7 +92,6 @@ class OyeeApi(
             q.source?.let { addQueryParameter("source", it) }
             q.severity?.let { addQueryParameter("severity", it.wire) }
             q.status?.let { addQueryParameter("status", it.wire) }
-            q.threadId?.let { addQueryParameter("threadId", it) }
             q.q?.takeIf { it.isNotBlank() }?.let { addQueryParameter("q", it) }
             q.updatedSince?.let { addQueryParameter("updatedSince", it) }
         }.build()
@@ -99,10 +100,14 @@ class OyeeApi(
 
     suspend fun get(s: Session, id: String): Notification = get(s, "api/notifications/${seg(id)}", Notification.serializer())
 
-    suspend fun respond(s: Session, id: String, actionId: String? = null, text: String? = null): Notification {
-        require(actionId != null || text != null) { "actionId or text is required" }
+    /**
+     * Answers an ask with one of its answer buttons ([option], the label) or a text reply. The first answer from any
+     * device wins; a later one gets `409 conflict` ([OyeeApiException.isConflict]).
+     */
+    suspend fun respond(s: Session, id: String, option: String? = null, text: String? = null): Notification {
+        require(option != null || text != null) { "option or text is required" }
         val body = buildJsonObject {
-            actionId?.let { put("actionId", it) }
+            option?.let { put("option", it) }
             text?.let { put("text", it) }
         }
         return send(s, "POST", "api/notifications/${seg(id)}/respond", body, Notification.serializer())

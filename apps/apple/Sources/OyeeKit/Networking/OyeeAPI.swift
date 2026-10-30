@@ -93,8 +93,9 @@ public struct OyeeAPI: Sendable {
         try await send("GET", "/api/notifications/\(escape(id))")
     }
 
-    public func respond(id: String, actionId: String? = nil, text: String? = nil) async throws -> OyeeNotification {
-        try await send("POST", "/api/notifications/\(escape(id))/respond", body: RespondInput(actionId: actionId, text: text))
+    /// Answers an open ask with an answer-button label or text. `409 conflict` once it's answered, expired or withdrawn.
+    public func respond(id: String, option: String? = nil, text: String? = nil) async throws -> OyeeNotification {
+        try await send("POST", "/api/notifications/\(escape(id))/respond", body: RespondInput(option: option, text: text))
     }
 
     public func markRead(id: String) async throws -> OyeeNotification {
@@ -128,13 +129,6 @@ public struct OyeeAPI: Sendable {
 
     public func unpairSelf() async throws {
         try await sendNoContent("DELETE", "/api/devices/self")
-    }
-
-    // MARK: Templates
-
-    public func templates() async throws -> [Template] {
-        let list: ItemList<Template> = try await send("GET", "/api/templates")
-        return list.items
     }
 
     // MARK: - Plumbing

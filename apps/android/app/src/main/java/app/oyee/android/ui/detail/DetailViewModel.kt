@@ -75,7 +75,8 @@ class DetailViewModel(private val c: AppContainer, private val id: String) : Vie
 
     fun consumeToast() = _state.update { it.copy(toast = null) }
 
-    fun respond(actionId: String, label: String) = act("Sent: $label") { s -> c.api.respond(s, id, actionId = actionId) }
+    /** Answers the ask with one of its answer buttons. */
+    fun answer(option: String) = act("Answered: $option") { s -> c.api.respond(s, id, option = option) }
 
     fun sendReply() {
         val text = _state.value.replyText.trim()
@@ -118,6 +119,8 @@ class DetailViewModel(private val c: AppContainer, private val id: String) : Vie
                 _state.update { onDone(it.copy(busy = false, toast = success, replyText = if (clearReply) "" else it.replyText)) }
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, toast = e.message ?: "Request failed") }
+                // 409: answered on another device, expired or withdrawn meanwhile. The message says which; show it as it is now.
+                if (e is OyeeApiException && e.isConflict) load()
             }
         }
     }

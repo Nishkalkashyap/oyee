@@ -152,7 +152,6 @@ export async function deleteSession(db: D1Database, sessionId: string): Promise<
 
 export interface TokenRecord extends TokenInfo {
   userId: string;
-  callbackSecret: string;
 }
 
 const toTokenInfo = (r: TokenRow): TokenInfo => ({
@@ -174,9 +173,8 @@ export async function createToken(
   db: D1Database,
   userId: string,
   p: { kind: TokenKind; label: string; defaultSource?: string },
-): Promise<{ token: TokenInfo; secret: string; callbackSecret: string }> {
+): Promise<{ token: TokenInfo; secret: string }> {
   const secret = newSecret(p.kind);
-  const callbackSecret = b64urlEncode(randomBytes(32));
   const row = await orm(db)
     .insert(tokens)
     .values({
@@ -187,12 +185,11 @@ export async function createToken(
       prefix: secretPrefix(secret),
       hash: await sha256Hex(secret),
       defaultSource: p.defaultSource ?? null,
-      callbackSecret,
       createdAt: nowIso(),
     })
     .returning()
     .get();
-  return { token: toTokenInfo(row), secret, callbackSecret };
+  return { token: toTokenInfo(row), secret };
 }
 
 export async function deleteToken(db: D1Database, userId: string, id: string): Promise<boolean> {
@@ -217,12 +214,7 @@ export async function findTokenBySecret(db: D1Database, secret: string, kind: To
     r.lastUsedAt = nowIso();
     await d.update(tokens).set({ lastUsedAt: r.lastUsedAt }).where(eq(tokens.id, r.id)).run();
   }
-  return { ...toTokenInfo(r), userId: r.userId, callbackSecret: r.callbackSecret };
-}
-
-export async function getTokenCallbackSecret(db: D1Database, tokenId: string): Promise<string | null> {
-  const r = await orm(db).select({ callbackSecret: tokens.callbackSecret }).from(tokens).where(eq(tokens.id, tokenId)).get();
-  return r?.callbackSecret ?? null;
+  return { ...toTokenInfo(r), userId: r.userId };
 }
 
 // ─── Devices ────────────────────────────────────────────────────────────────

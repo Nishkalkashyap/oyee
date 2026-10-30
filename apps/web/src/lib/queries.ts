@@ -10,8 +10,7 @@ import type {
   Notification,
   RegisterWebDeviceInput,
   RespondInput,
-  SendNotificationInput,
-  UpsertTemplateInput,
+  IntentSendBody,
 } from "@oyee/schema";
 import { api } from "./api";
 import {
@@ -33,7 +32,6 @@ export const qk = {
   tokens: ["tokens"] as const,
   devices: ["devices"] as const,
   sources: ["sources"] as const,
-  templates: ["templates"] as const,
   notificationLists: ["notifications", "list"] as const,
   notificationList: (f: InboxFilters) => ["notifications", "list", f] as const,
   notification: (id: string) => ["notifications", "detail", id] as const,
@@ -45,7 +43,6 @@ export function normalizeFilters(f: InboxFilters): InboxFilters {
   if (f.source) out.source = f.source;
   if (f.severity) out.severity = f.severity;
   if (f.status) out.status = f.status;
-  if (f.threadId) out.threadId = f.threadId;
   if (f.q?.trim()) out.q = f.q.trim();
   return out;
 }
@@ -205,8 +202,8 @@ export function useUnreadCount(): number {
 export function useSendNotification() {
   const apply = useApplyNotification();
   return useMutation({
-    mutationFn: (input: SendNotificationInput) => api.notifications.send(input),
-    onSuccess: apply,
+    mutationFn: (input: IntentSendBody) => api.notifications.send(input),
+    onSuccess: (sent) => apply(sent.notification),
   });
 }
 
@@ -251,31 +248,3 @@ export function useMarkAllRead() {
   });
 }
 
-// ─── Templates ──────────────────────────────────────────────────────────────
-
-export function useTemplates() {
-  return useQuery({ queryKey: qk.templates, queryFn: async () => (await api.templates.list()).items });
-}
-
-export function usePutTemplate() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ name, input }: { name: string; input: UpsertTemplateInput }) => api.templates.put(name, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.templates }),
-  });
-}
-
-export function useDeleteTemplate() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (name: string) => api.templates.remove(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.templates }),
-  });
-}
-
-export function usePreviewTemplate() {
-  return useMutation({
-    mutationFn: ({ name, vars }: { name: string; vars: Record<string, string | number | boolean> }) =>
-      api.templates.preview(name, vars),
-  });
-}

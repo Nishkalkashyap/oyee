@@ -95,14 +95,6 @@
   }
 }
 
-@keyframes indeterminate {
-  0% {
-    left: -35%;
-  }
-  100% {
-    left: 100%;
-  }
-}
 
 @keyframes toast-in {
   from {

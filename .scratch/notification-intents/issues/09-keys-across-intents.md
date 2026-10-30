@@ -6,8 +6,16 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 02, 05, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Inform, ask and progress each reject a key whose latest live notification has a different intent, with a how-to-fix message
 - [ ] A finished progress, answered/expired/withdrawn ask, or resolved inform lets a different intent take the key
 - [ ] Server tests through MCP and webhooks
+
+## Comments
+
+From 03: cooldown measures from the internal `alerted_at` column (written by the inform path only); the key rule should use the same last-alert source.
+
+## Comments
+
+Resolved: feature 888e78e, merged into `notification-intents`. `assertKeyFree` (pure, inbox keys module) + `InboxDO.claimKey` used by all three intents.

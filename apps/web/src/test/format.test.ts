@@ -3,10 +3,8 @@ import {
   fieldLines,
   formatCountdown,
   formatPairingCode,
-  progressLabel,
   progressPercent,
   relativeTime,
-  systemNotificationBody,
 } from "../lib/format";
 
 describe("progress formatting", () => {
@@ -18,14 +16,6 @@ describe("progress formatting", () => {
     expect(progressPercent({ value: Number.NaN })).toBe(0);
     expect(progressPercent({ value: 5, max: 0 })).toBe(5); // invalid max falls back to 100
   });
-
-  it("labels: explicit label, else % for max 100, else value/max", () => {
-    expect(progressLabel({ value: 3, max: 7, label: "3/7 checks" })).toBe("3/7 checks");
-    expect(progressLabel({ value: 42.4 })).toBe("42%");
-    expect(progressLabel({ value: 3, max: 7 })).toBe("3/7");
-    expect(progressLabel({ value: 0, indeterminate: true })).toBe("");
-    expect(progressLabel({ value: 0, indeterminate: true, label: "Waiting" })).toBe("Waiting");
-  });
 });
 
 describe("fields", () => {
@@ -35,25 +25,6 @@ describe("fields", () => {
       "Pods: 3",
     ]);
     expect(fieldLines(undefined)).toEqual([]);
-  });
-});
-
-describe("systemNotificationBody", () => {
-  it("strips markdown and appends fields and the text progress bar", () => {
-    expect(
-      systemNotificationBody({
-        body: "CPU **90%** on `api` ([graph](https://g.io))",
-        fields: [{ label: "Region", value: "us-east-1" }],
-        progress: { value: 3, max: 7, label: "3/7", indeterminate: false },
-      }),
-    ).toBe("CPU 90% on api (graph)\nRegion: us-east-1\n▓▓▓▓░░░░░░ 3/7");
-  });
-
-  it("handles empty body, indeterminate progress", () => {
-    expect(systemNotificationBody({ body: null, fields: [], progress: { value: 0, max: 100, indeterminate: true } })).toBe(
-      "In progress…",
-    );
-    expect(systemNotificationBody({ body: null, fields: [], progress: null })).toBe("");
   });
 });
 

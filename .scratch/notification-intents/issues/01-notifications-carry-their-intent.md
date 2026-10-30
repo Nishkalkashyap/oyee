@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The intent-shaped Notification (shared fields + `inform` / `ask` / `progress` block) is defined in the schema package, alongside the existing flat fields
 - [ ] Every notification returned by REST, WebSocket, push payloads and MCP includes `intent`, `key` and its intent block, and still includes the flat fields
@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Server tests (public endpoints in workerd) cover the intent inferred for each kind of flat send and for migrated old rows
 - [ ] One shared set of protocol-v2 example notifications (every intent in every state) exists for the client decoding tests to use
 - [ ] Web, Android and macOS test suites still pass unchanged
+
+## Comments
+
+Resolved in 2e987ee on `notification-intents`. Types and `inferIntent` in the schema package; fixtures at packages/schema/fixtures/notifications.v2.json.

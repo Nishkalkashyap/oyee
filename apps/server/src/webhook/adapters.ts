@@ -1,16 +1,16 @@
-/** Webhook payload adapters (docs/protocol.md §4): Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers. */
-import { LIMITS, type SendNotificationInput, type Severity, type UpdateNotificationInput } from "@oyee/schema";
+/**
+ * Webhook payload adapters (docs/protocol.md §4): Alertmanager, Grafana, AWS SNS, text/plain + query + ntfy headers.
+ * Each turns a payload into an intent (inform, or progress for `?intent=progress`).
+ */
+import { LIMITS, type InformInput, type IntentSendInput, type Severity } from "@oyee/schema";
 import { z } from "zod";
+import { badRequest } from "../lib/errors";
+import { REMOVED_FIELDS, parseIntentSend } from "../routes/send";
 
 export type HookAction =
-  | { kind: "send"; input: SendNotificationInput }
-  | {
-      kind: "resolve";
-      replaceKey: string;
-      patch: UpdateNotificationInput;
-      /** Used if nothing active matches: create the card (silently) and resolve it right away. */
-      fallback: SendNotificationInput;
-    }
+  | { kind: "send"; input: IntentSendInput }
+  /** Resolve the inform with this key, showing `input` as its final content (Alertmanager/Grafana group resolved). */
+  | { kind: "resolve"; input: InformInput & { key: string } }
   | { kind: "sns-confirm"; subscribeUrl: string }
   | { kind: "ignore"; reason: string };
 
@@ -26,6 +26,7 @@ const validUrl = (v: unknown): string | undefined => {
 
 // ─── Severity mapping ───────────────────────────────────────────────────────
 
+/** An alerting label (Alertmanager `severity`, `?severity=`) as a severity; below-info levels such as debug are info. */
 export function severityFromLabel(label: string | undefined, fallback: Severity = "warning"): Severity {
   switch (label?.toLowerCase().trim()) {
     case "critical":
@@ -50,9 +51,10 @@ export function severityFromLabel(label: string | undefined, fallback: Severity 
     case "none":
     case "p3":
     case "p4":
-      return "info";
     case "debug":
-      return "debug";
+    case "trace":
+    case "verbose":
+      return "info";
     case "success":
     case "ok":
       return "success";
@@ -61,13 +63,12 @@ export function severityFromLabel(label: string | undefined, fallback: Severity 
   }
 }
 
-/** ntfy-style priority: 1–2 → debug/info, 3 → info, 4 → warning, 5 → critical (names min/low/default/high/max too). */
+/** ntfy-style priority: 1–3 → info, 4 → warning, 5 → critical (names min/low/default/high/max too). */
 export function severityFromPriority(p: string | undefined): Severity | undefined {
   if (!p) return undefined;
   switch (p.toLowerCase().trim()) {
     case "1":
     case "min":
-      return "debug";
     case "2":
     case "low":
     case "3":
@@ -138,27 +139,18 @@ export async function fromAlertmanager(body: Json, flavor: "alertmanager" | "gra
     validUrl(alerts[0]?.generatorURL) ??
     validUrl(body.externalURL);
   const groupKey = str(body.groupKey) ?? `${alertname}:${JSON.stringify(groupLabels)}`;
-  const replaceKey = await shortKey(`${flavor === "grafana" ? "grafana" : "am"}:`, groupKey);
+  const key = await shortKey(`${flavor === "grafana" ? "grafana" : "am"}:`, groupKey);
 
   const count = firing.length || alerts.length;
-  const firingTitle = clip(`[FIRING:${count}] ${alertname}`, 200);
-  const resolvedTitle = clip(`[RESOLVED] ${alertname}`, 200);
-  const base: SendNotificationInput = {
-    title: resolved ? resolvedTitle : firingTitle,
+  const input: InformInput & { key: string } = {
+    title: clip(resolved ? `[RESOLVED] ${alertname}` : `[FIRING:${count}] ${alertname}`, 200),
     body: clip(text, 4000) || undefined,
     severity: resolved ? "success" : severity,
     fields,
-    tags: [flavor],
     url,
-    replaceKey,
+    key,
   };
-  if (!resolved) return { kind: "send", input: base };
-  return {
-    kind: "resolve",
-    replaceKey,
-    patch: { title: resolvedTitle, severity: "success", ...(base.body ? { body: base.body } : {}) },
-    fallback: { ...base, silent: true },
-  };
+  return resolved ? { kind: "resolve", input } : { kind: "send", input: { intent: "inform", ...input } };
 }
 
 // ─── AWS SNS ────────────────────────────────────────────────────────────────
@@ -196,9 +188,9 @@ export function fromSns(body: Json): HookAction {
     return {
       kind: "send",
       input: {
+        intent: "inform",
         title: clip(subject ?? firstLine ?? "AWS SNS notification", 200),
         body: clip(message, 4000) || undefined,
-        tags: ["sns"],
       },
     };
   }
@@ -207,18 +199,26 @@ export function fromSns(body: Json): HookAction {
 
 // ─── text/plain, GET, ntfy headers ──────────────────────────────────────────
 
-const splitTags = (s: string | undefined) =>
-  s
-    ? s
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .slice(0, LIMITS.maxTags)
-        .map((t) => t.slice(0, 32))
-    : undefined;
+/**
+ * Query parameters of removed features whose meaning a send would silently lose (updating one notification, a saved
+ * template): a send using one is rejected, saying to use `key`. `?threadId=`, `?tags=` and ntfy's Tags header only
+ * grouped or labelled notifications, so they are ignored and existing one-liners keep working.
+ */
+const REMOVED_PARAMS = { replaceKey: REMOVED_FIELDS.replaceKey!, template: REMOVED_FIELDS.template! };
 
-/** Builds a send input from query params + ntfy-style headers, with `body` from the request body (or `?body=`). */
-export function fromTextRequest(query: Record<string, string>, headers: Headers, bodyText: string | null): SendNotificationInput {
+/** The first non-empty line of a text body: the title for senders that only post text. */
+const firstLine = (text: string | undefined) =>
+  text
+    ?.split(/\r?\n/)
+    .find((l) => l.trim() !== "")
+    ?.trim()
+    .slice(0, 200);
+
+/**
+ * Builds an intent from query params + ntfy-style headers, with `body` from the request body (or `?body=`).
+ * `?intent=` picks the intent (default inform). A missing title falls back to the body's first line.
+ */
+export function fromTextRequest(query: Record<string, string>, headers: Headers, bodyText: string | null): IntentSendInput {
   const h = (...names: string[]) => {
     for (const n of names) {
       const v = headers.get(n);
@@ -227,28 +227,35 @@ export function fromTextRequest(query: Record<string, string>, headers: Headers,
     return undefined;
   };
   const q = (name: string) => (query[name] !== undefined && query[name] !== "" ? query[name] : undefined);
-
-  const severityParam = q("severity");
-  const severity =
-    (severityParam ? severityFromLabel(severityParam, "info") : undefined) ??
-    severityFromPriority(q("priority") ?? h("Priority", "X-Priority", "P"));
-  const body = bodyText !== null && bodyText.trim() !== "" ? bodyText : q("body") ?? q("message");
-  const input: SendNotificationInput = {
-    title: q("title") ?? h("Title", "X-Title", "T"),
-    body: body ? body.slice(0, 4000) : undefined,
-    severity,
-    source: q("source"),
-    threadId: q("threadId"),
-    tags: splitTags(q("tags") ?? h("Tags", "X-Tags", "Ta")),
-    url: q("url") ?? q("click") ?? h("Click", "X-Click"),
-    icon: q("icon") ?? h("Icon", "X-Icon"),
-    template: q("template"),
-    replaceKey: q("replaceKey"),
+  const num = (name: string) => {
+    const v = q(name);
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw badRequest(`${name}: expected a number`);
+    return n;
   };
-  // Template variables: `?var.service=api` (extension; plain query params stay reserved for metadata).
-  const vars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(query)) if (k.startsWith("var.")) vars[k.slice(4)] = v;
-  if (Object.keys(vars).length) input.vars = vars;
-  for (const k of Object.keys(input) as (keyof SendNotificationInput)[]) if (input[k] === undefined) delete input[k];
-  return input;
+  for (const [param, message] of Object.entries(REMOVED_PARAMS)) if (q(param) !== undefined) throw badRequest(message);
+
+  const body = bodyText !== null && bodyText.trim() !== "" ? bodyText.slice(0, 4000) : (q("body") ?? q("message"));
+  const intent = q("intent");
+  const severityParam = q("severity");
+  const input: Record<string, unknown> = {
+    intent,
+    title: q("title") ?? h("Title", "X-Title", "T") ?? firstLine(body) ?? "Notification",
+    body,
+    source: q("source"),
+    url: q("url") ?? q("click") ?? h("Click", "X-Click"),
+    key: q("key"),
+    ...(intent === "progress"
+      ? { value: num("value"), max: num("max"), label: q("label"), status: q("status") }
+      : {
+          severity:
+            (severityParam ? severityFromLabel(severityParam, "info") : undefined) ??
+            severityFromPriority(q("priority") ?? h("Priority", "X-Priority", "P")),
+          icon: q("icon") ?? h("Icon", "X-Icon"),
+          cooldown: q("cooldown"),
+        }),
+  };
+  for (const k of Object.keys(input)) if (input[k] === undefined) delete input[k];
+  return parseIntentSend(input);
 }

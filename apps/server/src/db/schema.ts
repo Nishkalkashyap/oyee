@@ -1,6 +1,6 @@
 /**
  * Oyee D1 schema (global data) — source of truth for migrations.
- * Per-user notifications/templates live in the InboxDO SQLite storage, not here.
+ * Per-user notifications live in the InboxDO SQLite storage, not here.
  *
  * Change this file, then `pnpm --filter @oyee/server db:generate` to create a migration in `migrations/`.
  */
@@ -34,7 +34,7 @@ export const sessions = sqliteTable(
   (t) => [index("sessions_user").on(t.userId)],
 );
 
-/** Webhook / MCP tokens. `hash` = SHA-256(secret). `callbackSecret` signs action callbacks (X-Oyee-Signature). */
+/** Webhook / MCP tokens. `hash` = SHA-256(secret). */
 export const tokens = sqliteTable(
   "tokens",
   {
@@ -47,7 +47,6 @@ export const tokens = sqliteTable(
     prefix: text("prefix").notNull(),
     hash: text("hash").notNull().unique(),
     defaultSource: text("default_source"),
-    callbackSecret: text("callback_secret").notNull(),
     createdAt: text("created_at").notNull(),
     lastUsedAt: text("last_used_at"),
   },

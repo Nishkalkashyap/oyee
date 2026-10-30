@@ -81,10 +81,19 @@ describe("per-account quotas", () => {
 
   it("counts updates, replies and reads separately", async () => {
     const { cookie, userId } = await signedIn();
-    const n = (await call("POST", "/api/notifications", { cookie }, { title: "x", actions: [{ id: "ok", label: "OK" }] })).body;
+    const mcp = new URL((await createToken(cookie, "mcp")).url).pathname;
+    const asked = await call("POST", mcp, null, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "ask", arguments: { title: "OK?", options: ["OK"] } },
+    }, { Accept: "application/json, text/event-stream" });
+    const id = /ntf_[0-9A-Za-z]+/.exec(asked.body.result.content[0].text)![0];
+    const report = { intent: "progress", key: "import", title: "Importing" };
+    expect((await call("POST", "/api/notifications", { cookie }, report)).status).toBe(201);
     await setUsage(userId, "update", "d", QUOTAS.update.perDay);
-    expect((await call("PATCH", `/api/notifications/${n.id}`, { cookie }, { body: "y" })).status).toBe(429);
-    expect((await call("POST", `/api/notifications/${n.id}/respond`, { cookie }, { actionId: "ok" })).status).toBe(200);
+    expect((await call("POST", "/api/notifications", { cookie }, { ...report, value: 50 })).status).toBe(429);
+    expect((await call("POST", `/api/notifications/${id}/respond`, { cookie }, { option: "OK" })).status).toBe(200);
     await setUsage(userId, "read", "d", QUOTAS.read.perDay);
     expect((await call("GET", "/api/notifications", { cookie })).status).toBe(429);
     expect((await call("GET", "/api/usage", { cookie })).status).toBe(200); // usage itself is never metered
@@ -122,15 +131,6 @@ describe("caps", () => {
       subscription: { endpoint: "https://push.example.net/sub/cap", keys: { p256dh: "x", auth: "y" } },
     });
     expect(web.status).toBe(409);
-  });
-
-  it("caps templates per account", async () => {
-    const { cookie } = await signedIn();
-    for (let i = 0; i < LIMITS.maxTemplatesPerUser; i++) {
-      expect((await call("PUT", `/api/templates/t${i}`, { cookie }, { card: { title: "T" } })).status).toBe(200);
-    }
-    expect((await call("PUT", "/api/templates/t0", { cookie }, { card: { title: "edit is fine" } })).status).toBe(200);
-    expect((await call("PUT", "/api/templates/extra", { cookie }, { card: { title: "T" } })).status).toBe(409);
   });
 });
 

@@ -1,7 +1,7 @@
-import { progressText, type Field, type Notification, type Progress } from "@oyee/schema";
-import { markdownToPlainText } from "./markdown";
+import type { Field } from "@oyee/schema";
 
-type ProgressLike = Pick<Progress, "value"> & Partial<Pick<Progress, "max" | "label" | "indeterminate">>;
+/** A progress block, or the parts of one a bar needs. */
+export type ProgressLike = { value: number; max?: number; label?: string };
 
 /** Percentage 0..100 for a progress object (max defaults to 100; NaN/negative safe). */
 export function progressPercent(p: ProgressLike): number {
@@ -10,32 +10,9 @@ export function progressPercent(p: ProgressLike): number {
   return Math.max(0, Math.min(100, (v / max) * 100));
 }
 
-/** The label shown next to a progress bar: explicit label, else "42%" (max 100) or "3/7". */
-export function progressLabel(p: ProgressLike): string {
-  if (p.label) return p.label;
-  if (p.indeterminate) return "";
-  const max = p.max && p.max > 0 ? p.max : 100;
-  return max === 100 ? `${Math.round(progressPercent(p))}%` : `${p.value}/${max}`;
-}
-
 /** `Label: value` lines, as appended to system-notification text (protocol §9). */
 export function fieldLines(fields: readonly Field[] | null | undefined): string[] {
   return (fields ?? []).map((f) => `${f.label}: ${f.value}`);
-}
-
-/**
- * The plain-text body a system notification shows: markdown-stripped body, then field lines, then the
- * text progress bar. Mirrors `public/sw.js` (keep them in sync).
- */
-export function systemNotificationBody(
-  n: Pick<Notification, "body" | "fields" | "progress"> | { body?: string | null; fields?: Field[]; progress?: ProgressLike | null },
-): string {
-  const parts: string[] = [];
-  const body = markdownToPlainText(n.body ?? null).trim();
-  if (body) parts.push(body);
-  parts.push(...fieldLines(n.fields));
-  if (n.progress) parts.push(progressText(n.progress));
-  return parts.join("\n");
 }
 
 /** Compact relative time: "now", "5m", "3h", "2d", else a short date. */

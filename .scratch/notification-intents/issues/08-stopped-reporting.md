@@ -6,10 +6,16 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 04, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] `staleAfter` validated with bounds in LIMITS; each report sets `lastReportAt` and registers the stale deadline
 - [ ] The scheduler marks due progress as stopped, alerts once, and sets the stopped label from the last known state
 - [ ] A later `progress` call on a stopped progress revives it as running (silently)
 - [ ] The web progress card shows the stopped state
 - [ ] Tests backdate `lastReportAt`, fire the alarm, and observe via MCP and WebSocket
+
+## Comments
+
+From 04: a due deadline ref is removed before its handler runs; decide whether stale refs need retry protection.
+
+Resolved: feature f777516, merged into `notification-intents`. Deadline kind `progress.stale`; failed checks retry in 5m. Clients build the label with `stoppedReportingLabel` from @oyee/schema (server leaves `label` untouched).

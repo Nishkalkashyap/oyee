@@ -13,13 +13,11 @@ import type {
   PairingCode,
   RegisterWebDeviceInput,
   RespondInput,
-  SendNotificationInput,
+  IntentSendBody,
+  IntentSendResult,
   ServerConfig,
   SourceSummary,
-  Template,
   TokenInfo,
-  UpdateNotificationInput,
-  UpsertTemplateInput,
   Usage,
   User,
 } from "@oyee/schema";
@@ -158,15 +156,13 @@ export const api = {
           source: p.source,
           severity: p.severity,
           status: p.status,
-          threadId: p.threadId,
           q: p.q,
           updatedSince: p.updatedSince,
         })}`,
       ),
     get: (id: string) => request<Notification>("GET", `/api/notifications/${enc(id)}`),
-    send: (input: SendNotificationInput) => request<Notification>("POST", "/api/notifications", input),
-    update: (id: string, input: UpdateNotificationInput) =>
-      request<Notification>("PATCH", `/api/notifications/${enc(id)}`, input),
+    /** An inform or progress (the web composer); answers what happened alongside the notification. */
+    send: (input: IntentSendBody) => request<IntentSendResult & { notification: Notification }>("POST", "/api/notifications", input),
     respond: (id: string, input: RespondInput) =>
       request<Notification>("POST", `/api/notifications/${enc(id)}/respond`, input),
     read: (id: string) => request<Notification>("POST", `/api/notifications/${enc(id)}/read`),
@@ -177,15 +173,6 @@ export const api = {
   },
 
   sources: () => request<{ items: SourceSummary[] }>("GET", "/api/sources"),
-
-  templates: {
-    list: () => request<{ items: Template[] }>("GET", "/api/templates"),
-    get: (name: string) => request<Template>("GET", `/api/templates/${enc(name)}`),
-    put: (name: string, input: UpsertTemplateInput) => request<Template>("PUT", `/api/templates/${enc(name)}`, input),
-    remove: (name: string) => request<null>("DELETE", `/api/templates/${enc(name)}`),
-    preview: (name: string, vars: Record<string, string | number | boolean>) =>
-      request<SendNotificationInput>("POST", `/api/templates/${enc(name)}/preview`, { vars }),
-  },
 };
 
 export function errorMessage(e: unknown): string {

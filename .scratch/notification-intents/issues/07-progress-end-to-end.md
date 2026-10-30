@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] MCP `progress` takes key (required), title, value, max (default 100), label, status (`running | done | failed`), body, url, source, devices, platforms
 - [ ] First call creates silently; later calls with the same `(source, key)` update silently; `done` alerts at success, `failed` alerts at warning; a `running` call after a finished progress starts a fresh one
@@ -14,3 +14,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] Native progress on Android still works through the flat fields during the expand phase
 - [ ] The web progress card shows running, done and failed states
 - [ ] Server tests through MCP and WebSocket events (alert flags); web view-model tests on the shared fixtures
+
+## Comments
+
+Resolved in dec999d on `notification-intents`. Rules in the inbox `progress` module; web ProgressCard; screenshots in the notes dir.

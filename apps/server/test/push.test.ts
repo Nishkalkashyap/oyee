@@ -45,7 +45,7 @@ describe("Web Push fan-out", () => {
     const decrypt = async (i: number) =>
       JSON.parse(new TextDecoder().decode(await decryptPayload(seen[i]!.body, uaJwk, p256dh, auth)));
 
-    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Push me", severity: "critical" });
+    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Push me", severity: "critical", key: "push-me", cooldown: "1h" });
     await eventually(() => seen.length === 1);
     const first = seen[0]!;
     expect(first.url).toBe(endpoint);
@@ -67,7 +67,8 @@ describe("Web Push fan-out", () => {
     expect(payload).toMatchObject({ type: "notification.created", id: sent.body.id, notification: { title: "Push me" } });
 
     // Silent update → no push; resolve → push (close-worthy)
-    await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { body: "quiet change" });
+    const quiet = { title: "Push me", severity: "critical", key: "push-me", cooldown: "1h", body: "quiet change" };
+    expect((await call("POST", "/api/notifications", { cookie }, quiet)).body.outcome).toBe("updated_silently");
     await call("POST", `/api/notifications/${sent.body.id}/resolve`, { cookie });
     await eventually(() => seen.length === 2);
     await sleep(100);
@@ -94,19 +95,19 @@ describe("update coalescing", () => {
     await call("POST", "/api/devices/web", { cookie }, { name: "Firefox", subscription: { endpoint, keys: { p256dh, auth } } });
     const seen = intercept(["https://push.example.net/"], () => new Response(null, { status: 201 }));
 
-    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Deploy", progress: { value: 0 } });
+    const report = { intent: "progress", key: "deploy", title: "Deploy" };
+    await call("POST", "/api/notifications", { cookie }, { ...report, value: 0 });
     await eventually(() => seen.length === 1);
-    for (const value of [0.25, 0.5, 0.75, 1]) {
-      await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { progress: { value }, alert: value === 0.5 });
-    }
+    for (const value of [25, 50, 75]) await call("POST", "/api/notifications", { cookie }, { ...report, value });
+    await call("POST", "/api/notifications", { cookie }, { ...report, status: "done" });
     await sleep(500);
     expect(seen).toHaveLength(1); // still inside the interval after the "created" push
     await eventually(() => seen.length === 2, 4000);
     await sleep(300);
     expect(seen).toHaveLength(2);
     const last = JSON.parse(new TextDecoder().decode(await decryptPayload(seen[1]!.body, uaJwk, p256dh, auth)));
-    // Silent updates aren't pushed to browsers: this one went out because an update in the burst asked to alert.
-    expect(last).toMatchObject({ type: "notification.updated", notification: { progress: { value: 1 } } });
+    // Silent updates aren't pushed to browsers: this one went out because the burst ended with an alerting "done".
+    expect(last).toMatchObject({ type: "notification.updated", notification: { progress: { value: 100, state: "done" } } });
   });
 });
 
@@ -137,7 +138,7 @@ describe("FCM fan-out", () => {
     });
     const fcmCalls = () => seen.filter((s) => s.url.startsWith("https://fcm.googleapis.com/"));
 
-    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Disk full", severity: "warning" });
+    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Disk full", severity: "warning", key: "disk" });
     await eventually(() => fcmCalls().length === 1);
 
     // OAuth: JWT bearer assertion signed RS256 by the service account
@@ -168,11 +169,16 @@ describe("FCM fan-out", () => {
     expect(msg.android).toEqual({ priority: "HIGH", collapse_key: sent.body.id });
     expect(msg.data).toMatchObject({ type: "notification.created", id: sent.body.id, version: "1", alert: "true" });
     expect(Object.values(msg.data).every((v) => typeof v === "string")).toBe(true);
-    expect(JSON.parse(msg.data.notification).title).toBe("Disk full");
+    expect(JSON.parse(msg.data.notification)).toMatchObject({
+      title: "Disk full",
+      intent: "inform",
+      key: "disk",
+      inform: { links: [], fields: [] },
+    });
 
     // UNREGISTERED → token dropped
     unregistered = true;
-    await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { title: "Disk still full", alert: true });
+    await call("POST", "/api/notifications", { cookie }, { title: "Disk still full", severity: "warning", key: "disk" });
     await eventually(() => fcmCalls().length === 2);
     const update = JSON.parse(new TextDecoder().decode(fcmCalls()[1]!.body)).message;
     expect(update.data).toMatchObject({ type: "notification.updated", version: "2", alert: "true" });

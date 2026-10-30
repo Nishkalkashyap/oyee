@@ -6,7 +6,7 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** 06, 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Swift models mirror protocol v2, decoding the shared fixtures
 - [ ] Inform, ask (all states) and progress (all states) cards
@@ -14,3 +14,13 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 - [ ] System notifications per intent via categories and text-input actions; expired/answered asks are removed
 - [ ] Tags, thread and silent handling removed; the iOS target still compiles
 - [ ] `swift test` passes; screenshots of each card state attached for code review
+
+## Comments
+
+From 01: Swift tests need a copy of packages/schema/fixtures/notifications.v2.json inside their test target.
+
+From 05: the respond endpoint now takes `{option}` (first answer wins, 409 after). Update this client's respond calls (web: sw.js + webpush.ts) to send `option`.
+
+From 08: mirror `stoppedReportingLabel` from @oyee/schema exactly ("Stopped reporting after <label or percent>"); the server does not overwrite `label`.
+
+Resolved: feature 44eea26, merged into `notification-intents`. 89 Swift tests; screenshots in the notes dir (screens/14-mac-*.png). Swift already dropped flat fields, debug and templates.

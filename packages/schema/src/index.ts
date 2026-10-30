@@ -1,14 +1,16 @@
 /**
- * Oyee Protocol v1 — TypeScript source of truth.
+ * Oyee Protocol v2 — TypeScript source of truth.
+ * Every notification is one intent (inform, ask, progress): GLOSSARY.md, docs/adr/0001-senders-send-intents.md.
  * Human-readable spec: docs/protocol.md. Kotlin (apps/android) and Swift (apps/apple) models mirror this file.
  */
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
-export const Severity = z.enum(["debug", "info", "success", "warning", "critical"]);
+/** How urgently a notification needs the user. Every severity alerts; muting is the receiver's choice. */
+export const Severity = z.enum(["info", "success", "warning", "critical"]);
 export type Severity = z.infer<typeof Severity>;
 
 export const NotificationStatus = z.enum(["active", "resolved"]);
@@ -26,7 +28,68 @@ export type TokenKind = z.infer<typeof TokenKind>;
 const isoDate = z.string().datetime({ offset: true });
 const httpsUrl = z.string().url().max(2048);
 
-// ─── Card parts ──────────────────────────────────────────────────────────────
+/** A duration such as "30s", "30m", "1h", "24h" (units s, m, h). */
+export const Duration = z.string().regex(/^[1-9][0-9]{0,5}[smh]$/, 'expected a duration such as "30m" or "1h"');
+export type Duration = z.infer<typeof Duration>;
+
+const DURATION_UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000 } as const;
+
+/** "30m" → 1_800_000. */
+export function durationMs(d: Duration): number {
+  const unit = d.slice(-1) as keyof typeof DURATION_UNIT_MS;
+  return Number(d.slice(0, -1)) * DURATION_UNIT_MS[unit];
+}
+
+// ─── Limits ──────────────────────────────────────────────────────────────────
+
+export const LIMITS = {
+  maxFields: 10,
+  maxLinks: 3,
+  maxOptions: 3,
+  maxBodyBytes: 64 * 1024,
+  fcmInlineMaxBytes: 3500,
+  retentionDays: 30,
+  maxNotificationsPerUser: 5000,
+  sendsPerMinutePerToken: 60,
+  maxDevicesPerUser: 10,
+  maxTokensPerUser: 20,
+  /** Pushes for updates to one notification are coalesced to at most one per interval (the socket gets every one). */
+  updatePushIntervalMs: 2000,
+  signupsPerIpPerDay: 5,
+  authFailuresPerIpPerMinute: 30,
+  /** An ask closes this long after it was sent unless the sender says otherwise. */
+  defaultAskExpiry: "1h",
+  /** The longest `expiresIn` an ask may set. */
+  maxAskExpiry: "24h",
+  /** A progress quiet for this long counts as Stopped reporting unless the sender says otherwise. */
+  defaultStaleAfter: "30m",
+  /** Bounds of a progress's `staleAfter`. */
+  minStaleAfter: "1m",
+  maxStaleAfter: "24h",
+  /** wait_for_response holds for an answer at most this long. */
+  askWaitSeconds: 50,
+  /** list_notifications (MCP) returns this many items unless asked for more, and at most `maxListPage`. */
+  defaultListPage: 10,
+  maxListPage: 50,
+  /** Bounds of an inform's `cooldown` (the minimum time between two alerts for its key). */
+  minCooldown: "1m",
+  maxCooldown: "168h",
+} as const satisfies Record<string, number | Duration>;
+
+/** A duration within [min, max], with an error naming the field and its bounds. */
+const boundedDuration = (field: string, min: Duration, max: Duration) =>
+  Duration.refine((d) => durationMs(d) >= durationMs(min) && durationMs(d) <= durationMs(max), {
+    error: () => `${field} must be between ${min} and ${max}`,
+  });
+
+// ─── Notification parts ──────────────────────────────────────────────────────
+
+/** What a sender means by a notification. Every notification is exactly one intent. */
+export const Intent = z.enum(["inform", "ask", "progress"]);
+export type Intent = z.infer<typeof Intent>;
+
+/** Names a notification per source so later sends refer to the same one. Unique per `(source, key)`. */
+export const Key = z.string().min(1).max(128);
 
 export const Field = z.object({
   label: z.string().min(1).max(40),
@@ -34,142 +97,258 @@ export const Field = z.object({
 });
 export type Field = z.infer<typeof Field>;
 
-export const Progress = z.object({
-  value: z.number().min(0),
-  max: z.number().positive().default(100),
-  label: z.string().max(64).optional(),
-  indeterminate: z.boolean().default(false),
-});
-export type Progress = z.infer<typeof Progress>;
-
-export const ActionCallback = z.object({
-  url: httpsUrl,
-  headers: z.record(z.string(), z.string()).optional(),
-});
-export type ActionCallback = z.infer<typeof ActionCallback>;
-
-export const ActionStyle = z.enum(["default", "primary", "destructive"]);
-export type ActionStyle = z.infer<typeof ActionStyle>;
-
-export const Action = z.object({
-  id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+/** A button that opens a URL on the device; nothing is sent back. */
+export const LinkButton = z.object({
   label: z.string().min(1).max(32),
-  style: ActionStyle.default("default"),
-  url: httpsUrl.optional(),
-  callback: ActionCallback.optional(),
-  resolves: z.boolean().default(false),
+  url: httpsUrl,
 });
-export type Action = z.infer<typeof Action>;
+export type LinkButton = z.infer<typeof LinkButton>;
 
-export const Reply = z.object({
-  placeholder: z.string().max(64).optional(),
-  buttonLabel: z.string().max(32).optional(),
+export const InformBlock = z.object({
+  links: z.array(LinkButton).max(LIMITS.maxLinks),
+  fields: z.array(Field).max(LIMITS.maxFields),
+  image: httpsUrl.nullable(),
+  /** Emoji or https URL, shown next to the title. Only informs have one. */
+  icon: z.string().max(2048).nullable(),
+  /** Minimum time between two alerts for this notification's key. */
+  cooldown: Duration.nullable(),
 });
-export type Reply = z.infer<typeof Reply>;
+export type InformBlock = z.infer<typeof InformBlock>;
 
-export const Response = z.object({
-  actionId: z.string().nullable(),
+/** `open` until the first answer (`answered`), its expiry (`expired`) or the sender withdrawing it (`withdrawn`). */
+export const AskState = z.enum(["open", "answered", "expired", "withdrawn"]);
+export type AskState = z.infer<typeof AskState>;
+
+export const AskAnswer = z.object({
+  /** Label of the answer button chosen, or null for a text answer. */
+  option: z.string().nullable(),
   text: z.string().max(2000).nullable(),
   deviceId: z.string().nullable(),
   deviceName: z.string().nullable(),
   at: isoDate,
 });
-export type Response = z.infer<typeof Response>;
+export type AskAnswer = z.infer<typeof AskAnswer>;
 
-// ─── Content fields shared by send / update / stored notification ───────────
-
-export const CardContent = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().max(4000).nullable(),
-  severity: Severity,
-  icon: z.string().max(2048).nullable(),
-  image: httpsUrl.nullable(),
-  url: httpsUrl.nullable(),
-  fields: z.array(Field).max(10),
-  progress: Progress.nullable(),
-  actions: z.array(Action).max(3),
-  reply: Reply.nullable(),
-  tags: z.array(z.string().min(1).max(32)).max(10),
-  silent: z.boolean(),
+export const AskBlock = z.object({
+  /** Answer-button labels. */
+  options: z.array(z.string().min(1).max(32)).max(LIMITS.maxOptions),
+  /** Whether a free-text answer is accepted. */
+  allowText: z.boolean(),
+  /** Hint for the reply box; clients show their own ("Reply…") when it is null. */
+  replyPlaceholder: z.string().max(64).nullable(),
+  expiresAt: isoDate,
+  /** The first answer, from any device. */
+  answer: AskAnswer.nullable(),
+  state: AskState,
 });
-export type CardContent = z.infer<typeof CardContent>;
+export type AskBlock = z.infer<typeof AskBlock>;
+
+/** `stopped` = Stopped reporting: the sender went quiet for longer than `staleAfter`; a later update revives it. */
+export const ProgressState = z.enum(["running", "done", "failed", "stopped"]);
+export type ProgressState = z.infer<typeof ProgressState>;
+
+export const ProgressBlock = z.object({
+  value: z.number().min(0),
+  max: z.number().positive(),
+  label: z.string().max(64).optional(),
+  state: ProgressState,
+  /** How long the progress may go quiet before it counts as stopped. */
+  staleAfter: Duration,
+  lastReportAt: isoDate,
+});
+export type ProgressBlock = z.infer<typeof ProgressBlock>;
 
 // ─── Notification (stored / returned) ───────────────────────────────────────
 
-export const Notification = CardContent.extend({
+/** Fields every intent shares. */
+export const NotificationShared = z.object({
   id: z.string(),
   source: z.string().min(1).max(64),
-  threadId: z.string().min(1).max(128).nullable(),
+  key: Key.nullable(),
+  title: z.string().min(1).max(200),
+  body: z.string().max(4000).nullable(),
+  severity: Severity,
   status: NotificationStatus,
-  template: z.string().nullable(),
+  /** Opens when the notification is tapped. */
+  url: httpsUrl.nullable(),
   version: z.number().int().positive(),
   createdAt: isoDate,
   updatedAt: isoDate,
   readAt: isoDate.nullable(),
   resolvedAt: isoDate.nullable(),
-  responses: z.array(Response).max(20),
   /**
    * Devices that get a system notification / push for this item. `null` (or absent, for older items) = every device.
    * Every inbox still lists the notification; only alerting is targeted.
    */
   targetDeviceIds: z.array(z.string()).nullable().optional(),
 });
+
+export const InformNotification = NotificationShared.extend({ intent: z.literal("inform"), inform: InformBlock });
+export const AskNotification = NotificationShared.extend({ intent: z.literal("ask"), ask: AskBlock });
+export const ProgressNotification = NotificationShared.extend({ intent: z.literal("progress"), progress: ProgressBlock });
+
+/**
+ * The stored / wire notification: shared fields plus exactly one block, named after its intent. Every intent in every
+ * state, as shared test fixtures for all clients: packages/schema/fixtures/notifications.v2.json.
+ */
+export const Notification = z.discriminatedUnion("intent", [InformNotification, AskNotification, ProgressNotification]);
 export type Notification = z.infer<typeof Notification>;
 
-// ─── Inputs ─────────────────────────────────────────────────────────────────
+// ─── Intent inputs: one shared base, one schema per intent ──────────────────
+// Each is a flat object (no oneOf) because it is also an MCP tool's input schema; every field is described.
 
-/** Create. `title` is required unless a template provides it (validated server-side after rendering). */
-export const SendNotificationInput = z.object({
-  title: z.string().min(1).max(200).optional(),
-  body: z.string().max(4000).optional(),
-  severity: Severity.optional(),
-  source: z.string().min(1).max(64).optional(),
-  threadId: z.string().min(1).max(128).optional(),
-  icon: z.string().max(2048).optional(),
-  image: httpsUrl.optional(),
-  url: httpsUrl.optional(),
-  fields: z.array(Field).max(10).optional(),
-  progress: Progress.optional(),
-  actions: z.array(Action).max(3).optional(),
-  reply: Reply.optional(),
-  tags: z.array(z.string().min(1).max(32)).max(10).optional(),
-  silent: z.boolean().optional(),
-  template: z.string().regex(/^[a-z0-9_-]{1,64}$/).optional(),
-  vars: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
-  replaceKey: z.string().min(1).max(128).optional(),
-  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
-  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
-  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
-  platforms: z.array(Platform).max(4).optional(),
+/** Fields every intent input shares, with the same names for every sender. */
+export const IntentInputBase = z.object({
+  title: z.string().min(1).max(200).describe("Headline, at most 200 characters. The only required field."),
+  body: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Detail in markdown (bold, italic, `code`, links, line breaks), at most 4000 characters."),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification."),
+  key: Key.optional().describe(
+    "Names this notification so a later send with the same key (from the same source) updates it instead of creating a duplicate.",
+  ),
+  source: z.string().min(1).max(64).optional().describe("Who is sending, shown on the card. Defaults to the token's name."),
+  devices: z
+    .array(z.string().min(1).max(64))
+    .max(20)
+    .optional()
+    .describe('Alert only these devices: names or ids from list_devices (a unique partial name such as "macbook" works). Default: every device.'),
+  platforms: z
+    .array(Platform)
+    .max(4)
+    .optional()
+    .describe("Alert only devices on these platforms; combined with `devices` as a union."),
 });
-export type SendNotificationInput = z.infer<typeof SendNotificationInput>;
 
-/** Patch. `null` clears nullable fields. `alert: true` re-alerts devices. */
-export const UpdateNotificationInput = z.object({
-  title: z.string().min(1).max(200).optional(),
-  body: z.string().max(4000).nullable().optional(),
-  severity: Severity.optional(),
-  icon: z.string().max(2048).nullable().optional(),
-  image: httpsUrl.nullable().optional(),
-  url: httpsUrl.nullable().optional(),
-  fields: z.array(Field).max(10).optional(),
-  progress: Progress.nullable().optional(),
-  actions: z.array(Action).max(3).optional(),
-  reply: Reply.nullable().optional(),
-  tags: z.array(z.string().min(1).max(32)).max(10).optional(),
-  silent: z.boolean().optional(),
-  alert: z.boolean().optional(),
+/** Something the user should know. */
+export const InformInput = IntentInputBase.extend({
+  severity: Severity.optional().describe(
+    "How urgently the user needs this. info: routine news (default). success: something finished well. " +
+      "warning: needs attention soon. critical: broken now, act immediately. Every severity alerts.",
+  ),
+  links: z
+    .array(LinkButton)
+    .max(LIMITS.maxLinks)
+    .optional()
+    .describe(`Up to ${LIMITS.maxLinks} link buttons (label + url), e.g. the PR, the build log, a dashboard.`),
+  fields: z
+    .array(Field)
+    .max(LIMITS.maxFields)
+    .optional()
+    .describe(`Up to ${LIMITS.maxFields} label/value rows for structured facts (region, duration, commit).`),
+  image: httpsUrl
+    .refine((u) => u.startsWith("https://"), "image must be an https URL")
+    .optional()
+    .describe("https URL of an image shown on the card, such as a chart or screenshot."),
+  icon: z.string().min(1).max(2048).optional().describe("An emoji or an https image URL shown next to the title."),
+  cooldown: boundedDuration("cooldown", LIMITS.minCooldown, LIMITS.maxCooldown)
+    .optional()
+    .describe(
+      'With `key`: alert at most once per this duration (such as "30m", "1h", "24h"; units s, m, h; ' +
+        `${LIMITS.minCooldown} to ${LIMITS.maxCooldown}). ` +
+        "Sends inside it update the notification silently, or change nothing if the user resolved it.",
+    ),
 });
-export type UpdateNotificationInput = z.infer<typeof UpdateNotificationInput>;
+export type InformInput = z.infer<typeof InformInput>;
 
+/**
+ * Ask: a question for the user (GLOSSARY.md). Agents only, over MCP; they poll the answer with wait_for_response.
+ * Always alerts at `warning`. With neither `options` nor `allowText`, a reply box is added.
+ */
+export const AskInput = IntentInputBase.extend({
+  title: z.string().min(1).max(200).describe("The question, short enough for a notification title."),
+  body: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe("Context for the decision. Markdown subset: **bold**, *italic*, `code`, [links](https://…), line breaks."),
+  options: z
+    .array(z.string().min(1).max(32))
+    .max(LIMITS.maxOptions)
+    .optional()
+    .describe(`Up to ${LIMITS.maxOptions} answer-button labels, e.g. ["Approve", "Reject"]. The label tapped is the answer.`),
+  allowText: z.boolean().optional().describe("Also accept a typed answer. Implied when there are no options."),
+  expiresIn: Duration.refine((d) => durationMs(d) <= durationMs(LIMITS.maxAskExpiry), {
+    message: `at most ${LIMITS.maxAskExpiry}`,
+  })
+    .optional()
+    .describe(
+      `How long the question stays answerable, e.g. "15m", "2h" (default ${LIMITS.defaultAskExpiry}, at most ` +
+        `${LIMITS.maxAskExpiry}). Then it leaves every device and wait_for_response reports it expired.`,
+    ),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the PR to review before answering."),
+  key: Key.optional().describe(
+    "Names this question. Asking again with the key of an open ask returns that ask instead of alerting again.",
+  ),
+});
+export type AskInput = z.infer<typeof AskInput>;
+
+/** How a sender reports progress: `running` while working, then `done` or `failed` once. */
+export const ProgressStatus = z.enum(["running", "done", "failed"]);
+export type ProgressStatus = z.infer<typeof ProgressStatus>;
+
+/**
+ * Report long-running work (MCP `progress`). Called repeatedly with the same `key`: the first report appears without
+ * sound, later ones update it silently, `done` / `failed` alert once. Omitted fields keep the previous report's value.
+ */
+export const ProgressInput = IntentInputBase.extend({
+  key: Key.describe('Names this task, e.g. "deploy-api". Reuse it on every report so they update one notification.'),
+  title: z.string().min(1).max(200).describe('What is running, e.g. "Deploying api to prod".'),
+  value: z.number().min(0).optional().describe("Work done so far, out of `max`. With status done it defaults to `max`."),
+  max: z.number().positive().optional().describe("Total amount of work (default 100, so `value` is a percentage)."),
+  label: z.string().max(64).optional().describe('Short text next to the bar, e.g. "3/7 checks" (default: the percent).'),
+  status: ProgressStatus.default("running").describe(
+    "running (default): update silently. done: finished well, alerts once. failed: finished badly, alerts once.",
+  ),
+  staleAfter: boundedDuration("staleAfter", LIMITS.minStaleAfter, LIMITS.maxStaleAfter)
+    .optional()
+    .describe(
+      'How long this may go without a report before the user is told it stopped reporting, e.g. "2h" for a long ' +
+        `silent step (default "${LIMITS.defaultStaleAfter}", from "${LIMITS.minStaleAfter}" to ` +
+        `"${LIMITS.maxStaleAfter}"). A later report revives it.`,
+    ),
+  url: httpsUrl.optional().describe("Opens when the user taps the notification, e.g. the build log."),
+});
+export type ProgressInput = z.infer<typeof ProgressInput>;
+
+/**
+ * What a send did. `created`: a new notification, alerted. `alerted`: the keyed one was updated and alerted again.
+ * `updated_silently`: updated without alerting (inside the cooldown). `suppressed`: nothing changed. `reused` (ask): an
+ * open ask with the same key was returned instead.
+ */
+export const SendOutcome = z.enum(["created", "updated_silently", "alerted", "suppressed", "reused"]);
+export type SendOutcome = z.infer<typeof SendOutcome>;
+
+/**
+ * Webhook and REST send body (`POST /hook/:token`, `POST /api/notifications`): an intent input tagged with `intent`,
+ * the same field names as the MCP tools. Senders may omit `intent` (it defaults to `inform`); ask is for agents over
+ * MCP, so it isn't accepted here.
+ */
+export const IntentSendInput = z.discriminatedUnion("intent", [
+  InformInput.extend({ intent: z.literal("inform") }),
+  ProgressInput.extend({ intent: z.literal("progress") }),
+]);
+export type IntentSendInput = z.infer<typeof IntentSendInput>;
+/** What a sender writes (defaults not yet applied), e.g. the web composer's request body. */
+export type IntentSendBody = z.input<typeof IntentSendInput>;
+
+/** The answer to a webhook or REST send: what happened (SendOutcome) and why, in one sentence. */
+export interface IntentSendResult {
+  id: string;
+  version: number;
+  outcome: SendOutcome;
+  reason: string;
+}
+
+/** An answer to an open ask: the label of one of its answer buttons, a typed text (when it allows text), or both. */
 export const RespondInput = z
   .object({
-    actionId: z.string().max(32).optional(),
+    option: z.string().min(1).max(32).optional(),
     text: z.string().min(1).max(2000).optional(),
   })
-  .refine((v) => v.actionId !== undefined || v.text !== undefined, {
-    message: "actionId or text is required",
-  });
+  .refine((v) => v.option !== undefined || v.text !== undefined, { message: "option or text is required" });
 export type RespondInput = z.infer<typeof RespondInput>;
 
 export const ListNotificationsQuery = z.object({
@@ -178,51 +357,10 @@ export const ListNotificationsQuery = z.object({
   source: z.string().optional(),
   severity: Severity.optional(),
   status: NotificationStatus.optional(),
-  threadId: z.string().optional(),
   q: z.string().max(200).optional(),
   updatedSince: z.string().optional(),
 });
 export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuery>;
-
-// ─── Templates ──────────────────────────────────────────────────────────────
-
-export const TemplateName = z.string().regex(/^[a-z0-9_-]{1,64}$/);
-
-/**
- * A template card is a partial send input whose strings may contain {{var}} / {{var|fallback}}.
- * URL fields are plain strings here (e.g. "image": "{{img}}"); the rendered result is validated as SendNotificationInput.
- */
-const templateUrl = z.string().max(2048);
-export const TemplateCard = SendNotificationInput.omit({ template: true, vars: true }).extend({
-  image: templateUrl.optional(),
-  url: templateUrl.optional(),
-  actions: z
-    .array(
-      Action.extend({
-        url: templateUrl.optional(),
-        callback: ActionCallback.extend({ url: templateUrl }).optional(),
-      }),
-    )
-    .max(3)
-    .optional(),
-});
-export type TemplateCard = z.infer<typeof TemplateCard>;
-
-export const Template = z.object({
-  id: z.string(),
-  name: TemplateName,
-  description: z.string().max(500).nullable(),
-  card: TemplateCard,
-  createdAt: isoDate,
-  updatedAt: isoDate,
-});
-export type Template = z.infer<typeof Template>;
-
-export const UpsertTemplateInput = z.object({
-  description: z.string().max(500).optional(),
-  card: TemplateCard,
-});
-export type UpsertTemplateInput = z.infer<typeof UpsertTemplateInput>;
 
 // ─── Users, tokens, devices ─────────────────────────────────────────────────
 
@@ -256,8 +394,6 @@ export const CreateTokenResult = z.object({
   token: TokenInfo,
   secret: z.string(),
   url: z.string(),
-  /** HMAC key for X-Oyee-Signature on action callbacks. Shown once. */
-  callbackSecret: z.string().optional(),
 });
 export type CreateTokenResult = z.infer<typeof CreateTokenResult>;
 
@@ -394,28 +530,56 @@ export interface WebPushPayload {
 
 // ─── MCP tool inputs ────────────────────────────────────────────────────────
 
-export const McpAskInput = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().max(4000).optional(),
-  options: z.array(z.string().min(1).max(32)).max(3).optional(),
-  allowText: z.boolean().optional(),
-  severity: Severity.optional(),
-  source: z.string().min(1).max(64).optional(),
-  threadId: z.string().min(1).max(128).optional(),
-  /** Deliver only to these devices: ids (`dev_…`) or names (case-insensitive; a unique partial match works). */
-  devices: z.array(z.string().min(1).max(64)).max(20).optional(),
-  /** Deliver only to devices on these platforms. Combined with `devices` as a union. */
-  platforms: z.array(Platform).max(4).optional(),
-});
-export type McpAskInput = z.infer<typeof McpAskInput>;
-
 export const McpWaitInput = z.object({
-  id: z.string(),
-  timeoutSeconds: z.number().int().min(1).max(55).default(50),
+  id: z.string().describe("The id returned by ask (ntf_…)."),
+  timeoutSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.askWaitSeconds)
+    .default(LIMITS.askWaitSeconds)
+    .describe(`How long to hold for an answer, at most ${LIMITS.askWaitSeconds} s. Call again while it is pending.`),
 });
 export type McpWaitInput = z.infer<typeof McpWaitInput>;
 
-export type McpWaitResult = { status: "answered"; response: Response } | { status: "pending" };
+/**
+ * wait_for_response: the first answer; still pending (with when it was asked and when it expires, so the agent needs
+ * no date maths); or closed unanswered because it expired or its sender withdrew it.
+ */
+export type McpWaitResult =
+  | { status: "answered"; answer: AskAnswer; askedAt: string }
+  | { status: "pending" | "expired" | "withdrawn"; askedAt: string; expiresAt: string | null };
+
+export const McpListInput = z.object({
+  key: Key.optional().describe("Only notifications with this key."),
+  intent: Intent.optional().describe("Only this intent: inform, ask or progress."),
+  status: NotificationStatus.optional().describe("active (still on the user's devices) or resolved."),
+  source: z.string().min(1).max(64).optional().describe("Only notifications from this source."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.maxListPage)
+    .default(LIMITS.defaultListPage)
+    .describe(`How many to return, newest first (default ${LIMITS.defaultListPage}, at most ${LIMITS.maxListPage}).`),
+  cursor: z.string().optional().describe("nextCursor from the previous page, to get older notifications."),
+});
+export type McpListInput = z.infer<typeof McpListInput>;
+
+/** One list_notifications item: only what an agent needs, with the age precomputed ("12m") so it needs no date maths. */
+export interface McpListItem {
+  id: string;
+  intent: Intent;
+  key: string | null;
+  title: string;
+  status: NotificationStatus;
+  /** ask: open | answered | expired | withdrawn; progress: running | done | failed | stopped; inform: null. */
+  state: AskState | ProgressState | null;
+  /** An ask's answer; null otherwise. */
+  answer: { option: string | null; text: string | null; device: string | null } | null;
+  createdAt: string;
+  ago: string;
+}
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -426,26 +590,7 @@ export const ANDROID_CHANNELS: Record<Severity, string> = {
   warning: "oyee.warning",
   info: "oyee.info",
   success: "oyee.success",
-  debug: "oyee.debug",
 };
-export const LIMITS = {
-  maxFields: 10,
-  maxActions: 3,
-  maxTags: 10,
-  maxResponses: 20,
-  maxBodyBytes: 64 * 1024,
-  fcmInlineMaxBytes: 3500,
-  retentionDays: 30,
-  maxNotificationsPerUser: 5000,
-  sendsPerMinutePerToken: 60,
-  maxDevicesPerUser: 10,
-  maxTokensPerUser: 20,
-  maxTemplatesPerUser: 100,
-  /** Pushes for updates to one notification are coalesced to at most one per interval (the socket gets every one). */
-  updatePushIntervalMs: 2000,
-  signupsPerIpPerDay: 5,
-  authFailuresPerIpPerMinute: 30,
-} as const;
 
 // ─── Quotas (per account; docs/protocol.md §3.1) ─────────────────────────────
 
@@ -456,7 +601,7 @@ export type QuotaKind = z.infer<typeof QuotaKind>;
 export const QUOTAS: Record<QuotaKind, { perDay: number; perMinute: number | null; label: string }> = {
   send: { perDay: 1000, perMinute: 120, label: "Notifications sent" },
   update: { perDay: 5000, perMinute: null, label: "Updates" },
-  respond: { perDay: 1000, perMinute: 30, label: "Replies and actions" },
+  respond: { perDay: 1000, perMinute: 30, label: "Answers" },
   read: { perDay: 20000, perMinute: 300, label: "Reads" },
   pairing: { perDay: 20, perMinute: 5, label: "Pairing codes" },
 };
@@ -468,38 +613,74 @@ export const Usage = z.object({
 });
 export type Usage = z.infer<typeof Usage>;
 
-// ─── Template rendering (shared by server + web preview) ────────────────────
+// ─── Display helpers shared by server and web ───────────────────────────────
+// Android (util/Formatting.kt, ui/cards/CardViews.kt) and Swift (Support/Rendering.swift, Support/IntentCards.swift)
+// port these and must produce identical strings; public/sw.js mirrors progressAmount (it can't import).
 
-const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_.-]+)\s*(?:\|([^}]*))?\}\}/g;
+/** The part of a notification the intent predicates read (a wire notification and an inbox item both fit). */
+type IntentStateLike =
+  | { intent: "inform"; status?: NotificationStatus }
+  | { intent: "ask"; status?: NotificationStatus; ask: { state: AskState; expiresAt: string } }
+  | { intent: "progress"; status?: NotificationStatus; progress: { state: ProgressState } };
 
-export function renderTemplateString(
-  input: string,
-  vars: Record<string, string | number | boolean> = {},
-): string {
-  return input.replace(PLACEHOLDER, (_m, name: string, fallback?: string) => {
-    const v = vars[name];
-    return v === undefined ? (fallback ?? "") : String(v);
-  });
+/**
+ * An ask the user can still answer: open, not resolved, and not past its expiry (an overdue one already counts as
+ * expired, before the server's broadcast arrives).
+ */
+export function isOpenAsk<T extends IntentStateLike>(n: T | null | undefined, now: number = Date.now()): n is Extract<T, { intent: "ask" }> {
+  return n?.intent === "ask" && n.status !== "resolved" && n.ask.state === "open" && Date.parse(n.ask.expiresAt) > now;
 }
 
-/** Deep-renders every string in `value`. */
-export function renderTemplateValue<T>(value: T, vars: Record<string, string | number | boolean> = {}): T {
-  if (typeof value === "string") return renderTemplateString(value, vars) as T;
-  if (Array.isArray(value)) return value.map((v) => renderTemplateValue(v, vars)) as T;
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, renderTemplateValue(v, vars)]),
-    ) as T;
+/** A progress that is still going (running or stopped reporting) and not resolved: In progress, and holds its key. */
+export function isLiveProgress<T extends IntentStateLike>(n: T | null | undefined): n is Extract<T, { intent: "progress" }> {
+  return n?.intent === "progress" && n.status !== "resolved" && (n.progress.state === "running" || n.progress.state === "stopped");
+}
+
+/** A running progress: it appears and updates without sound (every other notification alerts). */
+export function isQuietProgress<T extends IntentStateLike>(n: T | null | undefined): n is Extract<T, { intent: "progress" }> {
+  return n?.intent === "progress" && n.progress.state === "running";
+}
+
+/**
+ * A duration as clients and tool results write it. `elapsed` (how long ago, how long waiting): the largest whole
+ * unit, rounded down: "45s", "12m", "3h", "2d". `span` (how long something lasts or has left): to the nearest second
+ * under a minute, else the nearest minute, with hours and their leftover minutes: "40s", "48m", "1h", "2h 30m".
+ */
+export function formatDuration(ms: number, style: "elapsed" | "span" = "elapsed"): string {
+  if (style === "span") {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.round(ms / 60_000);
+    if (m < 60) return `${m}m`;
+    return m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`;
   }
-  return value;
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
 }
 
-/** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7". */
-export function progressText(p: { value: number; max?: number; label?: string; indeterminate?: boolean }): string {
-  if (p.indeterminate) return p.label ?? "In progress…";
+/** How far a progress is, as shown next to its bar: the sender's label, else "40%" (max 100) or "3/7". */
+export function progressAmount(p: { value: number; max?: number; label?: string }): string {
   const max = p.max ?? 100;
-  const ratio = Math.max(0, Math.min(1, p.value / max));
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
+  return p.label ?? (max === 100 ? `${Math.round(ratio * 100)}%` : `${p.value}/${max}`);
+}
+
+/**
+ * What every client shows for a progress that stopped reporting: "Stopped reporting after <last label or percent>",
+ * e.g. "Stopped reporting after 3/7 checks" or "Stopped reporting after 40%". The stored `label` stays the sender's.
+ */
+export function stoppedReportingLabel(p: { value: number; max: number; label?: string }): string {
+  const ratio = p.max > 0 ? Math.max(0, Math.min(1, p.value / p.max)) : 0;
+  return `Stopped reporting after ${p.label ?? `${Math.round(ratio * 100)}%`}`;
+}
+
+/** Text progress bar used where native progress isn't available: "▓▓▓░░░░ 3/7" (the bar, then `progressAmount`). */
+export function progressText(p: { value: number; max?: number; label?: string }): string {
+  const max = p.max ?? 100;
+  const ratio = max > 0 ? Math.max(0, Math.min(1, p.value / max)) : 0;
   const filled = Math.round(ratio * 10);
-  const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
-  return `${bar} ${p.label ?? (max === 100 ? `${Math.round(ratio * 100)}%` : `${p.value}/${max}`)}`;
+  return `${"▓".repeat(filled)}${"░".repeat(10 - filled)} ${progressAmount(p)}`;
 }

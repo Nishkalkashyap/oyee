@@ -6,9 +6,13 @@ Spec: `.scratch/notification-intents/spec.md`. Vocabulary: `GLOSSARY.md`.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] A deadline can be registered or cleared, and the alarm is always set to the earliest of all pending deadlines and the next prune
 - [ ] Firing the alarm runs everything that is due and reschedules for the next one
 - [ ] The existing retention test still passes; a new test shows an earlier deadline pulls the alarm forward and a cleared one lets it fall back to the prune
 - [ ] The interface is small enough that 06 and 08 only add a deadline kind and its handler
+
+## Comments
+
+Resolved in f1c65da on `notification-intents`: scheduler in the inbox DO (`handle`/`set`/`ensure`/`clear`; prune is kind "prune"). Follow-up for 06/08: a due ref is removed before its handler runs, so decide whether expiry/stale refs need retry protection.

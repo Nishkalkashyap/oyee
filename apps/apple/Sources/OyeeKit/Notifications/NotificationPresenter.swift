@@ -6,8 +6,10 @@ public struct NotificationResponseInfo: Sendable, Hashable {
     public enum Kind: Sendable, Hashable {
         /// Tapped the notification body.
         case open
-        /// Tapped an action button (Oyee action id). `url` is set for URL actions.
-        case action(id: String, url: URL?)
+        /// Tapped an ask's answer button.
+        case answer(option: String)
+        /// Tapped an inform's link button.
+        case link(URL)
         /// Sent text through the reply box.
         case reply(text: String)
         case dismiss
@@ -23,14 +25,13 @@ public struct NotificationResponseInfo: Sendable, Hashable {
 public enum NotificationContentBuilder {
     public static let userInfoId = "oyeeId"
     public static let userInfoURL = "url"
-    public static let userInfoActionURLs = "actionURLs"
+    public static let userInfoLinks = "links"
     public static let userInfoAlert = "alert"
     public static let userInfoVersion = "version"
 
-    /// Whether an alerting post should make a sound (severity + `silent`).
-    public static func playsSound(_ n: OyeeNotification, alert: Bool) -> Bool {
-        alert && !n.silent && n.severity != .debug
-    }
+    /// Whether a post makes a sound. Every severity alerts; muting is the receiver's choice (macOS settings), and the
+    /// store already posts a running progress with `alert: false`.
+    public static func playsSound(_ n: OyeeNotification, alert: Bool) -> Bool { alert }
 
     public static func relevanceScore(_ severity: Severity) -> Double {
         switch severity {
@@ -38,25 +39,22 @@ public enum NotificationContentBuilder {
         case .warning: 0.8
         case .success: 0.5
         case .info: 0.4
-        case .debug: 0.1
         }
     }
 
     public static func userInfo(for n: OyeeNotification, alert: Bool) -> [String: String] {
         var info: [String: String] = [userInfoId: n.id, userInfoAlert: alert ? "1" : "0", userInfoVersion: String(n.version)]
         if let url = n.url { info[userInfoURL] = url }
-        let actionURLs = n.actions.compactMap { action in action.url.map { "\(action.id)\u{1F}\($0)" } }
-        if !actionURLs.isEmpty { info[userInfoActionURLs] = actionURLs.joined(separator: "\u{1E}") }
+        // Link buttons share categories by label, so each notification carries its own URLs (index-aligned).
+        let links = InformCardModel(n).links.map(\.url.absoluteString)
+        if !links.isEmpty { info[userInfoLinks] = links.joined(separator: "\u{1E}") }
         return info
     }
 
-    static func actionURL(_ actionId: String, in userInfo: [AnyHashable: Any]) -> URL? {
-        guard let packed = userInfo[userInfoActionURLs] as? String else { return nil }
-        for entry in packed.split(separator: "\u{1E}") {
-            let parts = entry.split(separator: "\u{1F}", maxSplits: 1).map(String.init)
-            if parts.count == 2, parts[0] == actionId { return URL(string: parts[1]) }
-        }
-        return nil
+    static func linkURL(_ index: Int, in userInfo: [AnyHashable: Any]) -> URL? {
+        guard let packed = userInfo[userInfoLinks] as? String else { return nil }
+        let urls = packed.split(separator: "\u{1E}").map(String.init)
+        return urls.indices.contains(index) ? URL(string: urls[index]) : nil
     }
 
     /// Maps a raw UN response into a `NotificationResponseInfo`.
@@ -74,8 +72,12 @@ public enum NotificationContentBuilder {
         case NotificationCategories.replyActionIdentifier:
             kind = .reply(text: userText ?? "")
         default:
-            if let actionId = NotificationCategories.oyeeActionId(from: actionIdentifier) {
-                kind = .action(id: actionId, url: actionURL(actionId, in: userInfo))
+            if let option = NotificationCategories.answerOption(from: actionIdentifier) {
+                kind = .answer(option: option)
+            } else if let index = NotificationCategories.linkIndex(from: actionIdentifier),
+                let link = linkURL(index, in: userInfo)
+            {
+                kind = .link(link)
             } else {
                 kind = .open
             }
@@ -85,8 +87,8 @@ public enum NotificationContentBuilder {
 }
 
 /// Posts one local notification per Oyee notification (identifier = Oyee id), replaces them in place on updates,
-/// removes them on read/resolve/delete, registers dynamic categories for action buttons + reply, and forwards the
-/// user's responses to `onResponse`.
+/// removes them on read/resolve/delete (so answered and expired asks leave the tray), registers dynamic categories
+/// for answer buttons, link buttons and the text reply, and forwards the user's responses to `onResponse`.
 @MainActor
 public final class NotificationPresenter: NSObject, NotificationSink, UNUserNotificationCenterDelegate {
     /// UNUserNotificationCenter crashes in processes without an app bundle (e.g. `swift run`, `swift test`).
@@ -176,7 +178,7 @@ public final class NotificationPresenter: NSObject, NotificationSink, UNUserNoti
         let sample = OyeeNotification(
             id: OyeeNotification.makeLocalTestID(), source: "oyee", title: "Oyee test notification",
             body: "Notifications are working.", severity: .success,
-            fields: [Field(label: "Device", value: ProcessInfo.processInfo.hostName)])
+            content: .inform(InformBlock(fields: [Field(label: "Device", value: ProcessInfo.processInfo.hostName)])))
         present(sample, alert: true)
     }
 
@@ -187,15 +189,16 @@ public final class NotificationPresenter: NSObject, NotificationSink, UNUserNoti
         content.title = Rendering.systemTitle(for: n)
         content.subtitle = n.source
         content.body = Rendering.systemBody(for: n)
-        content.threadIdentifier = n.threadIdentifier
+        content.threadIdentifier = n.source
         content.userInfo = NotificationContentBuilder.userInfo(for: n, alert: alert)
         content.relevanceScore = NotificationContentBuilder.relevanceScore(n.severity)
         content.sound = NotificationContentBuilder.playsSound(n, alert: alert) ? .default : nil
         // Time-sensitive requires an entitlement we can't get without a paid account, so `.active` is the maximum.
-        content.interruptionLevel = (n.severity == .debug || !alert) ? .passive : .active
+        content.interruptionLevel = alert ? .active : .passive
 
-        if let categoryId = await ensureCategory(for: n) {
-            content.categoryIdentifier = categoryId
+        if let plan = NotificationCategories.plan(for: n) {
+            await ensureCategory(plan)
+            content.categoryIdentifier = plan.id
         }
         if let imageURL = n.imageURL, let attachment = await images.attachment(for: imageURL, notificationId: n.id) {
             content.attachments = [attachment]
@@ -205,16 +208,15 @@ public final class NotificationPresenter: NSObject, NotificationSink, UNUserNoti
         try? await center.add(request)
     }
 
-    /// Registers (merging with existing categories) the category for this action set and returns its id.
-    private func ensureCategory(for n: OyeeNotification) async -> String? {
-        guard let id = NotificationCategories.categoryIdentifier(for: n) else { return nil }
-        if categories[id] != nil {
-            categoryOrder.removeAll { $0 == id }
-            categoryOrder.append(id)
-            return id
+    /// Registers the planned category (merged with the other registered categories), most recent last.
+    private func ensureCategory(_ plan: NotificationCategories.Plan) async {
+        if categories[plan.id] != nil {
+            categoryOrder.removeAll { $0 == plan.id }
+            categoryOrder.append(plan.id)
+            return
         }
-        categories[id] = makeCategory(id: id, actions: n.actions, reply: n.reply)
-        categoryOrder.append(id)
+        categories[plan.id] = makeCategory(plan)
+        categoryOrder.append(plan.id)
         while categoryOrder.count > Self.maxOyeeCategories {
             categories[categoryOrder.removeFirst()] = nil
         }
@@ -222,26 +224,20 @@ public final class NotificationPresenter: NSObject, NotificationSink, UNUserNoti
         var merged = existing.filter { !$0.identifier.hasPrefix(NotificationCategories.prefix) }
         merged.formUnion(categories.values)
         center.setNotificationCategories(merged)
-        return id
     }
 
-    private func makeCategory(id: String, actions: [Action], reply: Reply?) -> UNNotificationCategory {
-        var unActions: [UNNotificationAction] = actions.map { action in
-            var options: UNNotificationActionOptions = []
-            if action.style == .destructive { options.insert(.destructive) }
-            if action.url != nil { options.insert(.foreground) }
-            return UNNotificationAction(
-                identifier: NotificationCategories.actionIdentifier(for: action.id), title: action.label,
-                options: options)
+    private func makeCategory(_ plan: NotificationCategories.Plan) -> UNNotificationCategory {
+        var actions: [UNNotificationAction] = plan.buttons.map { button in
+            UNNotificationAction(
+                identifier: button.identifier, title: button.title, options: button.opensURL ? [.foreground] : [])
         }
-        if let reply {
-            let button = reply.buttonLabel ?? "Send"
-            unActions.append(
+        if let placeholder = plan.textInput {
+            actions.append(
                 UNTextInputNotificationAction(
                     identifier: NotificationCategories.replyActionIdentifier, title: "Reply", options: [],
-                    textInputButtonTitle: button, textInputPlaceholder: reply.placeholder ?? "Reply…"))
+                    textInputButtonTitle: "Send", textInputPlaceholder: placeholder))
         }
-        return UNNotificationCategory(identifier: id, actions: unActions, intentIdentifiers: [], options: [])
+        return UNNotificationCategory(identifier: plan.id, actions: actions, intentIdentifiers: [], options: [])
     }
 
     // MARK: UNUserNotificationCenterDelegate

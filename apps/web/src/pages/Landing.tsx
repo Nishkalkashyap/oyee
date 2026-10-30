@@ -5,7 +5,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Action, Notification } from "@oyee/schema";
+import type { Notification } from "@oyee/schema";
 import { isMockMode } from "../lib/env";
 import { loginErrorMessage, safeRedirect } from "../lib/login";
 import { qk, useConfig, useMe } from "../lib/queries";
@@ -103,53 +103,50 @@ function SignInExtras() {
 
 // ─── The card the commands produce ──────────────────────────────────────────
 
-const DEMO_ACTIONS: Action[] = [
-  { id: "ship", label: "Ship it", style: "primary", resolves: true },
-  { id: "wait", label: "Not now", style: "default", resolves: false },
-];
+const DEMO_OPTIONS = ["Ship it", "Not now"];
 
-function demoCard(answer: Action | null): Notification {
+function demoCard(answer: string | null): Notification {
   const at = new Date().toISOString();
   return {
     id: "ntf_demo",
     source: "claude-code",
-    threadId: null,
+    key: null,
     title: "Deploy api@4f2c1a to prod?",
     body: "12 commits, all checks green.",
     severity: "info",
-    status: "active",
-    icon: null,
-    image: null,
+    status: answer ? "resolved" : "active",
     url: null,
-    fields: [],
-    progress: null,
-    actions: DEMO_ACTIONS,
-    reply: null,
-    tags: [],
-    silent: false,
-    template: null,
-    version: 1,
+    version: answer ? 2 : 1,
     createdAt: at,
     updatedAt: at,
     readAt: null,
-    resolvedAt: null,
-    responses: answer ? [{ actionId: answer.id, text: null, deviceId: null, deviceName: "This browser", at }] : [],
+    resolvedAt: answer ? at : null,
+    targetDeviceIds: null,
+    intent: "ask",
+    ask: {
+      options: DEMO_OPTIONS,
+      allowText: false,
+      replyPlaceholder: null,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      answer: answer ? { option: answer, text: null, deviceId: null, deviceName: "This browser", at } : null,
+      state: answer ? "answered" : "open",
+    },
   };
 }
 
 /** An agent's question you can actually answer: the tap comes back as the agent's tool result. */
 function DemoCard() {
-  const [answer, setAnswer] = useState<Action | null>(null);
+  const [answer, setAnswer] = useState<string | null>(null);
   return (
     <div>
-      <NotificationCard notification={demoCard(answer)} onAction={setAnswer} />
+      <NotificationCard notification={demoCard(answer)} onAnswer={setAnswer} />
       <div className={cx("mt-3 flex items-start gap-2.5 font-mono text-[12.5px] leading-relaxed", answer ? "text-secondary-label" : "text-zinc-400 dark:text-zinc-500")}>
         <span className="mt-px select-none">{answer ? "✓" : "◌"}</span>
         <span aria-live="polite">
           {answer ? (
             <>
-              ask → <span className="text-foreground">"{answer.label}"</span>{" "}
-              <span className="text-zinc-400 dark:text-zinc-500">· back in Claude Code, it {answer.id === "ship" ? "deploys" : "waits"}</span>
+              ask → <span className="text-foreground">"{answer}"</span>{" "}
+              <span className="text-zinc-400 dark:text-zinc-500">· back in Claude Code, it {answer === "Ship it" ? "deploys" : "waits"}</span>
             </>
           ) : (
             "claude-code is waiting for your answer. Tap one."

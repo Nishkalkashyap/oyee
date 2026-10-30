@@ -72,30 +72,22 @@ describe("VAPID", () => {
 });
 
 describe("push payload rules", () => {
-  const n = (over: Partial<Notification> = {}): Notification => ({
+  const n = (over: Partial<Pick<Notification, "body" | "status">> = {}): Notification => ({
     id: "ntf_X",
+    intent: "inform",
     source: "s",
-    threadId: null,
+    key: null,
     title: "t",
     body: null,
     severity: "info",
     status: "active",
-    icon: null,
-    image: null,
     url: null,
-    fields: [],
-    progress: null,
-    actions: [],
-    reply: null,
-    tags: [],
-    silent: false,
-    template: null,
     version: 3,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     readAt: null,
     resolvedAt: null,
-    responses: [],
+    inform: { links: [], fields: [], image: null, icon: null, cooldown: null },
     ...over,
   });
 

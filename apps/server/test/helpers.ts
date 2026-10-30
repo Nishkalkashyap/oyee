@@ -55,7 +55,7 @@ export async function call<T = any>(
 export async function createToken(cookie: string, kind: "webhook" | "mcp", label = "Test", defaultSource?: string) {
   const r = await call("POST", "/api/tokens", { cookie }, { kind, label, defaultSource });
   expect(r.status).toBe(201);
-  return r.body as { token: { id: string; prefix: string }; secret: string; url: string; callbackSecret: string };
+  return r.body as { token: { id: string; prefix: string }; secret: string; url: string };
 }
 
 /** Pair a device for the session user; returns the device token. */

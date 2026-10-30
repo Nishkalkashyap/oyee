@@ -3,54 +3,63 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import {
-  ListNotificationsQuery,
-  McpAskInput,
-  McpWaitInput,
-  SendNotificationInput,
-  TemplateCard,
-  TemplateName,
-  UpdateNotificationInput,
-  type SendNotificationInput as SendInput,
-} from "@oyee/schema";
+import { AskInput, LIMITS, McpListInput, McpWaitInput, ProgressInput, type Notification } from "@oyee/schema";
 import { z } from "zod";
 import { listDevices, toDevice, type TokenRecord } from "../db";
 import { SERVER_VERSION, type Env } from "../env";
 import { ApiError, rpc } from "../lib/errors";
 import type { Actor } from "../inbox/model";
+import { progressReason } from "../inbox/progress";
 import { inbox } from "../routes/api";
+import { askResultText, waitResultText } from "./ask";
+import { registerInformTool } from "./inform";
+import { listItem, resultText } from "./text";
 
-const IdInput = z.object({ id: z.string().describe("Notification id (ntf_…)") });
+/** Read by the client once per session: which of the three intents to pick, in a few lines. */
+const INSTRUCTIONS = [
+  "Oyee notifies the user on their phone, laptop and browser. Pick the tool by what you mean:",
+  "- inform: something the user should know (a build finished, an alert fired, a summary is ready). One-way, no answer.",
+  "- ask: you need a decision or text from the user. Then call wait_for_response with the returned id until it is answered.",
+  "- progress: long-running work, shown as a bar. Call it repeatedly with the same key; finish with status done or failed.",
+  "Give inform and ask a key so sending again updates the same notification instead of nagging. resolve withdraws a " +
+    "notification that no longer matters, list_notifications shows what you already sent, and list_devices names the " +
+    "devices you can target.",
+].join("\n");
 
-function ok(value: unknown): CallToolResult {
+/** For listing tools: compact JSON. */
+function json(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
-function fail(err: unknown): CallToolResult {
+export function fail(err: unknown): CallToolResult {
   const api = ApiError.fromUnknown(err);
   const message = api ? `${api.code}: ${api.message}` : err instanceof Error ? err.message : String(err);
   if (!api) console.error("MCP tool error", err);
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-async function run(fn: () => Promise<unknown>): Promise<CallToolResult> {
+/** Runs a tool body; its result (text in the shape of ./text.ts, or JSON for listings) or the error as `isError`. */
+async function run(fn: () => Promise<string | CallToolResult>): Promise<CallToolResult> {
   try {
-    return ok(await fn());
+    const r = await fn();
+    return typeof r === "string" ? { content: [{ type: "text", text: r }] } : r;
   } catch (e) {
     return fail(e);
   }
 }
 
+function resolveResultText(n: Notification): string {
+  const title = JSON.stringify(n.title);
+  if (n.intent === "ask" && n.ask.state === "withdrawn") {
+    return resultText("withdrawn", n.id, `Withdrew the ask ${title}: it can no longer be answered and is gone from the user's devices.`);
+  }
+  return resultText("resolved", n.id, `Resolved ${title}: it is gone from the user's devices.`);
+}
+
 export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
   const server = new McpServer(
     { name: "oyee", version: SERVER_VERSION },
-    {
-      jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
-      instructions:
-        "Oyee delivers notifications to the user's phone, laptop and browser. Use send_notification for one-way " +
-        "messages (update_notification to change them in place, e.g. progress), and ask + wait_for_response when you " +
-        "need a decision from the human.",
-    },
+    { jsonSchemaValidator: new CfWorkerJsonSchemaValidator(), instructions: INSTRUCTIONS },
   );
   const stub = () => inbox(env, token.userId);
   const actor: Actor = {
@@ -61,74 +70,20 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     defaultSource: (token.defaultSource ?? token.label).slice(0, 64),
   };
 
-  server.registerTool(
-    "send_notification",
-    {
-      title: "Send notification",
-      description:
-        "Send a notification card. By default it alerts every paired device; to reach specific ones, set `devices` " +
-        "(device names or ids from list_devices — a unique partial name such as \"macbook\" works) and/or `platforms` " +
-        "(android, macos, web, ios). Returns the stored Notification (keep its id to update it). " +
-        "Use `replaceKey` to update an existing active notification instead of creating a duplicate, and " +
-        "`template` + `vars` to render a saved template.",
-      inputSchema: SendNotificationInput,
-    },
-    (input) => run(() => rpc(stub().send(actor, input))),
-  );
-
-  server.registerTool(
-    "update_notification",
-    {
-      title: "Update notification",
-      description:
-        "Patch a notification in place (title, body, progress, fields, actions…). `null` clears a field. Silent unless `alert: true`.",
-      inputSchema: UpdateNotificationInput.extend({ id: z.string() }),
-    },
-    ({ id, ...patch }) => run(() => rpc(stub().update(actor, id, patch))),
-  );
-
-  server.registerTool(
-    "resolve_notification",
-    {
-      title: "Resolve notification",
-      description: "Mark a notification as resolved; it is removed from the system notification tray on every device.",
-      inputSchema: IdInput,
-    },
-    ({ id }) => run(() => rpc(stub().resolve(actor, id))),
-  );
+  registerInformTool(server, stub, actor);
 
   server.registerTool(
     "ask",
     {
       title: "Ask the user",
       description:
-        "Send a question with up to 3 option buttons and/or a text reply box. Returns { id }; then call " +
-        "wait_for_response with that id (repeat while it returns pending). `devices` / `platforms` target specific " +
-        "devices, as in send_notification.",
-      inputSchema: McpAskInput,
+        "Ask the user a question when you need a decision or text from them: up to 3 answer buttons (`options`) " +
+        "and/or a typed answer (`allowText`). It alerts every paired device (or only `devices` / `platforms`); the " +
+        "first answer from any device closes it everywhere. Then call wait_for_response with the returned id. Give " +
+        "it a `key` so asking again while it is open returns the same ask instead of alerting again.",
+      inputSchema: AskInput,
     },
-    (input) =>
-      run(async () => {
-        const send: SendInput = {
-          title: input.title,
-          body: input.body,
-          severity: input.severity ?? "info",
-          source: input.source,
-          threadId: input.threadId,
-          actions: (input.options ?? []).map((label, i) => ({
-            id: `option_${i + 1}`,
-            label,
-            style: i === 0 ? "primary" : "default",
-            resolves: true,
-          })),
-          reply: input.allowText ? { placeholder: "Reply…", buttonLabel: "Send" } : undefined,
-          devices: input.devices,
-          platforms: input.platforms,
-        };
-        if (!send.actions?.length && !send.reply) send.reply = { placeholder: "Reply…", buttonLabel: "Send" };
-        const n = await rpc(stub().send(actor, send));
-        return { id: n.id };
-      }),
+    (input) => run(async () => askResultText(await rpc(stub().ask(actor, input)))),
   );
 
   server.registerTool(
@@ -136,55 +91,60 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     {
       title: "Wait for response",
       description:
-        "Long-poll (up to 55 s) for the user's response to a notification. Returns { status: 'answered', response } " +
-        "or { status: 'pending' } — call again if pending.",
+        `Wait up to ${LIMITS.askWaitSeconds} s for the user's answer to an ask. Returns the answer and the device it ` +
+        "came from as soon as it arrives, or says it is still pending: then call again with the same id.",
       inputSchema: McpWaitInput,
     },
-    ({ id, timeoutSeconds }) => run(() => rpc(stub().waitForResponse(id, timeoutSeconds ?? 50))),
+    ({ id, timeoutSeconds }) =>
+      run(async () => waitResultText(id, await rpc(stub().waitForResponse(id, timeoutSeconds ?? LIMITS.askWaitSeconds)))),
   );
 
   server.registerTool(
-    "get_notification",
-    { title: "Get notification", description: "Fetch a notification by id, including responses.", inputSchema: IdInput },
-    ({ id }) => run(() => rpc(stub().get(id))),
+    "progress",
+    {
+      title: "Report progress",
+      description:
+        "Report long-running work as a progress bar on the user's devices. Call it repeatedly with the same `key`: " +
+        "the first report appears without sound, later ones update it silently, and status done or failed alerts the " +
+        "user once. Omitted fields keep the previous report's value.",
+      inputSchema: ProgressInput,
+    },
+    (input) =>
+      run(async () => {
+        const report = await rpc(stub().progress(actor, input));
+        return resultText(report.outcome, report.notification.id, progressReason(report));
+      }),
+  );
+
+  server.registerTool(
+    "resolve",
+    {
+      title: "Resolve",
+      description:
+        "Withdraw a notification that no longer matters (an inform that is settled, an ask you no longer need " +
+        "answered): it is removed from every device and an open ask can no longer be answered. Takes the id returned " +
+        "by inform, ask or progress (list_notifications with `key` finds it).",
+      inputSchema: z.object({ id: z.string().describe("Notification id (ntf_…).") }),
+    },
+    ({ id }) => run(async () => resolveResultText(await rpc(stub().resolve(actor, id)))),
   );
 
   server.registerTool(
     "list_notifications",
     {
       title: "List notifications",
-      description: "List notifications, newest first, with optional filters. Paginate with `cursor`.",
-      inputSchema: ListNotificationsQuery.omit({ updatedSince: true }).extend({
-        limit: z.number().int().min(1).max(200).optional(),
-      }),
-    },
-    (q) => run(() => rpc(stub().list({ ...q, limit: q.limit ?? 50 }))),
-  );
-
-  server.registerTool(
-    "list_templates",
-    { title: "List templates", description: "List the user's saved notification templates.", inputSchema: z.object({}) },
-    () => run(async () => ({ items: await rpc(stub().listTemplates()) })),
-  );
-
-  server.registerTool(
-    "upsert_template",
-    {
-      title: "Create or update template",
       description:
-        "Save a reusable partial card. Strings may contain {{var}} or {{var|fallback}} placeholders, rendered from `vars` at send time.",
-      inputSchema: z.object({ name: TemplateName, description: z.string().max(500).optional(), card: TemplateCard }),
+        "List notifications already sent to the user, newest first, filtered by `key`, `intent`, `status` and " +
+        "`source`. Each item is compact: id, intent, key, title, status, state, answer, createdAt and `ago` " +
+        `(e.g. "12m"). Returns ${LIMITS.defaultListPage} items unless you set \`limit\`; pass \`nextCursor\` as ` +
+        "`cursor` for older ones.",
+      inputSchema: McpListInput,
     },
-    ({ name, description, card }) => run(() => rpc(stub().upsertTemplate(name, { description, card }))),
-  );
-
-  server.registerTool(
-    "delete_template",
-    { title: "Delete template", description: "Delete a template by name.", inputSchema: z.object({ name: TemplateName }) },
-    ({ name }) =>
+    ({ limit, ...filters }) =>
       run(async () => {
-        await rpc(stub().deleteTemplate(name));
-        return { ok: true };
+        const page = await rpc(stub().list({ ...filters, limit: limit ?? LIMITS.defaultListPage }));
+        const now = Date.now();
+        return json({ items: page.items.map((n) => listItem(n, now)), nextCursor: page.nextCursor });
       }),
   );
 
@@ -194,10 +154,10 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
       title: "List devices",
       description:
         "List the user's paired devices (id, name, platform, transports). Use a name or id in the `devices` field of " +
-        "send_notification / ask to notify only that device.",
+        "inform, ask or progress to alert only that device.",
       inputSchema: z.object({}),
     },
-    () => run(async () => ({ items: (await listDevices(env.DB, token.userId)).map(toDevice) })),
+    () => run(async () => json({ items: (await listDevices(env.DB, token.userId)).map(toDevice) })),
   );
 
   return server;

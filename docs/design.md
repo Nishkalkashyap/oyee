@@ -28,7 +28,7 @@ components. (The accent is Oyee's own "Ocean blue" since 2026-10-29; Gluon's is 
 | border / row-selected | `#ece9e3` | `#302d29` / `#35312d` | hairlines / selected row |
 | secondary-label | `#44403c` | `#d6d0c6` | unread previews, labels |
 
-Severity: critical `#dc2626`, warning `#d97706`, info `#3b82f6`, success `#16a34a`, debug faint. Severity appears only
+Severity: critical `#dc2626`, warning `#d97706`, info `#3b82f6`, success `#16a34a`. Severity appears only
 as a soft pill on the card and, for critical and warning only, a small dot on the source avatar; never as a stripe or
 background. Info gets no avatar dot because blue in a list row means unread and nothing else.
 

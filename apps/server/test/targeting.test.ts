@@ -57,15 +57,15 @@ describe("targeted delivery", () => {
     await call("PUT", "/api/devices/self", { bearer: tablet.token }, { fcmToken: "fcm-tablet" });
     const fcm = interceptFcm();
 
-    const sent = await call("POST", "/api/notifications", { cookie }, { title: "Only the phone", devices: ["s23"] });
+    const sent = await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "only-phone", title: "Only the phone", devices: ["s23"] });
     expect(sent.status).toBe(201);
-    expect(sent.body.targetDeviceIds).toEqual([phone.device.id]);
+    expect(sent.body.notification.targetDeviceIds).toEqual([phone.device.id]);
     await eventually(() => fcm.length === 1);
     await sleep(100);
     expect(fcm).toEqual(["fcm-phone"]);
 
     // Updates follow the original targets.
-    await call("PATCH", `/api/notifications/${sent.body.id}`, { cookie }, { title: "Still only the phone", alert: true });
+    await call("POST", "/api/notifications", { cookie }, { intent: "progress", key: "only-phone", title: "Still only the phone", status: "done" });
     await eventually(() => fcm.length === 2);
     expect(fcm[1]).toBe("fcm-phone");
 
@@ -79,7 +79,7 @@ describe("targeted delivery", () => {
     expect(fcm.slice(2).sort()).toEqual(["fcm-phone", "fcm-tablet"]);
   });
 
-  it("MCP send/ask accept targets and explain unknown devices", async () => {
+  it("MCP inform/ask accept targets and explain unknown devices", async () => {
     const cookie = await devLogin();
     await pairDevice(cookie, "Nishkal’s MacBook Pro", "macos");
     const { secret } = await createToken(cookie, "mcp", "Agent");
@@ -90,14 +90,15 @@ describe("targeted delivery", () => {
       return res.body.result as { isError?: boolean; content: { text: string }[] };
     };
 
-    const ok = await tool("send_notification", { title: "Mac only", devices: ["macbook"] });
+    const ok = await tool("inform", { title: "Mac only", devices: ["macbook"] });
     expect(ok.isError).toBeFalsy();
-    expect(JSON.parse(ok.content[0]!.text).targetDeviceIds).toHaveLength(1);
+    const id = /^id: (ntf_\w+)$/m.exec(ok.content[0]!.text)![1];
+    expect((await call("GET", `/api/notifications/${id}`, { cookie })).body.targetDeviceIds).toHaveLength(1);
 
     const asked = await tool("ask", { title: "Mac question?", options: ["Yes"], platforms: ["macos"] });
     expect(asked.isError).toBeFalsy();
 
-    const bad = await tool("send_notification", { title: "Nope", devices: ["pixel"] });
+    const bad = await tool("inform", { title: "Nope", devices: ["pixel"] });
     expect(bad.isError).toBe(true);
     expect(bad.content[0]!.text).toMatch(/no paired device matches "pixel".*MacBook Pro \(macos/);
   });

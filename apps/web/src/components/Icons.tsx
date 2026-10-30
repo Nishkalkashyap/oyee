@@ -71,6 +71,20 @@ export const BellIcon = make(
   "BellIcon",
 );
 export const CheckIcon = make(<path d="M20 6 9 17l-5-5" />, "CheckIcon");
+export const ClockIcon = make(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 6v6l4 2" />
+  </>,
+  "ClockIcon",
+);
+export const UndoIcon = make(
+  <>
+    <path d="M3 7v6h6" />
+    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+  </>,
+  "UndoIcon",
+);
 export const CheckCheckIcon = make(
   <>
     <path d="M18 6 7 17l-5-5" />

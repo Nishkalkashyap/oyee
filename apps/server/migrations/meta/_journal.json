@@ -15,6 +15,13 @@
       "when": 1793253393346,
       "tag": "0001_ip_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793366162314,
+      "tag": "0002_drop_token_callback_secret",
+      "breakpoints": true
     }
   ]
 }
