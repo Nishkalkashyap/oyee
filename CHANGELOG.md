@@ -8,6 +8,16 @@
 - Web Push popup on intents: an open ask shows its first two answer buttons and answers with `{ "option" }`; an inform
   shows its first two link buttons, which open their URL; a finished or stopped progress says how it ended ("Done ·
   7/7 checks", "Stopped reporting after 40%"); only a running progress is silent.
+- MCP: agents now see exactly seven tools: `inform`, `ask`, `wait_for_response`, `progress`, `resolve`,
+  `list_notifications` and `list_devices`. `send_notification`, `update_notification`, `get_notification` and the
+  three template tools are gone, and `resolve` replaces `resolve_notification` (on an open ask it withdraws it). The
+  server instructions explain in a few lines when to use inform, ask and progress. Every acting tool answers in one
+  shape: `outcome:` and `id:` lines, then what happened and the next step. `list_notifications` filters by key,
+  intent, status and source, returns 10 compact items by default (at most 50) with a cursor, and says how long ago
+  each was sent (`"12m"`).
+- Keys across intents: reusing a key whose latest notification is a running or stopped progress or an open ask, with
+  a different intent (`inform`, `ask` or `progress`), now fails with a conflict that names the key, what holds it and
+  how to fix it. Once that notification is finished, answered, expired or withdrawn, the new intent takes the key.
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
@@ -19,6 +29,10 @@
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
   in plain text. The older tools keep working for now.
+- MCP: `inform` takes a `cooldown` (such as `"1h"`, 1m to 168h) alongside its key, so a cron agent alerts the user at
+  most once per cooldown: sends inside it update the card's text silently (`updated_silently`), and if the user
+  resolved it inside the cooldown nothing changes (`suppressed`, with when it was resolved and when the cooldown
+  ends). The cooldown runs from the key's last alert.
 - Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
   image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without
@@ -26,6 +40,9 @@
   until read. The tool answers in plain text with the outcome and the next step. The web inbox draws progress with
   its own card (state pill, a real bar with its label, last report), and a failed progress is no longer listed under
   In progress. Silent notifications no longer go out as alerting, high-priority FCM messages.
+- Stopped reporting: a running progress that gets no report for `staleAfter` (default 30m, `progress` tool input, 1m
+  to 24h) alerts once at warning and shows "Stopped reporting after 40%" (its last label or percent). The next report
+  brings it back as running, silently. The web progress card says how long it went quiet and that a report revives it.
 - Notifications carry their intent: every notification returned by REST, WebSocket, push and MCP now also has
   `intent` (inform, ask or progress), `key` and an `inform` / `ask` / `progress` block (docs/protocol.md §1.1). Flat
   sends get the intent they most resemble and existing notifications are converted once; the flat card fields are

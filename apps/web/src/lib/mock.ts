@@ -59,11 +59,6 @@ function base(partial: Partial<FlatNotification> & Pick<Notification, "title"> &
   });
 }
 
-/** Marks a progress as stopped reporting (the server does this when its sender goes quiet past `staleAfter`). */
-function stopped(n: Notification): Notification {
-  return n.intent === "progress" ? { ...n, severity: "warning", progress: { ...n.progress, state: "stopped" } } : n;
-}
-
 function fixtures(): Notification[] {
   const list: Notification[] = [
     base(
@@ -202,8 +197,17 @@ function fixtures(): Notification[] {
       { title: "Running the test suite", source: "claude-code", silent: true, progress: { value: 3, max: 7, label: "3/7 checks", indeterminate: false } },
       2 * MIN,
     ),
-    // A progress whose agent went quiet: it stays under In progress, marked "Stopped reporting after 40%".
-    stopped(base({ title: "Refactoring the auth module", source: "claude-code", key: "refactor-auth", progress: { value: 40, max: 100, indeterminate: false } }, 70 * MIN)),
+    // A progress whose agent went quiet for longer than its staleAfter: Stopped reporting.
+    base(
+      {
+        title: "Migrating user avatars",
+        body: "Copying avatars to the new bucket.",
+        source: "claude-code",
+        severity: "warning",
+        progress: { value: 40, max: 100, indeterminate: false, state: "stopped", staleAfter: "30m", lastReportAt: iso(52 * MIN) } as FlatNotification["progress"],
+      },
+      70 * MIN,
+    ),
     base(
       {
         title: "CI on main",

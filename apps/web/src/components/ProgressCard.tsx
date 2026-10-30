@@ -122,6 +122,11 @@ export function ProgressCard({
             Updated <time title={formatDateTime(n.progress.lastReportAt)}>{relativeTime(n.progress.lastReportAt)}</time>
           </div>
         )}
+        {view.state === "stopped" && (
+          <p className="mt-2 text-[13px] leading-snug text-secondary-label">
+            No report for over {n.progress.staleAfter}. It picks up again if {n.source} reports.
+          </p>
+        )}
       </div>
 
       {n.url && (
