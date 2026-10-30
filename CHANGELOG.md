@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased (server and web)
+- Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
+  `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
+  with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
+  who answered from which device, or how long ago it asked. The first answer from any device closes the ask
+  everywhere; later answers get `409` (this also applies to v1 cards with answer buttons). Respond accepts
+  `{ "option": "<label>" }`. The web inbox shows a purpose-built ask card: waiting time, buttons and reply box while
+  open, "Answered: Approve · Pixel 9" once answered.
 - MCP: new `inform` tool for one-way notifications (title, markdown body, severity, url, up to 3 link buttons, up to
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id

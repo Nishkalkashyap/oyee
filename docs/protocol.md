@@ -184,7 +184,10 @@ Rendering: every string anywhere in `card` has `{{name}}` replaced by `vars[name
 - `GET /api/notifications/:id` → `Notification`
 - `POST /api/notifications` `SendNotificationInput` → `201 Notification` (session only; devices may not send)
 - `PATCH /api/notifications/:id` `UpdateNotificationInput` → `Notification` (session only)
-- `POST /api/notifications/:id/respond` `{ "actionId"?: string, "text"?: string }` (at least one) → `Notification`
+- `POST /api/notifications/:id/respond` `{ "option"?: string, "actionId"?: string, "text"?: string }` (at least one) →
+  `Notification`. On an ask, `option` is an answer-button label (`actionId` is the v1 way to pick one) and `text`
+  needs `allowText`; the first answer from any device sets `ask.answer`, resolves the ask and marks it read; a later
+  answer gets `409 conflict` ("This ask was already answered: Approve · Pixel 9").
 - `POST /api/notifications/:id/read` → `Notification`
 - `POST /api/notifications/read-all` `{ "source"?: string }` → `{ "updated": n }`
 - `POST /api/notifications/:id/resolve` → `Notification`
@@ -252,9 +255,9 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `send_notification` | `SendNotificationInput` | `Notification` |
 | `update_notification` | `{ id, ...UpdateNotificationInput }` | `Notification` |
 | `resolve_notification` | `{ id }` | `Notification` |
-| `ask` | `{ title, body?, options?: string[] (≤3 → actions), allowText?: boolean, severity?, source?, threadId? }` | `{ id }` — the notification awaits a response |
+| `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | Text: `Asked the user (id ntf_…). Call wait_for_response with id "ntf_…" to get the answer.`, or for an open ask with the same `(source, key)`: `Already asked 12m ago, still waiting (id ntf_…)…` (no new alert) |
 | `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | text: `outcome:` (`created` / `updated_silently` / `alerted`) and `id:` lines, then the next step (as `inform`) |
-| `wait_for_response` | `{ id, timeoutSeconds?: number (1..55, default 50) }` | `{ status: "answered", response } \| { status: "pending" }` (call again if pending) |
+| `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | Text: `The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`, or `No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.` |
 | `get_notification` | `{ id }` | `Notification` |
 | `list_notifications` | `{ limit?, cursor?, source?, severity?, status?, threadId?, q? }` | `{ items, nextCursor }` |
 | `list_templates` | `{}` | `{ items }` |
@@ -262,10 +265,13 @@ Streamable HTTP, stateless. Server name `oyee`. Tools (the input schemas are the
 | `delete_template` | `{ name }` | `{ ok: true }` |
 | `list_devices` | `{}` | `{ items: Device[] }` |
 
-`wait_for_response` returns the latest existing response immediately if one exists. `ask` with neither options nor `allowText` adds a reply box.
+`wait_for_response` returns the answer immediately if there is one. An ask always alerts at `warning`; with neither
+options nor `allowText` it gets a reply box. Its `ask.expiresAt` is one hour after it was sent (expiry itself comes
+with ticket 06: until then an ask stays open).
 Responses are plain JSON (no SSE stream); `GET`/`DELETE` on the MCP endpoint return 405.
 
-`ask` options become actions with ids `option_1..3` and labels set to the option text. Each `resolves: true`. `allowText` adds `reply`.
+For app builds that predate intents, `ask` options also become flat actions with ids `option_1..3` (first `primary`,
+each `resolves: true`) and `allowText` adds `reply`; answering with `actionId: "option_2"` records the option `"Reject"`.
 
 **`inform`** (something the user should know; one-way). `InformInput`: `title` (required, ≤ 200), `body?` (markdown,
 ≤ 4000), `severity?` (`info` default \| `success` \| `warning` \| `critical`; every severity alerts), `url?` (opens on

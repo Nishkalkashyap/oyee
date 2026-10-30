@@ -68,6 +68,7 @@ describe("schemas", () => {
     expect(RespondInput.safeParse({}).success).toBe(false);
     expect(RespondInput.safeParse({ text: "hi" }).success).toBe(true);
     expect(RespondInput.safeParse({ actionId: "ack" }).success).toBe(true);
+    expect(RespondInput.safeParse({ option: "Approve" }).success).toBe(true);
   });
 
   it("ClientMessage discriminates", () => {

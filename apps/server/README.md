@@ -18,11 +18,13 @@ src/
   webhook/adapters.ts Alertmanager, Grafana, AWS SNS, text/plain + ntfy headers
   mcp/server.ts       MCP tools (stateless Streamable HTTP, official SDK)
   mcp/inform.ts       the `inform` tool and its plain-text result
+  mcp/ask.ts          `ask` / `wait_for_response` plain-text results ("asked 3m ago", "answered from Pixel 9")
   inbox/do.ts         InboxDO: notifications, tombstones, templates, quotas, push coalescing, WebSockets, waiters, retention
   lib/abuse.ts        per-IP limits: sign-ups per day (D1), failed token attempts (Rate Limiting binding)
   inbox/model.ts      pure card logic (template merge, patching)
   inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create
   inbox/progress.ts   progress intent rules: key lookup outcome, silent reports, done/failed alerts, MCP result text
+  inbox/ask.ts        pure ask rules: build from AskInput, reuse an open ask by (source, key), first answer wins
   push/fanout.ts      FCM + Web Push fan-out, signed action callbacks
   push/fcm.ts         FCM HTTP v1 (service-account JWT, RS256 via WebCrypto)
   push/webpush.ts     VAPID (ES256) + RFC 8291 aes128gcm encryption via WebCrypto

@@ -4,15 +4,15 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  AskInput,
+  LIMITS,
   ListNotificationsQuery,
-  McpAskInput,
   McpWaitInput,
   ProgressInput,
   SendNotificationInput,
   TemplateCard,
   TemplateName,
   UpdateNotificationInput,
-  type SendNotificationInput as SendInput,
 } from "@oyee/schema";
 import { z } from "zod";
 import { listDevices, toDevice, type TokenRecord } from "../db";
@@ -21,6 +21,7 @@ import { ApiError, rpc } from "../lib/errors";
 import type { Actor } from "../inbox/model";
 import { progressResultText } from "../inbox/progress";
 import { inbox } from "../routes/api";
+import { askResultText, waitResultText } from "./ask";
 import { registerInformTool } from "./inform";
 
 const IdInput = z.object({ id: z.string().describe("Notification id (ntf_…)") });
@@ -39,6 +40,15 @@ export function fail(err: unknown): CallToolResult {
 async function run(fn: () => Promise<unknown>): Promise<CallToolResult> {
   try {
     return ok(await fn());
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Like `run`, for intent tools whose result is text written for the model (what happened plus the next step). */
+async function runText(fn: () => Promise<string>): Promise<CallToolResult> {
+  try {
+    return { content: [{ type: "text", text: await fn() }] };
   } catch (e) {
     return fail(e);
   }
@@ -105,33 +115,13 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     {
       title: "Ask the user",
       description:
-        "Send a question with up to 3 option buttons and/or a text reply box. Returns { id }; then call " +
-        "wait_for_response with that id (repeat while it returns pending). `devices` / `platforms` target specific " +
-        "devices, as in send_notification.",
-      inputSchema: McpAskInput,
+        "Ask the user a question when you need a decision or text from them: up to 3 answer buttons (`options`) " +
+        "and/or a typed answer (`allowText`). It alerts every paired device (or only `devices` / `platforms`); the " +
+        "first answer from any device closes it everywhere. Then call wait_for_response with the returned id. Give " +
+        "it a `key` so asking again while it is open returns the same ask instead of alerting again.",
+      inputSchema: AskInput,
     },
-    (input) =>
-      run(async () => {
-        const send: SendInput = {
-          title: input.title,
-          body: input.body,
-          severity: input.severity ?? "info",
-          source: input.source,
-          threadId: input.threadId,
-          actions: (input.options ?? []).map((label, i) => ({
-            id: `option_${i + 1}`,
-            label,
-            style: i === 0 ? "primary" : "default",
-            resolves: true,
-          })),
-          reply: input.allowText ? { placeholder: "Reply…", buttonLabel: "Send" } : undefined,
-          devices: input.devices,
-          platforms: input.platforms,
-        };
-        if (!send.actions?.length && !send.reply) send.reply = { placeholder: "Reply…", buttonLabel: "Send" };
-        const n = await rpc(stub().send(actor, send));
-        return { id: n.id };
-      }),
+    (input) => runText(async () => askResultText(await rpc(stub().ask(actor, input)))),
   );
 
   server.registerTool(
@@ -139,11 +129,12 @@ export function buildMcpServer(env: Env, token: TokenRecord): McpServer {
     {
       title: "Wait for response",
       description:
-        "Long-poll (up to 55 s) for the user's response to a notification. Returns { status: 'answered', response } " +
-        "or { status: 'pending' } — call again if pending.",
+        `Wait up to ${LIMITS.askWaitSeconds} s for the user's answer to an ask. Returns the answer and the device it ` +
+        "came from as soon as it arrives, or says it is still pending: then call again with the same id.",
       inputSchema: McpWaitInput,
     },
-    ({ id, timeoutSeconds }) => run(() => rpc(stub().waitForResponse(id, timeoutSeconds ?? 50))),
+    ({ id, timeoutSeconds }) =>
+      runText(async () => waitResultText(id, await rpc(stub().waitForResponse(id, timeoutSeconds ?? LIMITS.askWaitSeconds)))),
   );
 
   server.registerTool(
