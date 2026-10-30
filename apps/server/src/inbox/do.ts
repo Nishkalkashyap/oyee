@@ -53,6 +53,7 @@ import { isLiveProgress, reportProgress, type ProgressReport } from "./progress"
 import { Scheduler } from "./scheduler";
 import { answerAsk, answerOf, buildAsk, isOpenAsk, type AskResult } from "./ask";
 import { applyInform, buildInform, type InformResult } from "./inform";
+import { assertKeyFree } from "./keys";
 
 type UpdatedEvent = Extract<InboxEvent, { type: "notification.updated" }>;
 
@@ -171,6 +172,13 @@ export class InboxDO extends DurableObject<Env> {
         count INTEGER NOT NULL, PRIMARY KEY (kind, period, win));
     `);
     this.migrateToIntents();
+    this.migrateAlertedAt();
+  }
+
+  /** Inform cooldown: when each notification last alerted, measured per key (inbox/inform.ts). */
+  private migrateAlertedAt() {
+    const columns = this.sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('notifications')").toArray();
+    if (!columns.some((c) => c.name === "alerted_at")) this.sql.exec("ALTER TABLE notifications ADD COLUMN alerted_at TEXT");
   }
 
   /**
@@ -467,26 +475,48 @@ export class InboxDO extends DurableObject<Env> {
   async inform(actor: Actor, input: InformInput): Promise<RpcResult<InformResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      this.consume("send", actor.userId);
       const targets =
         input.devices?.length || input.platforms?.length
           ? resolveTargets(await listDevices(this.env.DB, actor.userId), input)
           : null;
       const now = new Date().toISOString();
       const fresh = buildInform(newId("ntf"), input, actor, now, targets);
-      const latest = fresh.key ? this.latestByKey(fresh.source, fresh.key) : null;
-      const result = applyInform(latest?.n ?? null, fresh, now);
+      const latest = fresh.key ? this.claimKey(fresh.source, fresh.key, "inform") : null;
+      const result = applyInform(latest && { n: latest.n, alertedAt: this.informAlertedAt(latest.n) }, fresh, now);
+      if (result.outcome === "suppressed") return result;
+      // a new notification counts as a send, a silent update as an update (spec "Quotas")
+      this.consume(result.outcome === "updated_silently" ? "update" : "send", actor.userId);
       const n = result.notification;
       if (n.id === fresh.id) {
         this.save(n, null, actor.tokenId);
         this.emit(actor.userId, [{ type: "notification.created", notification: n }]);
         this.ensurePrune();
       } else {
+        const alert = result.outcome === "alerted";
         this.save(n, latest!.replaceKey, actor.tokenId ?? latest!.tokenId);
-        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: true, reason: "update" }]);
+        this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert, reason: "update" }]);
+      }
+      if (result.outcome !== "updated_silently") {
+        this.sql.exec("UPDATE notifications SET alerted_at = ? WHERE id = ?", now, n.id);
       }
       return result;
     });
+  }
+
+  /**
+   * The latest notification under `(source, key)`, for an intent about to use the key (inbox/keys.ts): fails when that
+   * notification is still live and of another intent.
+   */
+  private claimKey(source: string, key: string, intent: Intent): Loaded | null {
+    const latest = this.latestByKey(source, key);
+    assertKeyFree(latest?.n, intent, Date.now());
+    return latest;
+  }
+
+  /** When an inform last alerted (`alerted_at`, written by inform); rows from other send paths fall back to `updatedAt`. */
+  private informAlertedAt(n: Notification): string {
+    const r = this.sql.exec<{ alerted_at: string | null }>("SELECT alerted_at FROM notifications WHERE id = ?", n.id).toArray()[0];
+    return r?.alerted_at ?? n.updatedAt;
   }
 
   /** The latest notification a sender named with this key (keys are unique per `(source, key)`). */
@@ -743,20 +773,14 @@ export class InboxDO extends DurableObject<Env> {
           : undefined;
       // No awaits from here on, so concurrent reports for the same key can't interleave.
       const source = input.source ?? actor.defaultSource;
-      const row = this.sql
-        .exec<StoredRow>(
-          "SELECT data, replace_key, token_id, seq FROM notifications WHERE source = ? AND key = ? ORDER BY id DESC LIMIT 1",
-          source,
-          input.key,
-        )
-        .toArray()[0];
-      const latest = row ? (JSON.parse(row.data) as Notification) : null;
+      const row = this.claimKey(source, input.key, "progress");
+      const latest = row?.n ?? null;
       const continues = isLiveProgress(latest);
       if (!continues && actor.tokenId) this.checkRate(actor.tokenId);
       this.consume(continues ? "update" : "send", actor.userId);
       const report = reportProgress(latest, input, { id: newId("ntf"), source, now: new Date().toISOString(), targets });
       const n = report.notification;
-      this.save(n, null, continues ? (row!.token_id ?? actor.tokenId) : actor.tokenId);
+      this.save(n, null, continues ? (row!.tokenId ?? actor.tokenId) : actor.tokenId);
       if (continues) {
         this.emit(actor.userId, [{ type: "notification.updated", notification: n, alert: report.alert, reason: "update" }]);
       } else {
@@ -773,7 +797,7 @@ export class InboxDO extends DurableObject<Env> {
   async ask(actor: Actor, input: AskInput): Promise<RpcResult<AskResult>> {
     return guard(async () => {
       if (actor.tokenId) this.checkRate(actor.tokenId);
-      const latest = input.key ? this.latestByKey(input.source ?? actor.defaultSource, input.key)?.n : null;
+      const latest = input.key ? this.claimKey(input.source ?? actor.defaultSource, input.key, "ask")?.n : null;
       if (latest && isOpenAsk(latest, Date.now())) return { outcome: "reused", notification: latest };
       this.consume("send", actor.userId);
       const targets =

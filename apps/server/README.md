@@ -23,7 +23,7 @@ src/
   inbox/do.ts         InboxDO: notifications, tombstones, templates, quotas, push coalescing, WebSockets, waiters, retention
   lib/abuse.ts        per-IP limits: sign-ups per day (D1), failed token attempts (Rate Limiting binding)
   inbox/model.ts      pure card logic (template merge, patching)
-  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create
+  inbox/inform.ts     pure inform rules: build from InformInput, update by (source, key) or create, cooldown outcomes
   inbox/progress.ts   progress intent rules: key lookup outcome, silent reports, done/failed alerts, MCP result text
   inbox/ask.ts        pure ask rules: build from AskInput, reuse an open ask by (source, key), first answer wins
   push/fanout.ts      FCM + Web Push fan-out, signed action callbacks

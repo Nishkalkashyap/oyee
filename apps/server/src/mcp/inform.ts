@@ -22,7 +22,8 @@ export function registerInformTool(server: McpServer, stub: () => ReturnType<typ
       description:
         "Tell the user something they should know (a build finished, an alert fired, a summary is ready). One-way: " +
         "it has no answer buttons (use ask for a decision). Only `title` is required. Set `key` to update the same " +
-        "notification on later sends instead of creating duplicates.",
+        "notification on later sends instead of creating duplicates; add `cooldown` (such as \"1h\") when you send on a " +
+        "schedule, so the user is alerted at most that often and the card's text stays current silently in between.",
       inputSchema: InformInput,
     },
     async (input): Promise<CallToolResult> => {

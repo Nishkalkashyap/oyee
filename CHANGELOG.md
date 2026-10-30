@@ -8,6 +8,9 @@
   shape: `outcome:` and `id:` lines, then what happened and the next step. `list_notifications` filters by key,
   intent, status and source, returns 10 compact items by default (at most 50) with a cursor, and says how long ago
   each was sent (`"12m"`).
+- Keys across intents: reusing a key whose latest notification is a running or stopped progress or an open ask, with
+  a different intent (`inform`, `ask` or `progress`), now fails with a conflict that names the key, what holds it and
+  how to fix it. Once that notification is finished, answered, expired or withdrawn, the new intent takes the key.
 - Ask end-to-end: the MCP `ask` tool takes a question, up to three answer buttons and/or a text box, a `url` and a
   `key`, always alerts at warning, and answers in text that tells the agent to call `wait_for_response`; asking again
   with the key of an open ask returns it instead of alerting again. `wait_for_response` holds up to 50 s and says
@@ -19,6 +22,10 @@
   10 rows, image, icon, key). Sending again with the same key from the same source updates the active notification
   and alerts again instead of creating a duplicate. The result says what happened (`created` / `alerted`) and the id
   in plain text. The older tools keep working for now.
+- MCP: `inform` takes a `cooldown` (such as `"1h"`, 1m to 168h) alongside its key, so a cron agent alerts the user at
+  most once per cooldown: sends inside it update the card's text silently (`updated_silently`), and if the user
+  resolved it inside the cooldown nothing changes (`suppressed`, with when it was resolved and when the cooldown
+  ends). The cooldown runs from the key's last alert.
 - Web: informs get their own card in the inbox's conversation view: icon and severity, body, rows in a soft inset,
   image and link buttons, with where a tap goes shown as the host.
 - MCP `progress` tool: an agent reports long-running work by a key it chooses. The first report appears without

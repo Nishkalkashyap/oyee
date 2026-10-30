@@ -252,7 +252,7 @@ Streamable HTTP, stateless. Server name `oyee`. Exactly seven tools (the input s
 
 | Tool | Input | Output |
 |---|---|---|
-| `inform` | `InformInput` (below) | result text (below): `created` / `alerted` |
+| `inform` | `InformInput` (below) | result text (below): `created` / `updated_silently` / `alerted` / `suppressed` |
 | `ask` | `AskInput`: `{ title, body?, options?: string[] (≤3), allowText?, url?, key?, source?, devices?, platforms? }` | result text: `created` (`Asked the user. Call wait_for_response with id "ntf_…" to get the answer.`), or `reused` for an open ask with the same `(source, key)` (`Already asked 12m ago, still waiting; the user was not alerted again. …`, no new alert) |
 | `wait_for_response` | `{ id, timeoutSeconds?: number (1..50, default 50) }` | result text: `answered` (`The user answered "Approve" from Pixel 9.` / `The user replied from MacBook Pro: "main"`) or `pending` (`No answer yet: asked 3m ago. Call wait_for_response again with id "ntf_…" to keep waiting.`) |
 | `progress` | `ProgressInput`: `{ key, title, value?, max? (default 100), label?, status?: "running"\|"done"\|"failed" (default running), body?, url?, source?, devices?, platforms? }` | result text: `created` / `updated_silently` / `alerted`, then the next step |
@@ -288,15 +288,26 @@ each `resolves: true`) and `allowText` adds `reply`; answering with `actionId: "
 **`inform`** (something the user should know; one-way). `InformInput`: `title` (required, ≤ 200), `body?` (markdown,
 ≤ 4000), `severity?` (`info` default \| `success` \| `warning` \| `critical`; every severity alerts), `url?` (opens on
 tap), `key?` (≤ 128), `source?` (default: the token's name), `devices?`, `platforms?`, `links?` (≤ 3 link buttons
-`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL).
-Keys are unique per `(source, key)`: with a key whose latest notification is an active inform, that one is updated in
-place (same id, `version` + 1, unread again) and alerts again (`outcome: alerted`); otherwise a new inform is created
-and alerts (`outcome: created`). Another source using the same key gets its own notification. The result is text:
+`{ label ≤ 32, url }`), `fields?` (≤ 10 `{ label, value }` rows), `image?` (https), `icon?` (emoji or https URL),
+`cooldown?` (duration such as `"30m"`, `"1h"`, `"24h"`; units s, m, h; `LIMITS.minCooldown` 1m to
+`LIMITS.maxCooldown` 168h; only meaningful with `key`, stored as `inform.cooldown`).
+Keys are unique per `(source, key)`; another source using the same key gets its own notification. With a key whose
+latest notification is an inform, the send's `cooldown` is measured from the key's last alert, whatever the
+notification's status (silent updates don't move it):
+
+| Latest inform with the key | Inside the cooldown | Cooldown passed, or no cooldown |
+|---|---|---|
+| none (or another intent) | `created`: new inform, alerts | `created` |
+| active | `updated_silently`: content replaced, `version` + 1, `notification.updated` with `alert: false`, read state kept | `alerted`: content replaced, `version` + 1, unread again, `notification.updated` with `alert: true` |
+| resolved | `suppressed`: nothing changes, nothing is broadcast; the reason says when it was resolved and when the cooldown ends | `created`: new inform, alerts |
+
+A created or alerted send counts against the `send` quota, a silent update against `update`, a suppressed one against
+neither (the per-token rate limit still applies). The result is text:
 
 ```
-outcome: alerted
+outcome: updated_silently
 id: ntf_01J…
-Updated the notification with key "disk-db1" in place and alerted the user's devices again.
+Updated the notification with key "disk-full" without alerting: it alerted 12m ago, inside its 1h cooldown. The card shows the new text; sends with this key can alert again from 2026-10-30T13:05:00.000Z (in 48m).
 ```
 
 Until the flat card is removed, an inform also carries the flat fields: `links` become link `actions`
@@ -309,6 +320,19 @@ value and max are unchanged). `done` (value defaults to max, severity `success`)
 finish it with one alert (`updated`, `alert: true`, `silent: false`, unread again). A finished progress stays `active`
 (not resolved) so its alert isn't cancelled; the next report with the key starts a fresh progress. New progress counts
 as `send` (and the per-token rate limit), reports to a live one as `update`.
+
+**Keys across intents.** While the latest notification under a `(source, key)` is live (a running or stopped
+progress, or an open, unexpired ask), the key belongs to that intent: `inform`, `ask` or `progress` with the key and
+another intent fails with `conflict` (`409` over REST/webhooks once they send intents), and the message names the key,
+the live notification's intent and id, and the fix (use a different key, or finish the progress with `done` /
+`failed`, or withdraw the ask with resolve):
+
+```
+conflict: key "deploy" belongs to a running progress (id ntf_01J…). Use a different key for this inform, or first finish that progress by reporting it with key "deploy" and status "done" or "failed".
+```
+
+Once it is no longer live (finished progress, answered, expired or withdrawn ask, any inform, resolved or not) the
+next intent takes the key over and creates a new notification; the old one is left as it was.
 
 ---
 
