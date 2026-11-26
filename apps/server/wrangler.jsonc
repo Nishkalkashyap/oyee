@@ -19,7 +19,7 @@
       "binding": "DB",
       "database_name": "oyee",
       // Hosted instance (oyee.app). Self-hosters: replace with the id printed by `wrangler d1 create oyee`.
-      "database_id": "3ec8f056-1cc1-4e96-8e69-13963b8b7a7b",
+      "database_id": "798d2f59-1b07-49ee-af16-28547e325743",
       "migrations_dir": "migrations"
     }
   ],
